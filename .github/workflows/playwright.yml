@@ -12,6 +12,8 @@ on:
         type: boolean
         required: false
         default: false
+  schedule:
+    - cron: '7,37 * * * *' # A cada 30 minutos (UTC)
 
 jobs:
   test:
@@ -27,7 +29,7 @@ jobs:
     
     - name: Random Delay
       # Langkah ini hanya berjalan jika opsi 'aktifkan_random_delay' bernilai true (tercentang)
-      if: github.event.inputs.aktifkan_random_delay == 'true' || github.event.inputs.aktifkan_random_delay == ''
+      if: github.event_name == 'workflow_dispatch' && inputs.aktifkan_random_delay == true
       run: |
          DELAY=$(( RANDOM % 1500 ))
          echo "Menunggu $DELAY detik..."
