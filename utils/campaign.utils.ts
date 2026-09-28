@@ -95,7 +95,7 @@ export class CampaignUtils {
             const buyButton = this.page.getByRole('button', { name: '$' });
             await this.moveAndClick(buyButton);
 
-            console.log("Eco Friendly Campaign Created Successfully!");
+            console.log("Campanha ecologica iniciada.");
         }
     }
 
@@ -121,12 +121,12 @@ export class CampaignUtils {
             const targetCampaignButton = this.page.locator(`tr:has(td:has-text("Campaign ${campaignType}")) .btn-danger`);
             await this.moveAndClick(targetCampaignButton);
 
-            console.log("Increased Airline Reputation Successfully!");
+            console.log("Campanha de reputacao da companhia iniciada.");
         }
     }
 
     public async createCampaign() {
-        console.log('Create Campaign Started...')
+        console.log('Iniciando verificacao de campanhas...')
 
         const marketingButton = this.page.getByRole('button', { name: ' Marketing' });
         await this.moveAndClick(marketingButton);
@@ -140,6 +140,6 @@ export class CampaignUtils {
             await this.createReputation();
         }
 
-        console.log('Campaign Created Finished!');
+        console.log('Verificacao de campanhas finalizada.');
     }
 }
