@@ -202,25 +202,27 @@ test('All Operations', async ({ page }) => {
   };
 
   const runDepart = async () => {
-    console.log('[Task] Memulai Modul Pelepasan Armada (Depart All)...');
-    
-    // FIX KOREKSI 7: Klik ubin menu Depart dengan gerakan mouse melengkung
-    await GeneralUtils.moveAndClick(page, menuTiles.depart);
-    
-    // Jeda stabilisasi menunggu animasi panel rute terbuka sempurna
-    await GeneralUtils.randomSleep(4000, 6000);
+    console.log('[Task] Iniciando Depart All...');
+
+    await clickBlankSpaceTop();
+    await GeneralUtils.randomSleep(1000, 2000);
 
     try {
-      // Jalankan fungsi depart bawaan fleetUtils (yang di dalamnya sudah di-upgrade)
+      await GeneralUtils.moveAndClick(page, menuTiles.depart, 20000);
+      await GeneralUtils.randomSleep(2000, 3000);
+
       await fleetUtils.departPlanes();
-      await GeneralUtils.randomSleep(2000, 4000);
+      console.log('[Task] Depart All executado. Verificar resultado.');
     } catch (error) {
-      console.log('[Task] Eksekusi di dalam menu depart mendeteksi kondisi normal/selesai.');
+      console.error('[Task] FALHA NO DEPART ALL:', error);
+      await page.screenshot({
+        path: 'test-results/depart-error.png',
+        fullPage: true
+      });
+      throw error;
     }
 
-    // Keluar dari panel rute menuju peta utama
     await clickBlankSpaceTop();
-    console.log('[Task] Modul Pelepasan Armada Selesai.');
   };
 
   // ==================== LOGIKA PENGACAKAN SEMI-STATIS ====================
