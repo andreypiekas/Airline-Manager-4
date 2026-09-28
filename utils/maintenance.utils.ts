@@ -189,12 +189,12 @@ export class MaintenanceUtils {
                 // PRIORITAS UTAMA: Jika nilai angka teks berhasil dibaca, jadikan acuan mutlak (Hijau/Merah bernilai sama)
                 if (hoursRemaining <= this.hoursCheck) {
                     harusDiCheck = true;
-                    alasan = `Sisa ${hoursRemaining} jam (Di bawah/sama dengan batas ${this.hoursCheck} jam) [Berdasarkan Angka Teks]`;
+                    alasan = `Restam ${hoursRemaining} horas (limite de ${this.hoursCheck} horas) [Leitura do painel]`;
                 }
             } else if (hasDangerText) {
                 // PRIORITAS CADANGAN: Hanya jika teks angka gagal terbaca sama sekali, gunakan warna merah sebagai fallback
                 harusDiCheck = true;
-                alasan = "Gagal membaca teks angka, tetapi terdeteksi warna merah (.text-danger)";
+                alasan = "Nao foi possivel ler as horas, mas foi identificado um alerta vermelho.";
             }
 
             // Eksekusi klik jika memenuhi syarat evaluasi di atas
