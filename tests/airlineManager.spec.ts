@@ -33,15 +33,15 @@ test('All Operations', async ({ page }) => {
     }
 
     if (!sudahCommitBulanIni) {
-      console.log(`[Keepalive] Sesi pertama Tanggal 1 terdeteksi. Menulis log baru untuk bulan: ${formatBulanIni}`);
+      console.log(`[Keepalive] Primeira execucao do dia 1 detectada. Atualizando registro do mes: ${formatBulanIni}`);
       const kontenLogBaru = `Last Successful Keepalive Commit: ${formatBulanIni} (Executed at: ${hariIni.toISOString()} WIB/UTC)\n`;
       fs.writeFileSync(logFilePath, kontenLogBaru, 'utf8');
-      console.log("[Keepalive] File 'last-commit.txt' berhasil diperbarui. Langkah .yml akhir yang akan melakukan push.");
+      console.log("[Keepalive] Arquivo last-commit.txt atualizado. O workflow registrara o commit.");
     } else {
-      console.log(`[Keepalive] Bot sudah menulis log sukses untuk bulan ${formatBulanIni} pada sesi sebelumnya. Melewati pembaruan file agar git bersih.`);
+      console.log(`[Keepalive] Bot ja registrou atividade no mes ${formatBulanIni}; nenhuma atualizacao necessaria.`);
     }
   } else {
-    console.log(`[Keepalive] Hari ini Tanggal ${tanggalUTC} UTC. Pembaruan log keepalive dilewati.`);
+    console.log(`[Keepalive] Hoje e dia ${tanggalUTC} UTC. Atualizacao mensal dispensada.`);
   }
   // ==============================================================
 
@@ -58,7 +58,7 @@ test('All Operations', async ({ page }) => {
    * Menggunakan fungsi pergerakan mouse melengkung dan mengacak durasi klik (bukan teleportasi kaku).
    */
   const clickBlankSpaceTop = async () => {
-    console.log('Mengeklik area kosong di atas layar untuk menutup menu...');
+    console.log('Clicando fora do painel para fechar o menu...');
     const randomX = Math.floor(Math.random() * (600 - 200 + 1) + 200);
     const randomY = Math.floor(Math.random() * (30 - 15 + 1) + 15);
     
@@ -84,7 +84,7 @@ test('All Operations', async ({ page }) => {
     const keys = Object.keys(menuTiles).filter(key => key !== currentMenuKey);
     const randomKey = keys[Math.floor(Math.random() * keys.length)];
     
-    console.log(`[Anti-Freeze] Pancingan aktif! Membuka sekilas menu [${randomKey}] untuk me-refresh halaman...`);
+    console.log(`[Recuperacao] Tentando atualizar a interface por meio do menu [${randomKey}]...`);
     await clickBlankSpaceTop();
     await GeneralUtils.randomSleep(1000, 1800);
     
@@ -104,9 +104,9 @@ test('All Operations', async ({ page }) => {
   // ==================== DEFINISI FUNGSI MODUL ====================
 
   const runFuel = async (attempt = 1) => {
-    console.log(`[Task] Memulai Modul Bahan Bakar & CO2 (Percobaan ${attempt})...`);
+    console.log(`[Operacao] Iniciando combustivel e CO2 (tentativa ${attempt})...`);
     const currentBalance = await fuelUtils.getCurrentBalance();
-    console.log('[Task] Current account balance before opening Fuel: ' + currentBalance);
+    console.log('[Operacao] Saldo antes de abrir combustivel: ' + currentBalance);
 
     // FIX KOREKSI 3: Buka ubin menu Fuel dengan pergerakan kursor melengkung acak
     await GeneralUtils.moveAndClick(page, menuTiles.fuel);
@@ -116,13 +116,13 @@ test('All Operations', async ({ page }) => {
       // Validasi penanda halaman fuel sukses dimuat
       await page.getByPlaceholder('Amount to purchase').waitFor({ state: 'visible', timeout: 8000 });
     } catch (error) {
-      console.log('[Task] Modul Fuel gagal terbuka/freeze.');
+      console.log('[Operacao] Painel de combustivel nao abriu ou travou.');
       if (attempt < 2) {
         await triggerRandomMenuPoke('fuel');
         await runFuel(attempt + 1);
         return;
       } else {
-        throw new Error('Modul Fuel tetap gagal dimuat setelah pemancingan menu.');
+        throw new Error('Painel de combustivel nao carregou apos nova tentativa.');
       }
     }
     
@@ -138,11 +138,11 @@ test('All Operations', async ({ page }) => {
     await GeneralUtils.randomSleep(1500, 3000);
 
     await clickBlankSpaceTop();
-    console.log('[Task] Modul Bahan Bakar Selesai.');
+    console.log('[Operacao] Combustivel e CO2 finalizados.');
   };
 
   const runMaintenance = async (attempt = 1) => {
-    console.log(`[Task] Memulai Modul Pemeliharaan & Perbaikan Pesawat (Percobaan ${attempt})...`);
+    console.log(`[Operacao] Iniciando manutencao e reparos (tentativa ${attempt})...`);
     await clickBlankSpaceTop();
     await GeneralUtils.randomSleep(1000, 1800);
 
@@ -152,13 +152,13 @@ test('All Operations', async ({ page }) => {
     try {
       await page.getByRole('button', { name: ' Plan' }).waitFor({ state: 'visible', timeout: 15000 });
     } catch (error) {
-      console.log('[Task] Modul Maintenance gagal terbuka/freeze.');
+      console.log('[Operacao] Painel de manutencao nao abriu ou travou.');
       if (attempt < 2) {
         await triggerRandomMenuPoke('maintenance');
         await runMaintenance(attempt + 1);
         return;
       } else {
-        throw new Error('Modul Maintenance tetap gagal dimuat setelah pemancingan menu.');
+        throw new Error('Painel de manutencao nao carregou apos nova tentativa.');
       }
     }
 
@@ -170,11 +170,11 @@ test('All Operations', async ({ page }) => {
     await GeneralUtils.randomSleep(2000, 4000);
 
     await clickBlankSpaceTop();
-    console.log('[Task] Modul Pemeliharaan Selesai.');
+    console.log('[Operacao] Manutencao finalizada.');
   };
 
   const runCampaign = async (attempt = 1) => {
-    console.log(`[Task] Memulai Modul Kampanye Pemasaran (Sebelum Depart) (Percobaan ${attempt})...`);
+    console.log(`[Operacao] Iniciando campanhas antes das decolagens (tentativa ${attempt})...`);
     
     // FIX KOREKSI 6: Buka ubin menu Kampanye secara human-like
     await GeneralUtils.moveAndClick(page, menuTiles.campaign);
@@ -184,13 +184,13 @@ test('All Operations', async ({ page }) => {
       // Pastikan tombol internal marketing siap diakses
       await page.getByRole('button', { name: ' Marketing' }).waitFor({ state: 'visible', timeout: 8000 });
     } catch (error) {
-      console.log('[Task] Modul Kampanye gagal terbuka/freeze.');
+      console.log('[Operacao] Painel de campanhas nao abriu ou travou.');
       if (attempt < 2) {
         await triggerRandomMenuPoke('campaign');
         await runCampaign(attempt + 1);
         return;
       } else {
-        throw new Error('Modul Kampanye tetap gagal dimuat setelah pemancingan menu.');
+        throw new Error('Painel de campanhas nao carregou apos nova tentativa.');
       }
     }
     
@@ -198,11 +198,11 @@ test('All Operations', async ({ page }) => {
     await GeneralUtils.randomSleep(1500, 3000);
 
     await clickBlankSpaceTop();
-    console.log('[Task] Modul Kampanye Pemasaran Selesai.');
+    console.log('[Operacao] Campanhas finalizadas.');
   };
 
   const runDepart = async () => {
-    console.log('[Task] Iniciando Depart All...');
+    console.log('[Operacao] Iniciando decolagem de todas as aeronaves...');
 
     await clickBlankSpaceTop();
     await GeneralUtils.randomSleep(1000, 2000);
@@ -212,9 +212,9 @@ test('All Operations', async ({ page }) => {
       await GeneralUtils.randomSleep(2000, 3000);
 
       await fleetUtils.departPlanes();
-      console.log('[Task] Depart All executado. Verificar resultado.');
+      console.log('[Operacao] Comando de decolagem executado. Confira a frota.');
     } catch (error) {
-      console.error('[Task] FALHA NO DEPART ALL:', error);
+      console.error('[Operacao] FALHA NAS DECOLAGENS:', error);
       await page.screenshot({
         path: 'test-results/depart-error.png',
         fullPage: true
@@ -235,7 +235,7 @@ test('All Operations', async ({ page }) => {
   }
 
   // --- EKSEKUSI ALUR AMAN ---
-  console.log('--- Memulai Urutan Operasi Maskapai ---');
+  console.log('--- Iniciando operacoes da companhia aerea ---');
 
   // 1. Jalankan tugas awal yang sudah diacak (Fuel / Maintenance)
   for (const task of initialTasks) {
@@ -251,7 +251,7 @@ test('All Operations', async ({ page }) => {
   // 3. Kunci: Terbangkan semua pesawat di bagian paling akhir
   await runDepart();
 
-  console.log('--- Seluruh Operasi Sukses Dieksekusi ---');
+  console.log('--- Rotina de operacoes concluida ---');
 
   // Selesai
   await GeneralUtils.randomSleep(3000, 5000);
