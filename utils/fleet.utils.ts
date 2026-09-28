@@ -1,88 +1,54 @@
-import { Page } from "@playwright/test";
-import { GeneralUtils } from "./general.utils";
+import { Page } from '@playwright/test';
 
 export class FleetUtils {
-    page : Page;
-    maxTry : number;
+  constructor(private readonly page: Page) {}
 
-    constructor(page : Page) {
-        this.page = page;
-        this.maxTry = 8;
+  public async departPlanes(): Promise<void> {
+    console.log('[Depart] Aguardando botao de decolagem...');
+
+    const button = this.page.locator('#departAll');
+
+    try {
+      await button.waitFor({ state: 'visible', timeout: 20000 });
+    } catch {
+      await this.page.screenshot({
+        path: 'test-results/depart-button-missing.png',
+        fullPage: true
+      });
+      throw new Error(
+        '[Depart] Botao #departAll nao encontrado. ' +
+        'Verifique se o painel Routes abriu e se existem aeronaves prontas.'
+      );
     }
 
-    /**
-     * Menyimulasi pergerakan kursor mouse yang halus dari posisi saat ini ke koordinat target.
-     * Mencegah kursor melompat instan dengan memberikan efek kurva/noise mikro.
-     */
-    private async humanMouseMove(targetX: number, targetY: number) {
-        const steps = Math.floor(Math.random() * 5) + 5; // 5-10 langkah pergerakan kursor
-        let currentX = targetX + (Math.random() * 200 - 100);
-        let currentY = targetY + (Math.random() * 200 - 100);
+    let clicks = 0;
+    for (let attempt = 1; attempt <= 8; attempt++) {
+      if (!(await button.isVisible())) {
+        console.log('[Depart] Botao nao esta mais visivel.');
+        break;
+      }
+      if (!(await button.isEnabled())) {
+        console.log('[Depart] Botao desabilitado.');
+        break;
+      }
 
-        for (let i = 1; i <= steps; i++) {
-            const t = i / steps;
-            const noiseX = (Math.random() - 0.5) * 5;
-            const noiseY = (Math.random() - 0.5) * 5;
-            
-            const x = currentX + (targetX - currentX) * t + noiseX;
-            const y = currentY + (targetY - currentY) * t + noiseY;
+      console.log(`[Depart] Tentativa ${attempt}/8`);
+      await button.click({ timeout: 10000 });
+      clicks++;
+      await this.page.waitForTimeout(2500);
 
-            await this.page.mouse.move(x, y);
-            await this.page.waitForTimeout(Math.floor(Math.random() * 20) + 10);
-        }
-        await this.page.mouse.move(targetX, targetY);
+      const error = this.page.getByText(/Unable to depart|Some A\/C was/i);
+      if (await error.first().isVisible()) {
+        console.warn('[Depart] Jogo informou que alguns avioes nao podem decolar.');
+        break;
+      }
     }
 
-    /**
-     * Helper privat untuk menggerakkan mouse ke elemen target secara acak di dalam area kotak,
-     * lalu melakukan klik fisik manusiawi (tidak konstan di tengah box).
-     */
-    private async moveAndClick(locator: any) {
-        const box = await locator.boundingBox();
-        if (box) {
-            const paddingX = box.width * 0.15;
-            const paddingY = box.height * 0.15;
-
-            // Mengacak titik tujuan di dalam area aman kotak tombol
-            const randomX = box.x + paddingX + (Math.random() * (box.width - (paddingX * 2)));
-            const randomY = box.y + paddingY + (Math.random() * (box.height - (paddingY * 2)));
-
-            await this.humanMouseMove(randomX, randomY);
-            await GeneralUtils.randomSleep(200, 500); // Jeda sesaat setelah mouse mendarat
-        }
-        await GeneralUtils.humanClick(this.page, locator);
-    }
-
-    public async departPlanes() {
-        let departAllVisible = await this.page.locator('#departAll').isVisible();
-        console.log('Looking if there are any planes to be departed...')
-
-        let count = 0; 
-        while(departAllVisible && count < this.maxTry) {
-            console.log('Departing 20 or less...');
-
-            let departAll = this.page.locator('#departAll');
-            
-            // Tunggu respons API rute penerbangan asli selesai diproses jaringan,
-            // dikombinasikan dengan fungsi moveAndClick yang meluncur halus secara acak.
-            await Promise.all([
-                this.page.waitForResponse(response => 
-                    response.url().includes('route') && response.status() === 200, 
-                    { timeout: 10000 }
-                ).catch(() => console.log('Timeout waiting for API, doing fallback sleep')),
-                this.moveAndClick(departAll)
-            ]);
-
-            // Tambahkan jeda santai manusia pasca-klik (proses berpikir/animasi)
-            await GeneralUtils.randomSleep(1500, 3000);
-            
-            const cantDepartPlane = await this.page.getByText('×Unable to departSome A/C was').isVisible();
-            if(cantDepartPlane)
-                break;
-
-            departAllVisible = await this.page.locator('#departAll').isVisible();
-            count++;
-        }
-        console.log('Departed operations finished.');
-    }
+    await this.page.screenshot({
+      path: 'test-results/depart-result.png',
+      fullPage: true
+    });
+    console.log(`[Depart] Total de cliques: ${clicks}`);
+    console.log('[Depart] Verifique a frota para confirmar as decolagens.');
+  }
 }
