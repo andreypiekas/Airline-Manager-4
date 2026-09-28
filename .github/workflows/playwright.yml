@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       aktifkan_random_delay:
-        description: 'Ativar atraso aleatorio na execucao manual'
+        description: 'Ativar atraso aleatorio na execucao manual (padrao: desligado)'
         type: boolean
         required: false
         default: true
@@ -76,7 +76,7 @@ jobs:
         echo "INCREASE_AIRLINE_REPUTATION=${{ vars.INCREASE_AIRLINE_REPUTATION }}" >> .env
         echo "CAMPAIGN_TYPE=${{ vars.CAMPAIGN_TYPE }}" >> .env
         echo "CAMPAIGN_DURATION=${{ vars.CAMPAIGN_DURATION }}" >> .env
-        # --- PERBAIKAN BARU: Memasukkan variabel maintenance dinamis ---
+        # Variaveis de manutencao configuradas no GitHub
         echo "REPAIR_WEAR=${{ vars.REPAIR_WEAR }}" >> .env
         echo "HOURS_CHECK=${{ vars.HOURS_CHECK }}" >> .env
 
@@ -87,7 +87,7 @@ jobs:
       
     - name: Enviar relatorios da execucao
       uses: actions/upload-artifact@v4
-      if: always() # Tetap selalu upload seperti bawaan asli Anda
+      if: always() # Sempre guardar resultados para diagnostico
       with:
         name: playwright-report
         path: test-results/
