@@ -77,13 +77,13 @@ export class GeneralUtils {
     }
 
     public async login(page: Page) {
-        console.log('Logging in with enhanced keystroke and mouse dynamics...')
+        console.log('Iniciando login no Airline Manager 4...')
 
         await page.goto('https://www.airlinemanager.com/');
         
         // 🚀 OPTIMALISASI 1: Daripada tidur kaku 5 detik, kita suruh Playwright menunggu sampai network idle (aset selesai diunduh)
         // Jika server super cepat, proses ini hanya memakan waktu 1-2 detik saja!
-        await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => console.log("Network belum sepenuhnya idle, lanjut saja..."));
+        await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => console.log("Rede ainda esta carregando; continuando..."));
 
         // 🚀 OPTIMALISASI 2: Kasih timeout 30 detik (30000) KHUSUS untuk tombol "PLAY FREE NOW" karena ini gerbang pertama masuk web
         // Ingat: Playwright tidak akan menunggu sampai 30 detik penuh. Begitu tombolnya muncul di detik ke-3, ia langsung klik! Jadi tidak buang waktu.
@@ -114,6 +114,6 @@ export class GeneralUtils {
         const submitLoginButton = page.getByRole('button', { name: 'Log In', exact: true });
         await GeneralUtils.moveAndClick(page, submitLoginButton);
         
-        console.log('Logged in successfully!');
+        console.log('Tentativa de login concluida; validando operacoes seguintes.');
     }
 }
