@@ -13,8 +13,8 @@ export class FuelUtils {
         this.maxCo2Price = parseInt(process.env.MAX_CO2_PRICE!);
         this.page = page;
 
-        console.log("Max Fuel Price: " + this.maxFuelPrice);
-        console.log("Max Co2 Price: " + this.maxCo2Price);
+        console.log("Preco maximo do combustivel: " + this.maxFuelPrice);
+        console.log("Preco maximo de CO2: " + this.maxCo2Price);
     }
 
     /**
@@ -86,7 +86,7 @@ export class FuelUtils {
     }
 
     public async buyFuel() {
-        console.log('Buying Fuel...')
+        console.log('Verificando compra de combustivel...')
 
         const fuelInput = this.page.getByPlaceholder('Amount to purchase');
 
@@ -150,19 +150,19 @@ export class FuelUtils {
         }
 
         const currentBalance = await getCurrentBalance();
-        console.log('Current Balance: ' + currentBalance);
+        console.log('Saldo atual: ' + currentBalance);
 
         const emptyFuel = await getEmptyFuel();
         if(emptyFuel === 0) {
-            console.log('Fuel tank is already full.');
+            console.log('Tanque de combustivel ja esta cheio.');
             return;
         }
 
         const unitPrice = await getCurrentFuelUnitPrice();
         const curHolding = await getCurrentHolding();
 
-        console.log('Current Fuel Unit Price (per 1000): ' + unitPrice);
-        console.log('Current Balance: ' + currentBalance);
+        console.log('Preco atual do combustivel (por 1.000 L): ' + unitPrice);
+        console.log('Saldo atual: ' + currentBalance);
 
         const calculatePurchaseAmount = (capacity: number, balance: number, pricePer1000Liters: number) => {
             if (pricePer1000Liters <= 0 || balance <= 0) {
@@ -181,7 +181,7 @@ export class FuelUtils {
 
         const fillFuel = async (amountToBuy: number, label: string) => {
             if (amountToBuy <= 0) {
-                console.log('Skipped fuel purchase because computed amount is zero or insufficient balance.');
+                console.log('Compra de combustivel ignorada: quantidade zero ou saldo insuficiente.');
                 return;
             }
 
@@ -199,7 +199,7 @@ export class FuelUtils {
             const purchaseButton = this.page.getByRole('button', { name: ' Purchase' });
             await this.moveAndClick(purchaseButton);
             
-            console.log(`Bought Fuel Successfully! Amount of fuel bought: ${amountToBuy} Litres${label}`);
+            console.log(`Combustivel comprado. Quantidade: ${amountToBuy} litros${label}`);
         }
 
         if(unitPrice > 0 && unitPrice < this.maxFuelPrice) {
@@ -214,7 +214,7 @@ export class FuelUtils {
     }
 
     public async buyCo2() {
-        console.log('Buying CO2...')
+        console.log('Verificando compra de CO2...')
 
         const purchaseInput = this.page.getByPlaceholder('Amount to purchase');
 
@@ -237,14 +237,14 @@ export class FuelUtils {
 
         const emptyCo2 = await getEmptyCO2();
         if(emptyCo2 === 0) {
-            console.log('CO2 tank is already full.');
+            console.log('Reservatorio de CO2 ja esta cheio.');
             return;
         }
 
         const curCo2Price = await getCurrentCo2Price();
         const curHolding = await getCurrentHolding();
 
-        console.log('Current Co2 Price: ' + curCo2Price);
+        console.log('Preco atual do CO2: ' + curCo2Price);
 
         // Beli CO2 jika harga di bawah target harian maksimum
         if(curCo2Price < this.maxCo2Price) {
@@ -264,7 +264,7 @@ export class FuelUtils {
             const purchaseButton = this.page.getByRole('button', { name: ' Purchase' });
             await this.moveAndClick(purchaseButton);
 
-            console.log('Bought Co2 Successfully! Amount of co2 bought: ' + emptyCo2Capacity);
+            console.log('CO2 comprado. Quantidade: ' + emptyCo2Capacity);
         }
         // Kondisi darurat jika emisi kritis
         else if(curHolding < 1000000 && curCo2Price < 180) {
@@ -280,7 +280,7 @@ export class FuelUtils {
             const purchaseButton = this.page.getByRole('button', { name: ' Purchase' });
             await this.moveAndClick(purchaseButton);
 
-            console.log('Bought Co2 Successfully! Amount of co2 bought: 1000000 (Emergency Buy)');
+            console.log('CO2 comprado. Quantidade: 1000000 (Emergency Buy)');
         }
     }
 }
