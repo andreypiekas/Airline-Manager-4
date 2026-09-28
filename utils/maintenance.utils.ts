@@ -81,7 +81,7 @@ export class MaintenanceUtils {
      * Melakukan scroll balik ke atas secara penuh (mentok) secara bertahap.
      */
     private async scrollBackToTop() {
-        console.log("Melakukan scroll balik ke atas secara manusiawi...");
+        console.log("Voltando ao topo do painel de manutencao...");
         const upSteps = Math.floor(Math.random() * 3) + 4; // 4 sampai 6 kali usapan ke atas
         for (let k = 0; k < upSteps; k++) {
             const scrollAmount = -(Math.floor(Math.random() * 200) + 200); 
@@ -101,7 +101,7 @@ export class MaintenanceUtils {
         await GeneralUtils.randomSleep(1200, 2200);
         
         // --- 🚀 PROSES SELEKSI OPSI SECARA HUMAN-LIKE BERAKSI ---
-        console.log(`Memilih ambang batas perbaikan ${this.repairWear}% dengan jeda pencarian visual...`);
+        console.log(`Selecionando limite de desgaste para reparo: ${this.repairWear}%...`);
         const repairPercentSelect = this.page.locator('#repairPct');
         await this.moveAndSelectOption(repairPercentSelect, this.repairWear);
         await GeneralUtils.randomSleep(1200, 2500);
@@ -128,7 +128,7 @@ export class MaintenanceUtils {
         let didScroll = false; 
 
         // 🚀 STRATEGI UTAMA 1: Pre-Scroll ke bawah panel agar seluruh kartu pesawat (.bg-white) termuat penuh di layar
-        console.log("[Maintenance] Melakukan pre-scroll ke bawah panel untuk memuat seluruh komponen kartu...");
+        console.log("[Manutencao] Percorrendo painel para carregar todas as aeronaves...");
         for (let s = 0; s < 5; s++) {
             await this.page.mouse.wheel(0, 450);
             await GeneralUtils.randomSleep(200, 450);
@@ -141,7 +141,7 @@ export class MaintenanceUtils {
 
         // Ambil jumlah total elemen kartu pesawat `.bg-white` saat pertama kali dimuat
         let cardsCount = await this.page.locator('.bg-white').count();
-        console.log(`[Task] Mengevaluasi ${cardsCount} kartu pesawat dari atas ke bawah (Ambang batas: <= ${this.hoursCheck} jam)...`);
+        console.log(`[Manutencao] Avaliando ${cardsCount} aeronaves (limite: ate ${this.hoursCheck} horas)...`);
 
         // 🚀 STRATEGI UTAMA 2: Jalankan loop satu arah langsung dari indeks 0 hingga akhir
         for (let i = 0; i < cardsCount; i++) {
@@ -152,7 +152,7 @@ export class MaintenanceUtils {
             try {
                 await cardElement.waitFor({ state: 'attached', timeout: 3000 });
             } catch (e) {
-                console.log(`[Warning] Kartu indeks ${i} tidak merespon/hilang. Lanjut ke kartu berikutnya.`);
+                console.log(`[Aviso] Aeronave de indice ${i} indisponivel. Continuando para a proxima.`);
                 continue;
             }
 
@@ -199,7 +199,7 @@ export class MaintenanceUtils {
 
             // Eksekusi klik jika memenuhi syarat evaluasi di atas
             if (harusDiCheck) {
-                console.log(`[Preventif] Klik kartu pesawat indeks ${i} karena: ${alasan}`);
+                console.log(`[Preventivo] Selecionada aeronave de indice ${i} pelo motivo: ${alasan}`);
 
                 // Pastikan elemen berada di posisi tengah layar yang aman sebelum diklik oleh mouse virtual
                 await cardElement.scrollIntoViewIfNeeded();
@@ -230,9 +230,9 @@ export class MaintenanceUtils {
             // Upgrade tombol final bulk check menggunakan moveAndClick terpusat
             const planBulkCheckButton = this.page.getByRole('button', { name: 'Plan bulk check' });
             await GeneralUtils.moveAndClick(this.page, planBulkCheckButton);
-            console.log("[Maintenance] Batch bulk check berhasil dieksekusi!");
+            console.log("[Manutencao] Verificacoes em lote executadas.");
         } else {
-            console.log("[Preventif] Selesai. Semua pesawat dalam kondisi aman di atas batas jam terbang.");
+            console.log("[Preventivo] Finalizado. Aeronaves acima do limite de horas para revisao.");
         }
     }
 }
