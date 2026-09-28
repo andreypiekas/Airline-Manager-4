@@ -209,7 +209,7 @@ export class FuelUtils {
         else if(curHolding < 2000000 && unitPrice > 0 && unitPrice < 1250) {
             const suggestedAmount = 2000000;
             const purchaseAmount = calculatePurchaseAmount(suggestedAmount, currentBalance, unitPrice);
-            await fillFuel(purchaseAmount, ' (Emergency Buy)');
+            await fillFuel(purchaseAmount, ' (compra emergencial)');
         } 
     }
 
@@ -280,7 +280,7 @@ export class FuelUtils {
             const purchaseButton = this.page.getByRole('button', { name: ' Purchase' });
             await this.moveAndClick(purchaseButton);
 
-            console.log('CO2 comprado. Quantidade: 1000000 (Emergency Buy)');
+            console.log('CO2 comprado. Quantidade: 1000000 (compra emergencial)');
         }
     }
 }
