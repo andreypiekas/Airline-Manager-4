@@ -1,14 +1,14 @@
-name: Playwright Tests
+name: Automacao Airline Manager 4
 on:
   workflow_dispatch:
     inputs:
       aktifkan_random_delay:
-        description: 'Centang untuk aktifkan Random Delay (Default: ON)'
+        description: 'Ativar atraso aleatorio na execucao manual'
         type: boolean
         required: false
         default: true
       paksa_simpan_video:
-        description: 'Centang jika ingin paksa rekam video untuk ditonton (Default: OFF)'
+        description: 'Gravar video da execucao (padrao: desligado)'
         type: boolean
         required: false
         default: false
@@ -20,29 +20,29 @@ jobs:
     timeout-minutes: 29
     runs-on: ubuntu-22.04
     
-    # Hak akses wajib agar bot bisa melakukan push commit ke dalam repositori
+    # Permissao para atualizar o arquivo de atividade do repositorio
     permissions:
       contents: write
 
     steps:
     - uses: actions/checkout@v4
     
-    - name: Random Delay
-      # Langkah ini hanya berjalan jika opsi 'aktifkan_random_delay' bernilai true (tercentang)
+    - name: Atraso aleatorio opcional
+      # Executar atraso somente quando ativado manualmente
       if: github.event_name == 'workflow_dispatch' && inputs.aktifkan_random_delay == true
       run: |
          DELAY=$(( RANDOM % 1500 ))
-         echo "Menunggu $DELAY detik..."
+         echo "Aguardando $DELAY segundos..."
          sleep $DELAY
 
     - uses: actions/setup-node@v4
       with:
         node-version: '22' # Aman dari bug freeze ekstraksi ZIP
 
-    - name: Install dependencies
+    - name: Instalar dependencias
       run: npm ci
 
-    - name: Get Playwright version
+    - name: Identificar versao do Playwright
       id: pw-version
       run: echo "version=$(npx playwright --version | awk '{print $2}')" >> $GITHUB_OUTPUT
 
@@ -52,21 +52,21 @@ jobs:
         path: ~/.cache/ms-playwright
         key: ${{ runner.os }}-playwright-${{ steps.pw-version.outputs.version }}
 
-    - name: Disable Man-DB Auto-Update
+    - name: Desativar atualizacao automatica do Man-DB
       run: |
         sudo debconf-set-selections <<< "man-db man-db/auto-update boolean false"
         sudo dpkg-reconfigure man-db
 
-    - name: Install Playwright Browsers & System Dependencies
+    - name: Instalar Chromium e dependencias
       env:
         NODE_OPTIONS: "--max-old-space-size=4096"
       run: npx playwright install --with-deps chromium
 
-    - name: Install Xvfb (Virtual Display Layer)
-      # Menambahkan alat Xvfb agar server Linux memiliki layar monitor virtual
+    - name: Instalar servidor de tela virtual Xvfb
+      # Xvfb fornece uma tela virtual para o navegador
       run: sudo apt-get update && sudo apt-get install -y xvfb
 
-    - name: Create .env file
+    - name: Criar arquivo de configuracao .env
       run: |
         touch .env
         echo "EMAIL=${{ secrets.EMAIL }}" >> .env
@@ -80,12 +80,12 @@ jobs:
         echo "REPAIR_WEAR=${{ vars.REPAIR_WEAR }}" >> .env
         echo "HOURS_CHECK=${{ vars.HOURS_CHECK }}" >> .env
 
-    - name: Run Playwright tests (Headed Mode via Xvfb)
+    - name: Executar bot Airline Manager 4
       env:
         PAKSI_VIDEO: ${{ github.event.inputs.paksa_simpan_video }}
       run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed
       
-    - name: Upload Test Results
+    - name: Enviar relatorios da execucao
       uses: actions/upload-artifact@v4
       if: always() # Tetap selalu upload seperti bawaan asli Anda
       with:
@@ -93,22 +93,22 @@ jobs:
         path: test-results/
         retention-days: 7
 
-    # SOLUSI KOREKSI: Otomatis push file last-commit.txt jika ada perubahan dari script spec.ts
-    - name: Keepalive Via Auto Commit
+    # Atualizar arquivo de atividade caso tenha sido modificado
+    - name: Manter repositorio ativo
       if: always()
       run: |
-        # Konfigurasi identitas Git
+        # Configurar identidade do Git
         git config user.name "github-actions[bot]"
         git config user.email "github-actions[bot]@users.noreply.github.com"
         
-        # Cek apakah ada perubahan nyata pada file last-commit.txt
+        # Verificar se last-commit.txt foi modificado
         if [ -f "last-commit.txt" ] && git status --porcelain | grep -q "last-commit.txt"; then
-          echo "Terdeteksi perubahan pada last-commit.txt. Menjalankan auto-commit..."
+          echo "Alteracoes identificadas em last-commit.txt. Registrando commit automatico..."
           git add last-commit.txt
-          # Tag [skip ci] wajib agar commit ini tidak memicu run tes baru secara berulang-ulang
+          # Evitar disparar novas execucoes com o commit automatico
           git commit -m "chore: keepalive update [skip ci]"
           git push
         else
-          echo "Tidak ada perubahan pada last-commit.txt (Bukan tanggal 1 atau sudah di-commit pada sesi sebelumnya). Git tetap bersih."
+          echo "Nenhuma alteracao em last-commit.txt. Nenhum commit necessario."
         fi
         
