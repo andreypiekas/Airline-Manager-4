@@ -77,6 +77,8 @@ jobs:
         PASSWORD: ${{ secrets.PASSWORD }}
         MAX_FUEL_PRICE: ${{ vars.MAX_FUEL_PRICE }}
         MAX_CO2_PRICE: ${{ vars.MAX_CO2_PRICE }}
+        MAX_FUEL_PURCHASE_PER_RUN: ${{ vars.MAX_FUEL_PURCHASE_PER_RUN }}
+        MAX_CO2_PURCHASE_PER_RUN: ${{ vars.MAX_CO2_PURCHASE_PER_RUN }}
         REPAIR_WEAR: ${{ vars.REPAIR_WEAR }}
         HOURS_CHECK: ${{ vars.HOURS_CHECK }}
         INCREASE_AIRLINE_REPUTATION: ${{ vars.INCREASE_AIRLINE_REPUTATION }}
