@@ -13,6 +13,13 @@ export class FuelUtils {
         this.maxCo2Price = parseInt(process.env.MAX_CO2_PRICE!);
         this.page = page;
 
+        if (!Number.isFinite(this.maxFuelPrice) || this.maxFuelPrice <= 0) {
+            throw new Error('MAX_FUEL_PRICE deve ser um numero positivo.');
+        }
+        if (!Number.isFinite(this.maxCo2Price) || this.maxCo2Price <= 0) {
+            throw new Error('MAX_CO2_PRICE deve ser um numero positivo.');
+        }
+
         console.log("Preco maximo do combustivel: " + this.maxFuelPrice);
         console.log("Preco maximo de CO2: " + this.maxCo2Price);
     }
@@ -180,6 +187,11 @@ export class FuelUtils {
         }
 
         const fillFuel = async (amountToBuy: number, label: string) => {
+            const configuredLimit = Number(process.env.MAX_FUEL_PURCHASE_PER_RUN || '0');
+            if (Number.isFinite(configuredLimit) && configuredLimit > 0) {
+                amountToBuy = Math.min(amountToBuy, Math.floor(configuredLimit));
+            }
+            amountToBuy = Math.min(amountToBuy, emptyFuel);
             if (amountToBuy <= 0) {
                 console.log('Compra de combustivel ignorada: quantidade zero ou saldo insuficiente.');
                 return;
@@ -246,9 +258,13 @@ export class FuelUtils {
 
         console.log('Preco atual do CO2: ' + curCo2Price);
 
-        // Beli CO2 jika harga di bawah target harian maksimum
-        if(curCo2Price < this.maxCo2Price) {
-            const emptyCo2Capacity = (await this.page.locator('#remCapacity').innerText()).replaceAll(',', '');
+        // Limitar a quantidade comprada por execucao, se configurado.
+        const rawCo2Limit = Number(process.env.MAX_CO2_PURCHASE_PER_RUN || '0');
+        const co2Limit = Number.isFinite(rawCo2Limit) && rawCo2Limit > 0
+            ? Math.floor(rawCo2Limit) : emptyCo2;
+
+        if(curCo2Price > 0 && curCo2Price < this.maxCo2Price) {
+            const emptyCo2Capacity = String(Math.min(emptyCo2, co2Limit));
 
             // Gerakkan kursor secara halus dan acak ke input box
             await this.moveAndClick(purchaseInput);
@@ -267,20 +283,22 @@ export class FuelUtils {
             console.log('CO2 comprado. Quantidade: ' + emptyCo2Capacity);
         }
         // Kondisi darurat jika emisi kritis
-        else if(curHolding < 1000000 && curCo2Price < 180) {
+        else if(curHolding < 1000000 && curCo2Price > 0 && curCo2Price < 180) {
+            const emergencyAmount = Math.min(emptyCo2, co2Limit, 1000000);
+            if (emergencyAmount <= 0) return;
             await this.moveAndClick(purchaseInput);
             await GeneralUtils.randomSleep(500, 1200);
             
             await purchaseInput.press('Control+a');
             await GeneralUtils.randomSleep(400, 900);
             
-            await purchaseInput.pressSequentially('1000000', { delay: Math.floor(Math.random() * 80) + 40 });
+            await purchaseInput.pressSequentially(emergencyAmount.toString(), { delay: Math.floor(Math.random() * 80) + 40 });
             await GeneralUtils.randomSleep(1000, 2000);
             
             const purchaseButton = this.page.getByRole('button', { name: ' Purchase' });
             await this.moveAndClick(purchaseButton);
 
-            console.log('CO2 comprado. Quantidade: 1000000 (compra emergencial)');
+            console.log('CO2 comprado. Quantidade: ' + emergencyAmount + ' (compra emergencial)');
         }
     }
 }
