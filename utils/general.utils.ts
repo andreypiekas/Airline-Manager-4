@@ -85,21 +85,63 @@ export class GeneralUtils {
         // Jika server super cepat, proses ini hanya memakan waktu 1-2 detik saja!
         await page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => console.log("Rede ainda esta carregando; continuando..."));
 
-        // 🚀 OPTIMALISASI 2: Kasih timeout 30 detik (30000) KHUSUS untuk tombol "PLAY FREE NOW" karena ini gerbang pertama masuk web
-        // Ingat: Playwright tidak akan menunggu sampai 30 detik penuh. Begitu tombolnya muncul di detik ke-3, ia langsung klik! Jadi tidak buang waktu.
-        const playFreeButton = page.getByRole('button', { name: 'PLAY FREE NOW' });
-        await GeneralUtils.moveAndClick(page, playFreeButton, 30000); 
-        await GeneralUtils.randomSleep(1000, 2000);
+        // Abrir o jogo e verificar a transicao antes de procurar o formulario.
+        // Usar locator.click() permite ao Playwright esperar estabilidade do elemento.
+        const playFreeButton = page.getByRole('button', { name: /play free now/i });
+        await playFreeButton.waitFor({ state: 'visible', timeout: 30000 });
 
-        // O texto do botao pode variar entre "Log in", "Log In" e "Login".
-        // Confirma que o formulario foi aberto, sem mascarar falhas na pagina.
-        const loginMenuButton = page.getByRole('button', { name: /^(log\s*in|login|sign\s*in)$/i }).first();
+        let loginOpened = false;
+        const loginMenuButton = page.getByRole('button', { name: /log\s*in|sign\s*in/i });
+
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            console.log(`[Login] Tentativa ${attempt}/3 de abrir o jogo...`);
+            if (await page.locator('#lEmail').isVisible()) {
+                loginOpened = true;
+                break;
+            }
+
+            if (await loginMenuButton.first().isVisible()) {
+                loginOpened = true;
+                break;
+            }
+
+            try {
+                await playFreeButton.click({ timeout: 12000 });
+            } catch (error) {
+                console.warn('[Login] Clique em PLAY FREE NOW falhou:', error);
+            }
+
+            try {
+                await loginMenuButton.first().waitFor({ state: 'visible', timeout: 7000 });
+                loginOpened = true;
+                break;
+            } catch {
+                if (await page.locator('#lEmail').isVisible()) {
+                    loginOpened = true;
+                    break;
+                }
+                console.warn('[Login] O jogo ainda nao mostrou o acesso; tentando novamente.');
+                await page.waitForTimeout(1500);
+            }
+        }
+
+        if (!loginOpened) {
+            await page.screenshot({
+                path: 'test-results/login-start-failed.png',
+                fullPage: true
+            });
+            throw new Error('[Login] PLAY FREE NOW nao abriu a tela de acesso.');
+        }
+
+        if (!(await page.locator('#lEmail').isVisible())) {
+            console.log('[Login] Abrindo formulario de acesso...');
+            await loginMenuButton.first().click({ timeout: 15000 });
+        }
+
         try {
-            await GeneralUtils.moveAndClick(page, loginMenuButton, 20000);
-            await page.locator('#lEmail').waitFor({ state: 'visible', timeout: 10000 });
+            await page.locator('#lEmail').waitFor({ state: 'visible', timeout: 12000 });
         } catch (error) {
-            console.error('[Login] Nao foi possivel abrir o formulario de acesso.', error);
-            console.error('[Login] URL atual:', page.url());
+            console.error('[Login] Formulario de acesso nao apareceu. URL:', page.url());
             await page.screenshot({
                 path: 'test-results/login-form-not-found.png',
                 fullPage: true
