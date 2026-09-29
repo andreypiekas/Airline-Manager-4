@@ -24,6 +24,8 @@ Em **Settings > Secrets and variables > Actions > Variables**:
 | --- | --- | --- |
 | `MAX_FUEL_PRICE` | `550` | Limite de compra normal de combustivel |
 | `MAX_CO2_PRICE` | `120` | Limite de compra normal de CO2 |
+| `MAX_FUEL_PURCHASE_PER_RUN` | `500000` | Teto opcional em litros de combustivel por execucao; omitido = sem teto adicional |
+| `MAX_CO2_PURCHASE_PER_RUN` | `500000` | Teto opcional de CO2 por execucao; omitido = sem teto adicional |
 | `REPAIR_WEAR` | `30` | Percentual usado nas reparacoes |
 | `HOURS_CHECK` | `20` | Limite de horas da verificacao de aeronaves |
 | `INCREASE_AIRLINE_REPUTATION` | `true` | Habilita campanha de reputacao |
