@@ -6,7 +6,7 @@ on:
         description: 'Ativar atraso aleatorio na execucao manual (padrao: desligado)'
         type: boolean
         required: false
-        default: true
+        default: false
       paksa_simpan_video:
         description: 'Gravar video da execucao (padrao: desligado)'
         type: boolean
@@ -69,25 +69,30 @@ jobs:
       # Xvfb fornece uma tela virtual para o navegador
       run: sudo apt-get update && sudo apt-get install -y xvfb
 
-    - name: Criar arquivo de configuracao .env
-      run: |
-        touch .env
-        echo "EMAIL=${{ secrets.EMAIL }}" >> .env
-        echo "PASSWORD=${{ secrets.PASSWORD }}" >> .env
-        echo "MAX_FUEL_PRICE=${{ vars.MAX_FUEL_PRICE }}" >> .env
-        echo "MAX_CO2_PRICE=${{ vars.MAX_CO2_PRICE }}" >> .env
-        echo "INCREASE_AIRLINE_REPUTATION=${{ vars.INCREASE_AIRLINE_REPUTATION }}" >> .env
-        echo "CAMPAIGN_TYPE=${{ vars.CAMPAIGN_TYPE }}" >> .env
-        echo "CAMPAIGN_DURATION=${{ vars.CAMPAIGN_DURATION }}" >> .env
-        # Variaveis de manutencao configuradas no GitHub
-        echo "REPAIR_WEAR=${{ vars.REPAIR_WEAR }}" >> .env
-        echo "HOURS_CHECK=${{ vars.HOURS_CHECK }}" >> .env
-
+    # Secrets sao entregues diretamente ao processo, sem gravar senhas em .env.
     - name: Executar bot Airline Manager 4
       id: bot
       env:
-        PAKSI_VIDEO: ${{ github.event.inputs.paksa_simpan_video }}
-      run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed
+        EMAIL: ${{ secrets.EMAIL }}
+        PASSWORD: ${{ secrets.PASSWORD }}
+        MAX_FUEL_PRICE: ${{ vars.MAX_FUEL_PRICE }}
+        MAX_CO2_PRICE: ${{ vars.MAX_CO2_PRICE }}
+        REPAIR_WEAR: ${{ vars.REPAIR_WEAR }}
+        HOURS_CHECK: ${{ vars.HOURS_CHECK }}
+        INCREASE_AIRLINE_REPUTATION: ${{ vars.INCREASE_AIRLINE_REPUTATION }}
+        CAMPAIGN_TYPE: ${{ vars.CAMPAIGN_TYPE }}
+        CAMPAIGN_DURATION: ${{ vars.CAMPAIGN_DURATION }}
+        ENABLE_FUEL: ${{ vars.ENABLE_FUEL }}
+        ENABLE_MAINTENANCE: ${{ vars.ENABLE_MAINTENANCE }}
+        ENABLE_CAMPAIGN: ${{ vars.ENABLE_CAMPAIGN }}
+        ENABLE_DEPART: ${{ vars.ENABLE_DEPART }}
+        PAKSI_VIDEO: ${{ inputs.paksa_simpan_video }}
+      run: |
+        if [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
+          echo "::error::Secrets EMAIL e PASSWORD sao obrigatorios."
+          exit 1
+        fi
+        xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed
       
     - name: Enviar relatorios da execucao
       uses: actions/upload-artifact@v4
