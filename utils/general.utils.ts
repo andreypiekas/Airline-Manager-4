@@ -93,7 +93,7 @@ export class GeneralUtils {
 
         // O texto do botao pode variar entre "Log in", "Log In" e "Login".
         // Confirma que o formulario foi aberto, sem mascarar falhas na pagina.
-        const loginMenuButton = page.getByRole('button', { name: /^(log\\s*in|login|sign\\s*in)$/i }).first();
+        const loginMenuButton = page.getByRole('button', { name: /^(log\s*in|login|sign\s*in)$/i }).first();
         try {
             await GeneralUtils.moveAndClick(page, loginMenuButton, 20000);
             await page.locator('#lEmail').waitFor({ state: 'visible', timeout: 10000 });
