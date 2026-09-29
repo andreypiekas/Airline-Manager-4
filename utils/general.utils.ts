@@ -91,9 +91,21 @@ export class GeneralUtils {
         await GeneralUtils.moveAndClick(page, playFreeButton, 30000); 
         await GeneralUtils.randomSleep(1000, 2000);
 
-        // Kasih timeout sedikit lebih panjang juga untuk pemuatan modal login
-        const loginMenuButton = page.getByRole('button', { name: 'Log in' });
-        await GeneralUtils.moveAndClick(page, loginMenuButton, 15000);
+        // O texto do botao pode variar entre "Log in", "Log In" e "Login".
+        // Confirma que o formulario foi aberto, sem mascarar falhas na pagina.
+        const loginMenuButton = page.getByRole('button', { name: /^(log\\s*in|login|sign\\s*in)$/i }).first();
+        try {
+            await GeneralUtils.moveAndClick(page, loginMenuButton, 20000);
+            await page.locator('#lEmail').waitFor({ state: 'visible', timeout: 10000 });
+        } catch (error) {
+            console.error('[Login] Nao foi possivel abrir o formulario de acesso.', error);
+            console.error('[Login] URL atual:', page.url());
+            await page.screenshot({
+                path: 'test-results/login-form-not-found.png',
+                fullPage: true
+            });
+            throw error;
+        }
         await GeneralUtils.randomSleep(1000, 2000);
 
         // --- Proses Pengisian Email ---
