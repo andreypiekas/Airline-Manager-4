@@ -1,9 +1,16 @@
+import { readDemandConfig } from '../demand/config';
+import { runDemandSimulation } from '../demand/run';
 import { Page } from '@playwright/test';
 
 export class FleetUtils {
   constructor(private readonly page: Page) {}
 
   public async departPlanes(): Promise<void> {
+    const config = readDemandConfig();
+    if (config.enabled) {
+      await runDemandSimulation(this.page, config);
+      return; // No fallback to departAll, including on unavailable demand.
+    }
     console.log('[Depart] Aguardando botao de decolagem...');
 
     const button = this.page.locator('#departAll');
@@ -52,3 +59,4 @@ export class FleetUtils {
     console.log('[Depart] Verifique a frota para confirmar as decolagens.');
   }
 }
+

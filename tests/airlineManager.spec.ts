@@ -1,3 +1,6 @@
+import { readDemandConfig } from '../demand/config';
+import { runDemandSimulation } from '../demand/run';
+import { withRunLock } from '../utils/run-lock';
 import { test } from '@playwright/test';
 import { GeneralUtils } from '../utils/general.utils';
 import { FuelUtils } from '../utils/fuel.utils';
@@ -10,6 +13,16 @@ import * as path from 'path';
 require('dotenv').config();
 
 test('All Operations', async ({ page }) => {
+  await withRunLock(async () => {
+  const demandConfig = readDemandConfig();
+  if (demandConfig.enabled) {
+    test.setTimeout(600000);
+    await new GeneralUtils(page).login(page);
+    await page.locator('#mapRoutes').waitFor({ state: 'visible', timeout: 30000 });
+    await page.locator('#mapRoutes').click();
+    await runDemandSimulation(page, demandConfig);
+    return; // Simulation bypasses every financial, maintenance, campaign and departure module.
+  }
   // Timeout 3 menit karena simulasi gerakan kursor dan delay manusia butuh waktu lebih lama
   test.setTimeout(600000);
 
@@ -72,7 +85,7 @@ test('All Operations', async ({ page }) => {
   };
 
   // Kumpulan lokator ubin menu utama di peta untuk pancingan anti-freeze
-  const menuTiles = {
+  const menuTiles: Record<string, import('@playwright/test').Locator> = {
     fuel: page.locator('#mapMaint > img').first(),
     maintenance: page.locator('div:nth-child(4) > #mapMaint > img'),
     campaign: page.locator('div:nth-child(5) > #mapMaint > img'),
@@ -276,5 +289,5 @@ test('All Operations', async ({ page }) => {
   console.log('--- Rotina de operacoes concluida ---');
   await GeneralUtils.randomSleep(1000, 2000);
   await page.close();
+  });
 });
-

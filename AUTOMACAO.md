@@ -1,5 +1,11 @@
 # Operacao automatica do Airline Manager 4
 
+## Gerenciamento de demanda (nova rotina padrão)
+
+Esta versão inicia com `ENABLE_DEMAND_MANAGER=true`, `DEMAND_DRY_RUN=true` e `DEMAND_FAIL_SAFE=true`: somente login, leitura de rotas e relatório. **Nenhuma compra, manutenção, campanha ou decolagem é executada nesse modo**, mesmo que os antigos `ENABLE_*` estejam ativos. Não há fallback para `departAll`. Veja [configurações, inspeção, seletores e pendências](docs/DEMAND_MANAGER.md).
+
+Desativar `ENABLE_DEMAND_MANAGER` restaura o fluxo legado de operações reais descrito abaixo; não ativa decolagem inteligente. A integração real do DemandManager ainda exige autorização e validação posterior. O novo `validate.yml` faz testes locais com fixtures, sem conta do jogo.
+
 ## Situacao
 
 - A execucao e iniciada manualmente pela aba **Actions** ou pela API `workflow_dispatch` utilizada no **cron-job.org**.
@@ -37,7 +43,7 @@ Em **Settings > Secrets and variables > Actions > Variables**:
 | `ENABLE_DEPART` | `true` | Habilita decolagens |
 | `ALERT_CASH_ABOVE` | `5000000` | Alerta opcional por Telegram se o saldo detectado for igual/maior |
 
-Variaveis `ENABLE_*` omitidas equivalem a `true`, preservando o comportamento anterior. Coloque `false` para desligar algum modulo. O alerta de saldo so funciona se houver Telegram configurado e o modulo de combustivel conseguir registrar o saldo. Ele nao dispara sozinho fora dos ciclos do bot.
+No fluxo legado, variaveis `ENABLE_*` omitidas equivalem a `true`, preservando o comportamento anterior. Coloque `false` para desligar algum modulo. O alerta de saldo so funciona se houver Telegram configurado e o modulo de combustivel conseguir registrar o saldo. Ele nao dispara sozinho fora dos ciclos do bot.
 
 **Atencao:** o algoritmo original tambem permite compras emergenciais por limites fixos, separados de `MAX_FUEL_PRICE` e `MAX_CO2_PRICE`. Revise antes de usar com uma companhia com pouco saldo.
 
@@ -63,3 +69,4 @@ O workflow tenta enviar uma mensagem no Telegram ao final, mas essa notificacao 
 Este repositorio ja automatiza as operacoes de combustivel/CO2, manutencao, campanhas e decolagens. Compra automatica de novas aeronaves, abertura de rotas, alteracao de precos e outras operacoes de investimento **nao foram habilitadas**: exigem seletores testados e limites financeiros especificos para evitar gastos irreversiveis.
 
 Nao existe garantia de ausencia de banimento, disponibilidade 24h, sucesso de login ou horarios exatos de execucao. O uso do bot pode contrariar as regras do jogo.
+

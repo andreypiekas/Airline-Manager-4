@@ -45,6 +45,9 @@ jobs:
     - name: Instalar dependencias
       run: npm ci
 
+    - name: Verificar compilacao
+      run: npm run typecheck
+
     - name: Identificar versao do Playwright
       id: pw-version
       run: echo "version=$(npx playwright --version | awk '{print $2}')" >> $GITHUB_OUTPUT
@@ -65,6 +68,13 @@ jobs:
         NODE_OPTIONS: "--max-old-space-size=4096"
       run: npx playwright install --with-deps chromium
 
+    - name: Testar calculos e interface simulada (sem credenciais)
+      run: npm test
+
+    - name: Limpar relatorios sinteticos antes da coleta real
+      if: always()
+      run: rm -rf test-results/demand
+
     - name: Instalar servidor de tela virtual Xvfb
       # Xvfb fornece uma tela virtual para o navegador
       run: sudo apt-get update && sudo apt-get install -y xvfb
@@ -73,6 +83,13 @@ jobs:
     - name: Executar bot Airline Manager 4
       id: bot
       env:
+        ENABLE_DEMAND_MANAGER: ${{ vars.ENABLE_DEMAND_MANAGER || 'true' }}
+        DEMAND_DRY_RUN: ${{ vars.DEMAND_DRY_RUN || 'true' }}
+        DEMAND_FAIL_SAFE: ${{ vars.DEMAND_FAIL_SAFE || 'true' }}
+        MIN_DEMAND_PERCENTAGE: ${{ vars.MIN_DEMAND_PERCENTAGE || '80' }}
+        DEMAND_THRESHOLD_MODE: ${{ vars.DEMAND_THRESHOLD_MODE || 'aggregate' }}
+        DEMAND_POOL_SCOPE: ${{ vars.DEMAND_POOL_SCOPE || 'airport-pair' }}
+        DEMAND_MAX_AGE_SECONDS: ${{ vars.DEMAND_MAX_AGE_SECONDS || '300' }}
         EMAIL: ${{ secrets.EMAIL }}
         PASSWORD: ${{ secrets.PASSWORD }}
         MAX_FUEL_PRICE: ${{ vars.MAX_FUEL_PRICE }}
@@ -98,6 +115,31 @@ jobs:
         mkdir -p test-results
         xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed 2>&1 | tee test-results/bot.log
       
+    - name: Resumo de demanda
+      if: always()
+      run: |
+        if [ -f test-results/demand/demand-report.md ]; then
+          cat test-results/demand/demand-report.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Enviar JSON e Markdown de demanda
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: demand-report
+        path: test-results/demand/
+        if-no-files-found: ignore
+        retention-days: 7
+
+    - name: Notificar problemas de demanda (opcional)
+      if: always()
+      continue-on-error: true
+      env:
+        DEMAND_TELEGRAM_ENABLED: ${{ vars.DEMAND_TELEGRAM_ENABLED || 'false' }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      run: node scripts/telegram-demand.cjs
+
     - name: Enviar relatorios da execucao
       uses: actions/upload-artifact@v4
       if: always() # Sempre guardar resultados para diagnostico
@@ -128,7 +170,7 @@ jobs:
     # Alertas opcionais. Configure TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID
     # em Settings > Secrets and variables > Actions > Secrets.
     - name: Notificar resultado pelo Telegram
-      if: always()
+      if: always() && vars.ENABLE_DEMAND_MANAGER == 'false'
       continue-on-error: true
       env:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
@@ -162,3 +204,4 @@ jobs:
           --data-urlencode "text=Airline Manager 4: $STATUS | $RUN_URL" \
           "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
           > /dev/null
+
