@@ -92,7 +92,9 @@ jobs:
           echo "::error::Secrets EMAIL e PASSWORD sao obrigatorios."
           exit 1
         fi
-        xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed
+        set -o pipefail
+        mkdir -p test-results
+        xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed 2>&1 | tee test-results/bot.log
       
     - name: Enviar relatorios da execucao
       uses: actions/upload-artifact@v4
@@ -131,6 +133,7 @@ jobs:
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         BOT_RESULT: ${{ steps.bot.outcome }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        ALERT_CASH_ABOVE: ${{ vars.ALERT_CASH_ABOVE }}
       run: |
         if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
           echo "Telegram nao configurado. Notificacao ignorada."
@@ -142,6 +145,14 @@ jobs:
           STATUS="FALHA"
         else
           STATUS="NAO CONCLUIDO ($BOT_RESULT)"
+        fi
+        # Opcional: informar saldo quando ultrapassar o limite configurado.
+        # Sem a variavel ALERT_CASH_ABOVE nao existe alerta financeiro.
+        if [[ "$ALERT_CASH_ABOVE" =~ ^[0-9]+$ ]] && [ -f test-results/bot.log ]; then
+          BALANCE=$(sed -nE 's/.*Saldo antes de abrir combustivel: ([0-9]+).*/\1/p' test-results/bot.log | tail -n 1)
+          if [[ "$BALANCE" =~ ^[0-9]+$ ]] && (( BALANCE >= ALERT_CASH_ABOVE )); then
+            STATUS="$STATUS | Saldo acima do limite: $BALANCE"
+          fi
         fi
         curl --fail --silent --show-error --max-time 15 \
           --request POST \
