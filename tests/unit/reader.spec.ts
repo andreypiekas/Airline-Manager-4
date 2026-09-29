@@ -5,7 +5,7 @@ import { runDemandSimulation } from '../../demand/run';
 import { readDemandConfig } from '../../demand/config';
 import { readFile } from 'node:fs/promises';
 
-interface FixtureOptions { missingCabin?: boolean; badDemand?: boolean; wrongIdentity?: boolean; pages?: number; badCount?: boolean; loop?: boolean; missingDetails?: boolean }
+interface FixtureOptions { missingCabin?: boolean; badDemand?: boolean; wrongIdentity?: boolean; pages?: number; badCount?: boolean; loop?: boolean; missingDetails?: boolean; unknownAuto?: boolean }
 async function fixture(page: Page, options: FixtureOptions = {}) {
   await page.route('**/*', route => route.abort()); // Absolutely no game or other network access.
   const errors: string[] = [];
@@ -14,6 +14,7 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
     <div id="routeAction"><div id="routesContainer"></div></div><div id="detailsAction" style="display:none"></div>
     <script>
     window.mutations=0;
+    window.ticketPriceSuggest=()=>window.mutations++;
     const options=${JSON.stringify(options)};
     function render(index=0) {
       document.getElementById('routeAction').style.display='block';
@@ -38,6 +39,8 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
       '<div onclick="document.getElementById(\'seat-layout\').style.display=\'block\'">Seat layout</div>'+
       '<div id="seat-layout" style="display:none">'+['economy','business','first'].map((c,i)=>'<div><img src="assets/'+c+'_seat.png"><br>'+(i?0:100)+'<div>$<input value="9999"></div></div>').join('')+'</div>'+
       '<div>Todays demand</div><div id="list-demand">'+['economy','business','first'].filter((c,i)=>!options.missingCabin||i!==1).map((c,i)=>'<div><img src="assets/'+c+'_seat.png"><br>'+(i?'0/200':options.badDemand?'90/80':'90/1000')+'</div>').join('')+'</div>';
+      d.querySelector('#seat-layout').insertAdjacentHTML('beforeend', '<button onclick="'+(options.unknownAuto?'unknownCallback()':'ticketPriceSuggest(1234,3456,17890,this,291);')+'">Auto</button><button onclick="window.mutations++">Save</button>');
+      d.querySelectorAll('#seat-layout input').forEach((el,i)=>el.id=['eTicket','bTicket','fTicket'][i]);
     }
     render();
     </script>`);
@@ -81,4 +84,17 @@ test('FleetUtils simulation never clicks departAll, individual Depart or Ground'
 test('total UI load failure returns an incomplete report', async ({ page }) => {
   await page.setContent('<p>Loading</p>'); const r = await new DemandReader(page, 100).collect();
   expect(r.complete).toBe(false); expect(r.warnings).toContain('COLLECTION_FAILED');
+});
+
+
+test('reads automatic fare reference without clicking Auto/Save or changing prices', async ({ page }) => {
+  await fixture(page); const result = await new DemandReader(page, 400).collect();
+  expect(result.aircraft[0].fares).toMatchObject({ automatic: { Y: 1234, J: 3456, F: 17890 }, current: { Y: 9999, J: 9999, F: 9999 }, source: 'inspected-auto-control' });
+  expect(await page.locator('#eTicket').inputValue()).toBe('9999');
+  expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
+});
+test('unknown Auto callback does not invalidate valid demand but blocks pricing', async ({ page }) => {
+  await fixture(page, { unknownAuto: true }); const result = await new DemandReader(page, 400).collect();
+  expect(result.aircraft[0].state).toBe('ready'); expect(result.aircraft[0].fares?.source).toBe('unavailable');
+  expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
 });

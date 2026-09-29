@@ -83,6 +83,10 @@ jobs:
     - name: Executar bot Airline Manager 4
       id: bot
       env:
+        ENABLE_TICKET_PRICING: ${{ vars.ENABLE_TICKET_PRICING || 'true' }}
+        ENABLE_ROUTE_OPTIMIZER: ${{ vars.ENABLE_ROUTE_OPTIMIZER || 'true' }}
+        ROUTE_MIN_OCCUPANCY_PERCENT: ${{ vars.ROUTE_MIN_OCCUPANCY_PERCENT || '80' }}
+        ROUTE_MIN_IMPROVEMENT_PERCENT: ${{ vars.ROUTE_MIN_IMPROVEMENT_PERCENT || '0' }}
         ENABLE_DEMAND_MANAGER: ${{ vars.ENABLE_DEMAND_MANAGER || 'true' }}
         DEMAND_DRY_RUN: ${{ vars.DEMAND_DRY_RUN || 'true' }}
         DEMAND_FAIL_SAFE: ${{ vars.DEMAND_FAIL_SAFE || 'true' }}
@@ -120,6 +124,9 @@ jobs:
       run: |
         if [ -f test-results/demand/demand-report.md ]; then
           cat test-results/demand/demand-report.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/optimization-report.md ]; then
+          cat test-results/demand/optimization-report.md >> "$GITHUB_STEP_SUMMARY"
         fi
 
     - name: Enviar JSON e Markdown de demanda

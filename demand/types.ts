@@ -1,3 +1,4 @@
+import type { FareObservation } from '../pricing/ticket-pricing';
 export const CLASSES = ['Y', 'J', 'F'] as const;
 export type Cabin = typeof CLASSES[number];
 export type Cabins = Record<Cabin, number>;
@@ -15,6 +16,7 @@ export interface AircraftSnapshot {
   dailyTotal: Cabins | null;
   observedAt: string;
   issue?: string;
+  fares?: FareObservation;
 }
 export interface DemandConfig {
   enabled: boolean;

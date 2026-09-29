@@ -127,3 +127,7 @@ Criados: `demand/types.ts`, `demand/config.ts`, `demand/manager.ts`, `demand/par
 Modificados: `utils/fleet.utils.ts`, `tests/airlineManager.spec.ts`, `.github/workflows/playwright.yml`, `playwright.config.ts`, `tsconfig.json`, `package.json`, `package-lock.json`, `.gitignore`, `AUTOMACAO.md` e `README.md`.
 
 `utils/general.utils.ts` foi inspecionado; o login existente foi reutilizado sem alteração. Os módulos financeiros não foram modificados nem executados.
+
+## Extensão: rotas e tarifas
+
+A atualização posterior acrescenta a proposta de tarifas e o motor de revisão de rotas documentados em [ROUTES_AND_PRICING.md](ROUTES_AND_PRICING.md). As novas propostas também são exclusivamente simuladas; dados ausentes de base/retorno/candidatos bloqueiam a revisão da rota.

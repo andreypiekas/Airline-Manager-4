@@ -1,3 +1,4 @@
+import { optimizationConfig } from '../optimization/report';
 import { readDemandConfig } from '../demand/config';
 import { runDemandSimulation } from '../demand/run';
 import { withRunLock } from '../utils/run-lock';
@@ -16,6 +17,7 @@ test('All Operations', async ({ page }) => {
   await withRunLock(async () => {
   const demandConfig = readDemandConfig();
   if (demandConfig.enabled) {
+    optimizationConfig(); // Reject invalid optimization settings before login.
     test.setTimeout(600000);
     await new GeneralUtils(page).login(page);
     await page.locator('#mapRoutes').waitFor({ state: 'visible', timeout: 30000 });

@@ -1,3 +1,4 @@
+import { automaticFaresFromControl } from '../pricing/ticket-pricing';
 import { expect, Page } from '@playwright/test';
 import { AircraftSnapshot, CollectionResult } from './types';
 import { CabinText, integerText, parseCapacity, parseDemand } from './parsing';
@@ -105,5 +106,18 @@ export class DemandReader {
     const capacity = parseCapacity(text.seats as CabinText);
     const demand = parseDemand(text.demand as CabinText);
     Object.assign(item, { capacity, ...demand, from: text.codes[0], to: text.codes[1], state: 'ready', observedAt: new Date().toISOString() });
+    // Read only the inspected Auto callback and ticket inputs. Never click Auto/Save or fill inputs.
+    try {
+      const auto = details.locator('#seat-layout').getByRole('button', { name: 'Auto', exact: true });
+      if (await auto.count() !== 1 || !(await auto.isVisible())) throw new Error('Auto unavailable');
+      const automatic = automaticFaresFromControl(await auto.getAttribute('onclick') || '');
+      let current = null;
+      try {
+        current = { Y: integerText(await details.locator('#eTicket').inputValue()), J: integerText(await details.locator('#bTicket').inputValue()), F: integerText(await details.locator('#fTicket').inputValue()) };
+      } catch { /* Unknown current fare does not invalidate the observed Auto reference. */ }
+      item.fares = { automatic, current, source: 'inspected-auto-control' };
+    } catch {
+      item.fares = { automatic: null, current: null, source: 'unavailable', issue: 'Referencia Auto nao confirmada.' };
+    }
   }
 }
