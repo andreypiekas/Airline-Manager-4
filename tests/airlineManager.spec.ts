@@ -11,7 +11,7 @@ require('dotenv').config();
 
 test('All Operations', async ({ page }) => {
   // Timeout 3 menit karena simulasi gerakan kursor dan delay manusia butuh waktu lebih lama
-  test.setTimeout(180000);
+  test.setTimeout(600000);
 
   // ==============================================================
   // ⏱️ LOGIKA AUTOMATIC KEEPALIVE LOG (.TXT) - HANYA 1X DI TANGGAL 1
@@ -234,27 +234,47 @@ test('All Operations', async ({ page }) => {
     [initialTasks[i], initialTasks[j]] = [initialTasks[j], initialTasks[i]];
   }
 
-  // --- EKSEKUSI ALUR AMAN ---
-  console.log('--- Iniciando operacoes da companhia aerea ---');
+  // Modulos podem ser desligados em Settings > Secrets and variables > Actions.
+  // Variavel ausente significa ativado, preservando o comportamento existente.
+  const enabled = (name: string) =>
+    !['false', '0', 'off', 'no'].includes((process.env[name] || '').trim().toLowerCase());
 
-  // 1. Jalankan tugas awal yang sudah diacak (Fuel / Maintenance)
-  for (const task of initialTasks) {
-    await task();
-    // Jeda ditingkatkan ke 5-9 detik agar transisi penutupan pop-up menu stabil di server GitHub Actions
-    await GeneralUtils.randomSleep(5000, 9000); 
+  const flags = {
+    fuel: enabled('ENABLE_FUEL'),
+    maintenance: enabled('ENABLE_MAINTENANCE'),
+    campaign: enabled('ENABLE_CAMPAIGN'),
+    depart: enabled('ENABLE_DEPART'),
+  };
+  console.log('[Configuracao] Modulos ativados:', JSON.stringify(flags));
+
+  // Usar test.step facilita identificar a etapa que falhou nos relatorios.
+  console.log('--- Iniciando operacoes da companhia aerea ---');
+  const selectedTasks = initialTasks.filter(task =>
+    (task === runFuel && flags.fuel) ||
+    (task === runMaintenance && flags.maintenance)
+  );
+
+  for (const task of selectedTasks) {
+    const name = task === runFuel ? 'Combustivel e CO2' : 'Manutencao';
+    await test.step(name, async () => await task());
+    await GeneralUtils.randomSleep(5000, 9000);
   }
 
-  // 2. Kunci: Selalu jalankan Marketing tepat sebelum armada terbang
-  await runCampaign();
-  await GeneralUtils.randomSleep(5000, 8000);
+  if (flags.campaign) {
+    await test.step('Campanhas', async () => await runCampaign());
+    await GeneralUtils.randomSleep(5000, 8000);
+  } else {
+    console.log('[Configuracao] Campanhas desativadas.');
+  }
 
-  // 3. Kunci: Terbangkan semua pesawat di bagian paling akhir
-  await runDepart();
+  if (flags.depart) {
+    await test.step('Decolagens', async () => await runDepart());
+  } else {
+    console.log('[Configuracao] Decolagens desativadas.');
+  }
 
   console.log('--- Rotina de operacoes concluida ---');
-
-  // Selesai
-  await GeneralUtils.randomSleep(3000, 5000);
-  page.close();
+  await GeneralUtils.randomSleep(1000, 2000);
+  await page.close();
 });
 
