@@ -13,6 +13,11 @@ on:
         required: false
         default: false
 
+# Evita executar duas automacoes ao mesmo tempo.
+concurrency:
+  group: airline-manager-4-main
+  cancel-in-progress: false
+
 jobs:
   test:
     timeout-minutes: 29
@@ -79,6 +84,7 @@ jobs:
         echo "HOURS_CHECK=${{ vars.HOURS_CHECK }}" >> .env
 
     - name: Executar bot Airline Manager 4
+      id: bot
       env:
         PAKSI_VIDEO: ${{ github.event.inputs.paksa_simpan_video }}
       run: xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed
@@ -109,4 +115,32 @@ jobs:
         else
           echo "Nenhuma alteracao em last-commit.txt. Nenhum commit necessario."
         fi
-        
+
+    # Alertas opcionais. Configure TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID
+    # em Settings > Secrets and variables > Actions > Secrets.
+    - name: Notificar resultado pelo Telegram
+      if: always()
+      continue-on-error: true
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        BOT_RESULT: ${{ steps.bot.outcome }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: |
+        if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+          echo "Telegram nao configurado. Notificacao ignorada."
+          exit 0
+        fi
+        if [ "$BOT_RESULT" = "success" ]; then
+          STATUS="SUCESSO"
+        elif [ "$BOT_RESULT" = "failure" ]; then
+          STATUS="FALHA"
+        else
+          STATUS="NAO CONCLUIDO ($BOT_RESULT)"
+        fi
+        curl --fail --silent --show-error --max-time 15 \
+          --request POST \
+          --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+          --data-urlencode "text=Airline Manager 4: $STATUS | $RUN_URL" \
+          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+          > /dev/null
