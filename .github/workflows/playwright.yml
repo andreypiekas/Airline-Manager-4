@@ -12,8 +12,6 @@ on:
         type: boolean
         required: false
         default: false
-  schedule:
-    - cron: '7,37 * * * *' # A cada 30 minutos (UTC)
 
 jobs:
   test:
