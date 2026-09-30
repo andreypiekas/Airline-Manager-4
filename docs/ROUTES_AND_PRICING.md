@@ -222,3 +222,17 @@ A origem e resolvida por prioridade:
 3. Duas bases (GRU-XAP, por exemplo) ou nenhuma: bloquear a origem automatica e explicar o motivo. Coleta incompleta, dados inconsistentes e identidades duplicadas tambem bloqueiam inferencia.
 
 Os relatorios mostram `originResolution.source`: `registered`, `unique-route-base` ou `unavailable`, junto com a justificativa. A atribuicao pela rota e uma regra operacional autorizada pelo dono, nao um campo nativo confirmado do jogo. Nao comprova retorno, nao cria ID de voo e nao habilita operacoes. O modelo de origens passa a preencher os casos univocos e deixa `null` somente nos casos nao resolvidos. As atribuicoes pela rota sao recalculadas a cada coleta; o cadastro explicito tem prioridade e nao e sobrescrito.
+
+## Revisao diaria e excecao BC-605 — 30/09/2026
+
+O operador confirmou GRU como origem da BC-605, ID `22316469`. Essa excecao acompanha o codigo; entradas em `AIRCRAFT_ORIGINS_JSON` podem sobrescreve-la explicitamente. O nome/registro da aeronave nao e usado como chave.
+
+A cada execucao, o relatorio agora verifica a necessidade de revisao diaria para todas as aeronaves coletadas. O dia segue `ROUTE_REVIEW_TIMEZONE` (padrao `America/Sao_Paulo`). Uma revisao completa por retorno a base tambem satisfaz a revisao daquele dia. Ausencia de historico persistente e marcada como `historyAvailable=false`; nao e apresentada como revisao realizada.
+
+Sem um novo retorno confirmado, uma aeronave em solo na propria base pode ser comparada pelo gatilho `daily`. O evento e `daily_YYYYMMDD`, nao um voo inventado. O campo legado `flightId` do journal armazena esse ID de evento para revisoes diarias; para revisoes por retorno continua armazenando o ID de voo confirmado. A chave inclui aeronave e origem, e os registros anteriores permanecem preservados.
+
+Somente comparacoes completas (`would_reroute`, `keep_route`, `hold`) gravadas com sucesso no journal contam como revisao diaria concluida. Falha, dados ausentes e candidatos incompletos mantem a pendencia para a proxima execucao. Um retorno ja consumido em outro dia nao impede nova revisao diaria. Um novo retorno no mesmo dia continua podendo gerar uma revisao adicional.
+
+Aeronaves em voo ou fora da propria base ficam pendentes ate uma execucao que as observe em solo na base. Nao se garante uma comparacao completa a cada 24 horas se o bot nao executar, se a aeronave nao retornar, ou se faltarem dados. O gatilho diario nao cria agendamento: o cron-job.org continua disparando o workflow existente. Nao foram alterados cron, branch main ou permissoes.
+
+O mecanismo de calendario, comparacao e deduplicacao esta implementado e testado localmente. A coleta automatica de candidatos completos e de eventos de retorno reais continua pendente. O transporte do journal deve ser inicializado/validado antes de habilitar `ENABLE_RETURN_JOURNAL`; enquanto estiver desabilitado, os relatorios sinalizam a pendencia e nao alegam persistencia entre execucoes. Todas as decisoes continuam em simulacao, sem alterar rotas, precos ou decolar.

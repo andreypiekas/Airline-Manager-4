@@ -2,7 +2,7 @@ import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { withRunLock } from '../utils/run-lock';
-import { confirmedBaseReturn, RouteOptimizer, RoutePlan, RouteReview } from './route-optimizer';
+import { reviewEventId, RouteOptimizer, RoutePlan, RouteReview } from './route-optimizer';
 
 type CompletedDecision = 'would_reroute' | 'keep_route' | 'hold';
 interface Entry { aircraftId: string; origin: string; flightId: string; reviewedAt: string; decision: CompletedDecision }
@@ -47,10 +47,11 @@ export async function reviewWithReturnJournal(input: RouteReview, options: Journ
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') data = { schemaVersion: 1, scope: options.scope, entries: [] };
       else throw new Error('JOURNAL_UNAVAILABLE: registro invalido/inacessivel; revisao bloqueada.');
     }
-    const arrivalKey = confirmedBaseReturn(input.previousPosition, input.position);
+    const eventId = reviewEventId(input, now);
+    const arrivalKey = eventId ? `${input.position.aircraftId}:${eventId}:${options.origin}` : null;
     if (!arrivalKey) return optimizer.review(input, now);
-    if (!validId(input.position.flightId)) throw new Error('JOURNAL_FLIGHT_ID_INVALID');
-    const entry: Entry = { aircraftId: input.position.aircraftId, origin: options.origin, flightId: input.position.flightId, reviewedAt: now.toISOString(), decision: 'hold' };
+    if (!validId(eventId)) throw new Error('JOURNAL_FLIGHT_ID_INVALID');
+    const entry: Entry = { aircraftId: input.position.aircraftId, origin: options.origin, flightId: eventId!, reviewedAt: now.toISOString(), decision: 'hold' };
     if (data.entries.some(e => key(e) === key(entry))) return { aircraftId: entry.aircraftId, arrivalKey, decision: 'already_reviewed', selectedRouteId: null, scores: [], reason: 'Retorno ja revisado em execucao anterior do mesmo registro.', dryRun: true, mutationAuthorized: false };
     const plan = optimizer.review(input, now);
     if (!completed(plan.decision)) return plan; // Missing data is retryable; never consume the arrival.

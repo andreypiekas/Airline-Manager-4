@@ -37,3 +37,8 @@ export function resolveAircraftOrigin(a: AircraftSnapshot, collection: Collectio
   if (matches.length === 1) return { origin: matches[0], source: 'unique-route-base', reason: 'Unica base da companhia nos aeroportos da rota, conforme regra do operador.' };
   return unavailable(matches.length === 2 ? 'Rota entre duas bases; exige origem explicita para esta aeronave.' : 'Nenhum aeroporto da rota pertence as bases configuradas.');
 }
+
+/** Owner-confirmed exceptions; environment entries can explicitly override them. */
+export function configuredAircraftOrigins(raw: string | undefined): ReadonlyMap<string, string> {
+  return new Map([['22316469', 'GRU'], ...readAircraftOrigins(raw)]);
+}

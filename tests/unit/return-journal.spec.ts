@@ -68,3 +68,25 @@ test('unreadable state destination blocks recommendations',async()=>{
   await mkdir(join(directory,'return-journal.json'));
   await expect(reviewWithReturnJournal(input(),options(),now)).rejects.toThrow('JOURNAL_UNAVAILABLE');
 });
+
+test('daily review requires no fabricated flight ID and deduplicates across reopen', async () => {
+  const r=input();r.trigger='daily';r.previousPosition=null;r.position.flightId=null;
+  expect((await reviewWithReturnJournal(r,options(),now)).decision).toBe('keep_route');
+  expect((await reviewWithReturnJournal(r,options(),now)).decision).toBe('already_reviewed');
+  const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
+  expect(saved.entries[0].flightId).toBe('daily_20260930');
+  const tomorrow=new Date('2026-10-01T11:00:00Z');r.position.observedAt=tomorrow.toISOString();r.candidates.forEach(c=>c.observedAt=tomorrow.toISOString());
+  expect((await reviewWithReturnJournal(r,options(),tomorrow)).decision).toBe('keep_route');
+});
+test('failed daily comparison stays pending and is retryable the same day', async () => {
+  const r=input();r.trigger='daily';r.previousPosition=null;r.position.flightId=null;r.candidatesComplete=false;
+  expect((await reviewWithReturnJournal(r,options(),now)).decision).toBe('unavailable');
+  r.candidatesComplete=true;
+  expect((await reviewWithReturnJournal(r,options(),now)).decision).toBe('keep_route');
+});
+test('daily review away from base cannot be recorded', async () => {
+  const r=input();r.trigger='daily';r.position.airport='BBB';
+  expect((await reviewWithReturnJournal(r,options(),now)).decision).toBe('not_at_base_return');
+  r.position.airport='AAA';
+  expect((await reviewWithReturnJournal(r,options(),now)).decision).toBe('keep_route');
+});

@@ -1,3 +1,4 @@
+import { reviewDay } from './review-schedule';
 import { Cabins, CLASSES } from '../demand/types';
 import { adjustedPaxFare } from '../pricing/ticket-pricing';
 
@@ -34,6 +35,8 @@ export interface RouteCandidate {
   legs: [RouteLeg, RouteLeg];
 }
 export interface RouteReview {
+  trigger?: 'return' | 'daily';
+  reviewTimeZone?: string;
   position: AircraftPosition;
   previousPosition: AircraftPosition | null;
   lastReviewedArrival?: string;
@@ -44,6 +47,15 @@ export interface RouteReview {
   currentRouteId: string;
   candidates: RouteCandidate[];
   candidatesComplete: boolean;
+}
+/** Daily review is a distinct event, never a fabricated flight/arrival. */
+export function reviewEventId(input: RouteReview, now: Date): string | null {
+  if (input.trigger === 'daily') {
+    if (input.position.state !== 'landed' || !input.position.homeBase || input.position.airport !== input.position.homeBase) return null;
+    return `daily_${reviewDay(now, input.reviewTimeZone).replace(/-/g, '')}`;
+  }
+  if (input.trigger !== undefined && input.trigger !== 'return') return null;
+  return confirmedBaseReturn(input.previousPosition, input.position) ? input.position.flightId : null;
 }
 export interface RouteScore {
   routeId: string;
@@ -121,11 +133,12 @@ export class RouteOptimizer {
       reason: !occupancyOkay ? 'Ocupacao estimada abaixo do limite em pelo menos um trecho.' : netProfit <= 0 ? 'Ciclo sem lucro liquido estimado positivo.' : 'Ciclo viavel pelas estimativas informadas.' };
   }
   review(input: RouteReview, now = new Date()): RoutePlan {
-    const arrivalKey = confirmedBaseReturn(input.previousPosition, input.position);
+    const eventId = reviewEventId(input, now);
+    const arrivalKey = eventId ? `${input.position.aircraftId}:${eventId}:${input.position.homeBase}` : null;
     const result: RoutePlan = { aircraftId: input.position.aircraftId, arrivalKey, decision: 'unavailable', selectedRouteId: null, scores: [], reason: '', dryRun: true, mutationAuthorized: false };
     const positionAge = now.getTime() - Date.parse(input.position.observedAt);
     if (!Number.isFinite(positionAge) || positionAge < 0 || positionAge > this.maxAgeSeconds * 1000) return { ...result, reason: 'Posicao atual ausente ou expirada.' };
-    if (!arrivalKey) return { ...result, decision: 'not_at_base_return', reason: 'Retorno a propria base ainda nao confirmado por transicao de voo.' };
+    if (!arrivalKey) return { ...result, decision: 'not_at_base_return', reason: input.trigger === 'daily' ? 'Revisao diaria pendente: aeronave precisa estar em solo na propria base.' : 'Retorno a propria base ainda nao confirmado por transicao de voo.' };
     if (this.reviewed.has(arrivalKey) || input.lastReviewedArrival === arrivalKey) return { ...result, decision: 'already_reviewed', reason: 'Este retorno ja foi avaliado.' };
     if (!airport(input.position.homeBase) || !input.candidatesComplete || !countCabins(input.capacity) || input.capacity.Y + input.capacity.J + input.capacity.F <= 0 || !Number.isFinite(input.rangeKm) || input.rangeKm <= 0 || !finiteNonnegative(input.minRunwayFt) || typeof input.enforceRunway !== 'boolean' || !input.currentRouteId || new Set(input.candidates.map(c => c.id)).size !== input.candidates.length) {
       return { ...result, reason: 'Identidade, aeronave ou conjunto de candidatos incompleto/inconsistente.' };

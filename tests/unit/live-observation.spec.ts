@@ -27,9 +27,9 @@ test('observed VIP demand and automatic reference remain simulation-only', () =>
   const prices = planTicketPrices(a, true, now);
   expect(prices).toMatchObject({ automatic: { Y: 845, J: 2083, F: 3773 },
     proposed: { Y: 920, J: null, F: null }, status: 'recommendation_only', mutationAuthorized: false });
-  // Being on the XAP-GRU route does not establish this aircraft's operational origin.
+  // Owner explicitly confirmed this aircraft's origin as GRU.
   const optimization = analyzeOptimization(collection, optimizationConfig({}), {}, now);
-  expect(optimization.aircraft[0].operationalOrigin).toBeNull();
+  expect(optimization.aircraft[0].operationalOrigin).toBe('GRU');
   expect(optimization.aircraft[0].route.decision).toBe('unavailable');
 });
 test('observed spare J/F demand cannot replace depleted Y demand on the VIP layout', () => {

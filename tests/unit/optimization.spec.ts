@@ -164,7 +164,7 @@ test('landing at another hub cannot redefine the aircraft origin', () => {
   const r = analyzeOptimization({aircraft:[aircraft()],complete:true,expectedRoutes:1,warnings:[]},config,{'1':review()},now);
   expect(r.aircraft[0].route.decision).toBe('unavailable'); expect(r.aircraft[0].operationalOrigin).toBe('CCC');
   expect(r.aircraft[0].route.reason).toContain('diverge');
-  expect(JSON.parse(JSON.stringify(r)).config.aircraftOrigins).toEqual([{aircraftId:'1',origin:'CCC'}]);
+  expect(JSON.parse(JSON.stringify(r)).config.aircraftOrigins).toContainEqual({aircraftId:'1',origin:'CCC'});
 });
 test('two aircraft returning to their distinct origins can each be reviewed', () => {
   const second = aircraft(); second.aircraftId='2'; second.routeId='second'; second.from='CCC'; second.to='DDD'; second.routeLabel='CCC-DDD';
@@ -192,4 +192,19 @@ for (const mismatch of ['airport', 'snapshot-age', 'range', 'runway'] as const) 
   const result = analyzeOptimization({ aircraft: [a], complete: true, expectedRoutes: 1, warnings: [] }, config, {'1': input}, now);
   expect(result.aircraft[0].route.decision).toBe('unavailable');
   expect(result.aircraft[0].route.mutationAuthorized).toBe(false);
+});
+
+test('daily fallback evaluates a grounded aircraft without claiming a return', () => {
+  const r=review();r.previousPosition=null;r.position.flightId=null;
+  const result=analyzeOptimization({aircraft:[aircraft()],complete:true,expectedRoutes:1,warnings:[]},optimizationConfig({AIRCRAFT_ORIGINS_JSON:'[{"aircraftId":"1","origin":"AAA"}]'}),{'1':r},now);
+  expect(result.aircraft[0].route.decision).toBe('would_reroute');
+  expect(result.aircraft[0].route.arrivalKey).toBe('1:daily_20260929:AAA');
+  expect(result.aircraft[0].dailyReview.historyAvailable).toBe(false);
+  expect(result.dailyReviews[0].due).toBe(true); // A proposal without durable state does not complete a daily review.
+});
+test('yesterday consumed return falls back to new daily comparison', () => {
+  const r=review();r.lastReviewedArrival='1:flight-1:AAA';
+  const result=analyzeOptimization({aircraft:[aircraft()],complete:true,expectedRoutes:1,warnings:[]},optimizationConfig({AIRCRAFT_ORIGINS_JSON:'[{"aircraftId":"1","origin":"AAA"}]'}),{'1':r},now);
+  expect(result.aircraft[0].route.decision).toBe('would_reroute');
+  expect(result.aircraft[0].route.arrivalKey).toContain('daily_');
 });
