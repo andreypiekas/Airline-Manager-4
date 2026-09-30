@@ -108,6 +108,23 @@ Orçamento observado para GRU–COR: 1.955 km; 01:38:14; 23.695 lb de combustív
 A saída mantém `remainingDemand=null`, `netProfit=null`, `comparisonReady=false`, `mutationAuthorized=false`. O callback é analisado como texto, nunca executado. Esse leitor não foi ligado à navegação automática do workflow: ainda não há coleta abrangente de candidatos, base confirmada, persistência dos retornos e custos/ocupação confiáveis para alimentar RouteReview. Assim a revisão automática permanece indisponível no relatório, não é apresentada como concluída.
 
 
-A tela Hubs confirmou São Paulo Guarulhos como **(Base)**, além de Chapecó e Detroit Metrop. como hubs. Isso identifica a base da companhia, mas não atribui automaticamente todas as aeronaves a GRU. Para a regra “sua base”, ainda é necessário definir se a revisão deve acontecer apenas em GRU ou no hub operacional atribuído a cada aeronave.
+A tela Hubs confirmou São Paulo Guarulhos como **(Base)**, além de Chapecó e Detroit Metrop. como hubs. Isso identifica a base da companhia, mas não atribui automaticamente todas as aeronaves a GRU. Regra esclarecida pelo usuário: revisar no retorno à origem operacional individual de cada aeronave, incluindo aeronaves baseadas em outros hubs; não limitar a GRU. Falta confirmar e cadastrar o vínculo real de cada ID de aeronave à sua origem.
 
 Validação da continuação: TypeScript sem erros; 115 testes locais aprovados, incluindo 28 testes de interface em Chromium com rede bloqueada. Há testes de identidade divergente, orçamento oculto, números inválidos, ordem das classes, ausência de dados e propagação das observações aos dois relatórios JSON. Nenhuma chamada ao jogo é feita pelos testes.
+
+
+## Origem operacional individual — regra confirmada
+
+A base de comparação é a origem operacional de **cada avião**. Pousar em qualquer outro hub não representa retorno à sua base. Uma rota de ida e volta pode inverter a ordem dos aeroportos na interface; essa inversão não altera o vínculo aeronave–origem. Renomear a matrícula ou trocar o destino também não deve redefinir a origem.
+
+`AIRCRAFT_ORIGINS_JSON` recebe uma lista de IDs estáveis de aeronave e aeroportos IATA. Exemplo **fictício**, não corresponde a um cadastro da frota real:
+
+```json
+[{"aircraftId":"1","origin":"GRU"},{"aircraftId":"2","origin":"DTW"}]
+```
+
+O workflow encaminha a variável do repositório com padrão `[]`. Nenhuma variável do GitHub foi preenchida nesta entrega. Origem desconhecida, ID duplicado, formato inválido ou divergência entre o cadastro e as observações impedem a revisão. Não há padrão implícito GRU nem inferência pelo último pouso. O cadastro permanece independente dos snapshots e só muda mediante alteração explícita da configuração.
+
+A integração exige que ambas as observações da transição de voo concordem com a origem cadastrada. A origem individual aparece no JSON e no Markdown do relatório de otimização. A avaliação ainda requer retorno confirmado, candidatos completos e custos/demanda confiáveis; esse cadastro não habilita trocas ou decolagens.
+
+Validação: `npm run typecheck`, `git diff --check` e 125 testes aprovados. Os testes novos incluem duas aeronaves retornando a origens distintas, pouso em outro hub, ausência de cadastro, duplicação de IDs e serialização do cadastro no relatório.

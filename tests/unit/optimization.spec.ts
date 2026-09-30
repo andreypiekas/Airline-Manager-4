@@ -1,3 +1,4 @@
+import { readAircraftOrigins } from '../../optimization/aircraft-origins';
 import { test, expect } from '@playwright/test';
 import { adjustedPaxFare, automaticFaresFromControl, planTicketPrices } from '../../pricing/ticket-pricing';
 import { RouteOptimizer, RouteReview, RouteCandidate, confirmedBaseReturn } from '../../optimization/route-optimizer';
@@ -125,7 +126,7 @@ test('report explicitly leaves missing live route adapter pending, but prices ca
   expect(r.aircraft[0].route.decision).toBe('unavailable'); expect(r.aircraft[0].pricing.proposed).toEqual({ Y: 1350, J: 3730, F: 18960 });
 });
 test('a route change defers prices instead of applying old route reference', () => {
-  const r = analyzeOptimization({ aircraft: [aircraft()], complete: true, expectedRoutes: 1, warnings: [] }, optimizationConfig({}), { '1': review() }, now);
+  const r = analyzeOptimization({ aircraft: [aircraft()], complete: true, expectedRoutes: 1, warnings: [] }, optimizationConfig({ AIRCRAFT_ORIGINS_JSON: '[{"aircraftId":"1","origin":"AAA"}]' }), { '1': review() }, now);
   expect(r.aircraft[0].route.decision).toBe('would_reroute'); expect(r.aircraft[0].pricing.proposed).toBeNull();
 });
 test('mismatched aircraft context cannot trigger reroute', () => {
@@ -143,4 +144,36 @@ test('invalid flags or optimization thresholds rejected', () => {
   expect(() => optimizationConfig({ ENABLE_TICKET_PRICING: 'yes' })).toThrow();
   expect(() => optimizationConfig({ ROUTE_MIN_OCCUPANCY_PERCENT: '0' })).toThrow();
   expect(() => optimizationConfig({ ROUTE_MIN_IMPROVEMENT_PERCENT: '-1' })).toThrow();
+});
+
+
+test('per-aircraft origin is explicit and never defaults to company base', () => {
+  expect(readAircraftOrigins(undefined).size).toBe(0);
+  const origins = readAircraftOrigins('[{"aircraftId":"1","origin":"GRU"},{"aircraftId":"2","origin":"DTW"}]');
+  expect(origins.get('1')).toBe('GRU'); expect(origins.get('2')).toBe('DTW'); expect(origins.get('3')).toBeUndefined();
+});
+for (const raw of ['{}','null','oops','[{"aircraftId":"1","origin":"gru"}]','[{"aircraftId":"TEST","origin":"GRU"}]','[{"aircraftId":"1","origin":"GRU"},{"aircraftId":"1","origin":"DTW"}]']) {
+  test(`rejects invalid or ambiguous origins ${raw}`, () => expect(()=>readAircraftOrigins(raw)).toThrow('AIRCRAFT_ORIGINS_JSON invalido'));
+}
+test('known return without registered operational origin remains unavailable', () => {
+  const r = analyzeOptimization({aircraft:[aircraft()],complete:true,expectedRoutes:1,warnings:[]},optimizationConfig({}),{'1':review()},now);
+  expect(r.aircraft[0].route.decision).toBe('unavailable'); expect(r.aircraft[0].operationalOrigin).toBeNull();
+});
+test('landing at another hub cannot redefine the aircraft origin', () => {
+  const config = optimizationConfig({AIRCRAFT_ORIGINS_JSON:'[{"aircraftId":"1","origin":"CCC"}]'});
+  const r = analyzeOptimization({aircraft:[aircraft()],complete:true,expectedRoutes:1,warnings:[]},config,{'1':review()},now);
+  expect(r.aircraft[0].route.decision).toBe('unavailable'); expect(r.aircraft[0].operationalOrigin).toBe('CCC');
+  expect(r.aircraft[0].route.reason).toContain('diverge');
+  expect(JSON.parse(JSON.stringify(r)).config.aircraftOrigins).toEqual([{aircraftId:'1',origin:'CCC'}]);
+});
+test('two aircraft returning to their distinct origins can each be reviewed', () => {
+  const second = aircraft(); second.aircraftId='2'; second.routeId='second'; second.from='CCC'; second.to='DDD'; second.routeLabel='CCC-DDD';
+  const secondReview=review(); secondReview.position.aircraftId='2'; secondReview.previousPosition!.aircraftId='2';
+  secondReview.position.homeBase='CCC'; secondReview.position.airport='CCC'; secondReview.previousPosition!.homeBase='CCC'; secondReview.previousPosition!.destination='CCC';
+  secondReview.currentRouteId='second'; secondReview.candidates[0].id='second';
+  secondReview.candidates.forEach(c=>{c.legs[0].from='CCC';c.legs[0].to='DDD';c.legs[1].from='DDD';c.legs[1].to='CCC';c.legs.forEach(l=>l.demandPool='CCC-DDD');});
+  const config=optimizationConfig({AIRCRAFT_ORIGINS_JSON:'[{"aircraftId":"1","origin":"AAA"},{"aircraftId":"2","origin":"CCC"}]'});
+  const r=analyzeOptimization({aircraft:[aircraft(),second],complete:true,expectedRoutes:2,warnings:[]},config,{'1':review(),'2':secondReview},now);
+  expect(r.aircraft.map(a=>a.route.decision)).toEqual(['would_reroute','would_reroute']);
+  expect(r.aircraft.map(a=>a.operationalOrigin)).toEqual(['AAA','CCC']);
 });
