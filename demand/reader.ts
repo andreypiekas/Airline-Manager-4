@@ -2,11 +2,11 @@ import { readOperationalObservation } from '../optimization/observations';
 import { automaticFaresFromControl } from '../pricing/ticket-pricing';
 import { expect, Page } from '@playwright/test';
 import { AircraftSnapshot, CollectionResult } from './types';
-import { CabinText, integerText, parseCapacity, parseDemand } from './parsing';
+import { CabinText, integerText, parseCapacity, parseDemand, parseOnboard } from './parsing';
 
 interface RouteCard {
   routeId: string; aircraftId: string; registration: string; routeLabel: string;
-  from: string; to: string; ready: boolean; inflight: boolean; pax: boolean;
+  from: string; to: string; ready: boolean; inflight: boolean; pax: boolean; onboardText: string;
 }
 /** Read-only navigation using DOM inspected on 2026-09-29. No direct HTTP requests. */
 export class DemandReader {
@@ -32,6 +32,7 @@ export class DemandReader {
           return { routeId, aircraftId: registration?.id.replace(/^acRegList/, '') || '', registration: registration?.textContent?.trim() || '', routeLabel,
             from: codes[0] || '', to: codes[1] || '', pax: el.classList.contains('classPAX'),
             ready: visible && el.classList.contains('listDepartable') && !!depart && !depart.disabled && !!depart.getClientRects().length,
+            onboardText: ((el as HTMLElement).innerText.match(/Onboard:[^\n]*/) || [''])[0].trim(),
             inflight: visible && /Onboard\s*:/.test((el as HTMLElement).innerText) };
         }));
         for (const card of cards) {
@@ -39,7 +40,7 @@ export class DemandReader {
           seenRoutes.add(card.routeId);
           const item: AircraftSnapshot = { aircraftId: card.aircraftId, routeId: card.routeId, registration: card.registration,
             routeLabel: card.routeLabel, from: card.from, to: card.to, state: card.inflight ? 'inflight' : 'unavailable',
-            capacity: null, remaining: null, dailyTotal: null, observedAt: new Date().toISOString() };
+            capacity: null, onboard: card.inflight ? parseOnboard(card.onboardText) : null, remaining: null, dailyTotal: null, observedAt: new Date().toISOString() };
           result.aircraft.push(item);
           if (!card.pax) { item.state = 'unavailable'; item.issue = 'Carga/charter nao suportado nesta versao.'; continue; }
           if (!card.ready && !(this.includeInflightDetails && card.inflight)) continue;

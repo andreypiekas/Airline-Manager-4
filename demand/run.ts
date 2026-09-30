@@ -1,3 +1,4 @@
+import { writeOccupancyAudit } from './occupancy-audit';
 import { writeReferenceReport } from '../optimization/reference-report';
 import { RouteReview } from '../optimization/route-optimizer';
 import { writeFleetObservations } from '../optimization/fleet-observations';
@@ -14,6 +15,7 @@ export async function runDemandSimulation(page: Page, config: DemandConfig = rea
   const collection = await new DemandReader(page, 10000, true).collect();
   const report = new DemandManager(config).analyze(collection);
   await writeDemandReport(report);
+  await writeOccupancyAudit(collection, config);
   await writeFleetObservations(collection, optimization.aircraftOrigins, 'test-results/demand', config.maxAgeSeconds, optimization.airlineBases);
   await writeReferenceReport(collection, optimization);
   await writeOptimizationReport(await analyzeOptimizationWithJournal(collection, optimization, reviews));

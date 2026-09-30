@@ -13,6 +13,8 @@ export interface AircraftSnapshot {
   to: string;
   state: AircraftState;
   capacity: Cabins | null;
+  /** Observed onboard passengers, never remaining demand. */
+  onboard?: Cabins | null;
   remaining: Cabins | null;
   dailyTotal: Cabins | null;
   observedAt: string;

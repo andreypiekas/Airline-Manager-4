@@ -57,7 +57,7 @@ test('reader matches inspected DOM, ignores ticket prices, reads remaining/total
   await fixture(page); const result = await new DemandReader(page, 400).collect();
   expect(result.complete).toBe(true); expect(result.aircraft).toHaveLength(2);
   expect(result.aircraft[0]).toMatchObject({ aircraftId: '1101', routeId: '101', capacity: { Y: 100, J: 0, F: 0 }, remaining: { Y: 90, J: 0, F: 0 }, dailyTotal: { Y: 1000, J: 200, F: 200 }, from: 'BBB', to: 'AAA', state: 'ready' });
-  expect(result.aircraft[1].state).toBe('inflight'); expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
+  expect(result.aircraft[1].state).toBe('inflight'); expect(result.aircraft[1].onboard).toEqual({Y:40,J:0,F:0}); expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
 });
 test('pagination reads every page once', async ({ page }) => {
   await fixture(page, { pages: 2 }); const r = await new DemandReader(page, 400).collect(); expect(r.complete).toBe(true); expect(r.aircraft).toHaveLength(3);

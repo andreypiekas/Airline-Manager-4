@@ -26,3 +26,11 @@ export function individualDepartureSelector(routeId: string): string {
   if (!/^\d+$/.test(routeId)) throw new Error('ID de rota invalido.');
   return `#routeMainList${routeId} #listDepart${routeId}`;
 }
+
+/** Only the inspected Onboard label; malformed values stay unknown, not zero. */
+export function parseOnboard(text: string): Cabins | null {
+  const match = text.trim().match(/^Onboard:\s*([\d,]+)\s*\/\s*([\d,]+)\s*\/\s*([\d,]+)$/);
+  if (!match) return null;
+  try { return { Y: integerText(match[1]), J: integerText(match[2]), F: integerText(match[3]) }; }
+  catch { return null; }
+}
