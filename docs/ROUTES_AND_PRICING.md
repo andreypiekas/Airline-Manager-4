@@ -128,3 +128,23 @@ O workflow encaminha a variável do repositório com padrão `[]`. Nenhuma vari�
 A integração exige que ambas as observações da transição de voo concordem com a origem cadastrada. A origem individual aparece no JSON e no Markdown do relatório de otimização. A avaliação ainda requer retorno confirmado, candidatos completos e custos/demanda confiáveis; esse cadastro não habilita trocas ou decolagens.
 
 Validação: `npm run typecheck`, `git diff --check` e 125 testes aprovados. Os testes novos incluem duas aeronaves retornando a origens distintas, pouso em outro hub, ausência de cadastro, duplicação de IDs e serialização do cadastro no relatório.
+
+
+## Registro persistente de revisões — módulo independente
+
+`optimization/return-journal.ts` disponibiliza `reviewWithReturnJournal(input, options, now)` para o futuro provedor de retornos confirmados. A função executa exclusivamente a análise simulada do RouteOptimizer, sob lock local, e salva o resultado antes de devolvê-lo.
+
+- A chave é composta por ID da aeronave, origem operacional e ID do voo confirmado. Não usa matrícula, relógio relativo ou contador de ciclos como substituto do ID.
+- O arquivo guarda todas as chegadas revisadas, e não apenas a última. Uma observação antiga reapresentada após outro voo continua bloqueada.
+- `would_reroute`, `keep_route` e `hold` registram revisão concluída; dados ausentes/inconsistentes não consomem o evento.
+- JSON inválido, companhia/ambiente divergente, registro duplicado, data futura, falta de acesso ou lock existente bloqueiam a análise. O arquivo não é apagado ou reinicializado automaticamente nesses casos.
+- A gravação usa arquivo temporário exclusivo, sincronização do conteúdo e substituição por rename no mesmo diretório. Duas execuções que compartilham esse diretório não conseguem revisar simultaneamente a mesma chegada. Não representa uma transação com o servidor do jogo.
+- O registro só contém IDs operacionais, origem, instante e decisão; não recebe credenciais, cookies ou dados de sessão.
+
+`options.directory` deve apontar para armazenamento persistente (por exemplo `.am4-state/<identificador-da-companhia>`); `options.scope` identifica companhia/ambiente sem usar e-mail ou outro segredo; `options.origin` deve vir do cadastro confirmado AIRCRAFT_ORIGINS_JSON. A pasta sugerida está ignorada pelo Git. O arquivo usa schemaVersion 1 e bloqueia novas gravações ao atingir 100 mil eventos, sem descartar eventos antigos silenciosamente.
+
+**Limite de integração:** o módulo está testado em reaberturas do arquivo local, mas ainda não está conectado ao coletor/workflow. Runners do GitHub Actions são efêmeros: é necessário implementar e validar restauração e gravação durável do estado, além do provedor de posição anterior/atual com ID real de voo. O primeiro arquivo ausente inicia um registro vazio; um transporte que perca estado NÃO pode fingir que se trata da primeira execução. A concorrência do workflow continua sendo necessária entre runners. Não há garantia de deduplicação entre runners antes dessa integração.
+
+Nada nesta entrega habilita decolagens, mudanças de preço ou troca de rota. Não foram configuradas origens reais nem deduzidas a partir dos aeroportos alternados na interface.
+
+Validação do registro: `npm run typecheck` e `git diff --check` aprovados; 137 testes locais aprovados, incluindo 12 cenários de persistência/reabertura, repetição de voo antigo, concorrência, bloqueio por corrupção, identidade de ambiente e revisão indisponível com nova tentativa. A consulta ao jogo nesta retomada encontrou a tela pública, sem acesso autenticado à frota; não houve coleta adicional nem operações.
