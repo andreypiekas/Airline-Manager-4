@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, writeFile, rm, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { GitHubReturnState, StateOptions } from '../../optimization/github-state';
@@ -11,7 +11,7 @@ const scope='company-test';
 const empty=()=>({schemaVersion:1,scope,entries:[] as any[]});
 const event=(id='flight-1')=>({aircraftId:'1',origin:'AAA',flightId:id,reviewedAt:'2026-01-01T00:00:00.000Z',decision:'keep_route'});
 function server() {
-  let data=empty(), sha='a'.repeat(40); const calls: {method:string;body:any;url:string}[]=[];
+  let data=empty(), revision=0, sha='a'.repeat(40); const calls: {method:string;body:any;url:string}[]=[];
   const request: typeof fetch=async(url,options)=>{
     const method=String(options?.method);const body=options?.body ? JSON.parse(String(options.body)):null;
     calls.push({method,body,url:String(url)});
@@ -22,7 +22,7 @@ function server() {
     }
     expect(body.branch).toBe('am4-runtime-state');
     if(body.sha!==sha) return new Response('{}',{status:409});
-    data=JSON.parse(Buffer.from(body.content,'base64').toString());sha='b'.repeat(40);return new Response('{}',{status:200});
+    data=JSON.parse(Buffer.from(body.content,'base64').toString());sha=(++revision).toString(16).padStart(40,'0');return new Response('{}',{status:200});
   };
   return {request,calls,get data(){return data;}};
 }
@@ -91,4 +91,39 @@ test('reports deduplicate an arrival after remote save and fresh runner restore'
 test('enabled report integration refuses absent restored state',async()=>{
   const config=optimizationConfig({ENABLE_RETURN_JOURNAL:'true',RETURN_JOURNAL_SCOPE:scope});config.returnJournal!.directory=options().directory;
   await expect(analyzeOptimizationWithJournal({aircraft:[],complete:true,expectedRoutes:0,warnings:[]},config)).rejects.toThrow();
+});
+
+for (const base of ['XAP','GRU','DTW']) test(`multi-run daily lifecycle at ${base}`,async({},testInfo)=>{
+  const remote=server(); const timeline:unknown[]=[];
+  const config=optimizationConfig({ENABLE_RETURN_JOURNAL:'true',RETURN_JOURNAL_SCOPE:scope,AIRCRAFT_ORIGINS_JSON:JSON.stringify([{aircraftId:'1',origin:base}])});
+  const stages=[
+    {day:1,complete:false,demand:0,better:false,expected:'unavailable',events:0},
+    {day:1,complete:true,demand:0,better:false,expected:'hold',events:1},
+    {day:1,complete:true,demand:0,better:false,expected:'already_reviewed',events:1},
+    {day:2,complete:true,demand:1000,better:false,expected:'keep_route',events:2},
+    {day:2,complete:true,demand:1000,better:false,expected:'already_reviewed',events:2},
+    {day:3,complete:true,demand:1000,better:true,expected:'would_reroute',events:3},
+  ];
+  for(const [index,stage] of stages.entries()) {
+    const stateOptions=options(`lifecycle-${base}-${index}`);
+    const client=new GitHubReturnState(stateOptions,remote.request); await client.restore();
+    config.returnJournal!.directory=stateOptions.directory;
+    const input=review(); const now=new Date(`2026-01-0${stage.day}T12:00:00Z`);
+    input.previousPosition=null;input.position={...input.position,homeBase:base,airport:base,flightId:null,observedAt:now.toISOString()};
+    input.candidatesComplete=stage.complete;
+    for(const c of input.candidates) {
+      c.observedAt=now.toISOString();
+      c.legs[0]={...c.legs[0],from:base,demandPool:`${base}-BBB`,remaining:{Y:stage.demand,J:0,F:0}};
+      c.legs[1]={...c.legs[1],to:base,demandPool:`${base}-BBB`,remaining:{Y:stage.demand,J:0,F:0}};
+    }
+    if(stage.better){const best=JSON.parse(JSON.stringify(input.candidates[0]));best.id='better';best.setupCost=500;best.legs.forEach((l:any)=>l.automaticFares.Y=2000);input.candidates.push(best);}
+    const aircraft:AircraftSnapshot={aircraftId:'1',registration:'SIMULATED',routeId:'current',routeLabel:`${base}-BBB`,from:base,to:'BBB',state:'ready',capacity:input.capacity,remaining:{Y:stage.demand,J:0,F:0},dailyTotal:{Y:1000,J:0,F:0},observedAt:now.toISOString()};
+    const result=await analyzeOptimizationWithJournal({aircraft:[aircraft],complete:true,expectedRoutes:1,warnings:[]},config,{'1':input},now);
+    const plan=result.aircraft[0].route;
+    expect(plan.decision).toBe(stage.expected);expect(plan.mutationAuthorized).toBe(false);
+    const save=await client.save();expect(remote.data.entries).toHaveLength(stage.events);
+    timeline.push({run:index+1,base,date:now.toISOString(),remaining:aircraft.remaining,decision:plan.decision,reason:plan.reason,scores:plan.scores,persistedEvents:remote.data.entries.length,save,mutationAuthorized:false});
+  }
+  await mkdir(testInfo.outputDir,{recursive:true});
+  await writeFile(testInfo.outputPath('simulation-report.json'),JSON.stringify({schemaVersion:1,synthetic:true,transport:'mock-github-api',gameRequests:0,dryRun:true,timeline},null,2));
 });
