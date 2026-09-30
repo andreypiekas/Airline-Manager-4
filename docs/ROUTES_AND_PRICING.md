@@ -193,3 +193,20 @@ A origem por aeronave, o ID estável do voo e os dados completos dos candidatos 
 Referência da API utilizada: https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents (branch explícita e SHA para atualizar arquivo).
 
 Validação desta integração: 150 testes locais aprovados (incluindo transporte remoto simulado, conflito de SHA e deduplicação no relatório após restauração em runner novo); `npm run typecheck`, `npm run build:state`, estrutura/condições do YAML e `git diff --check` aprovados. Nenhuma chamada de escrita à API de estado nem execução do workflow do jogo foi realizada.
+
+## Coleta ampliada e cadastro de origens
+
+A simulacao agora consulta detalhes de aeronaves PAX em voo, alem das disponiveis. O estado em voo exige contador `#timer`, ausencia de Depart visivel e identidades de aeronave e rota nos controles de detalhes ja inspecionados. Nenhum controle Rename e acionado. Uma falha preserva o estado em voo, registra alerta e nao publica uma posicao confirmada.
+
+O artefato `demand-report` inclui:
+
+- `fleet-observations.json`: estado, aeroporto atual quando em solo, destino, capacidade, alcance/ciclos, origem cadastrada e bloqueios por aeronave. `flightId=null` e `returnConfirmed=false` ate existir um provedor de eventos validado. Este arquivo e evidencia para diagnostico, nao estado duravel automaticamente restaurado.
+- `aircraft-origins.template.json`: pares `aircraftId`/`origin` das aeronaves com identidade unica. Preencher os `null` com a origem operacional confirmada e copiar a lista para a variavel `AIRCRAFT_ORIGINS_JSON`. Nao copiar o modelo incompleto: a validacao rejeita origens nulas. IDs cadastrados mas nao observados aparecem em `configuredButNotObserved`, pois podem estar estacionados ou pendentes; nao sao removidos automaticamente.
+
+Nao escolher a origem pelo aeroporto atual ou pelo primeiro aeroporto da rota. Aeronaves em voo nao tem aeroporto atual confirmado. A coleta nao inclui aeronaves estacionadas/pendentes sem rota: cadastrar suas origens quando aparecerem na colecao de rotas.
+
+A comparacao agora exige que a posicao fornecida corresponda ao aeroporto atual da aeronave coletada, que a leitura esteja dentro de `DEMAND_MAX_AGE_SECONDS` e, quando disponiveis, que alcance e pista coincidam com a ficha. Um provedor externo nao pode recomendar troca usando posicao ou configuracao divergente.
+
+A leitura ampliada aumenta o tempo de coleta. Caso as primeiras leituras expirem, a politica continua bloqueando liberacoes em vez de aumentar automaticamente a janela. A integracao ampliada foi testada com DOM sintetico baseado na inspecao; ainda requer uma execucao de simulacao no Actions para validar a frota completa.
+
+Permanecem bloqueados: inferencia de origem, geracao de ID de voo a partir de ciclos/horarios relativos, confirmacao de retorno, busca automatica completa de candidatos, executor de decolagem e alteracoes reais. O journal existente deduplica revisoes fornecidas por um provedor; nao cria esse provedor. Manter `ENABLE_RETURN_JOURNAL=false` ate inicializacao e validacao explicitas.

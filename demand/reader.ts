@@ -10,7 +10,7 @@ interface RouteCard {
 }
 /** Read-only navigation using DOM inspected on 2026-09-29. No direct HTTP requests. */
 export class DemandReader {
-  constructor(private readonly page: Page, private readonly timeout = 10000) {}
+  constructor(private readonly page: Page, private readonly timeout = 10000, private readonly includeInflightDetails = false) {}
 
   async collect(): Promise<CollectionResult> {
     const result: CollectionResult = { aircraft: [], complete: false, expectedRoutes: null, warnings: [] };
@@ -42,12 +42,12 @@ export class DemandReader {
             capacity: null, remaining: null, dailyTotal: null, observedAt: new Date().toISOString() };
           result.aircraft.push(item);
           if (!card.pax) { item.state = 'unavailable'; item.issue = 'Carga/charter nao suportado nesta versao.'; continue; }
-          if (!card.ready) continue;
+          if (!card.ready && !(this.includeInflightDetails && card.inflight)) continue;
           try {
             await this.readDetails(card, item);
           } catch {
             // Do not serialize exception messages, HTML, URLs, session data or credentials.
-            item.state = 'unavailable'; item.issue = 'Falha de carregamento, identidade ou leitura dos detalhes.';
+            item.state = card.inflight ? 'inflight' : 'unavailable'; item.issue = 'Falha de carregamento, identidade ou leitura dos detalhes.';
             result.warnings.push(`DETAILS_UNAVAILABLE:${/^\d+$/.test(card.routeId) ? card.routeId : 'invalid-id'}`);
           } finally {
             const back = this.page.locator('#route-name .glyphicons-chevron-left');
@@ -81,10 +81,18 @@ export class DemandReader {
     const details = this.page.locator('#detailsAction');
     await details.waitFor({ state: 'visible', timeout: this.timeout });
     const depart = details.locator('#routeViewDepart');
-    await depart.waitFor({ state: 'visible', timeout: this.timeout });
-    await expect(depart).toHaveAttribute('onclick', new RegExp(`route_depart\\.php\\?id=${card.routeId}&`), { timeout: this.timeout });
+    if (card.ready) {
+      await depart.waitFor({ state: 'visible', timeout: this.timeout });
+      await expect(depart).toHaveAttribute('onclick', new RegExp(`route_depart\\.php\\?id=${card.routeId}&`), { timeout: this.timeout });
+      if (!(await depart.isEnabled()) || !(await details.locator('#routeViewGround_unground').isVisible())) throw new Error('Not ready / grounded');
+    } else {
+      // Inspected on the ATR in flight: countdown plus independent aircraft/route identities.
+      await details.locator('#timer').waitFor({ state: 'visible', timeout: this.timeout });
+      const callbacks = await details.locator('button').evaluateAll(es => es.map(e => e.getAttribute('onclick') || ''));
+      if (!callbacks.some(s => s.includes(`fleet_details.php?id=${card.aircraftId}&mode=reg&`)) ||
+          !callbacks.some(s => s.includes(`fleet_details.php?id=${card.routeId}&mode=routeReg&`)) || await depart.isVisible()) throw new Error('Inflight identity not confirmed');
+    }
     await expect(details.locator('#ff-name')).toHaveText(card.registration, { timeout: this.timeout });
-    if (!(await depart.isEnabled()) || !(await details.locator('#routeViewGround_unground').isVisible())) throw new Error('Not ready / grounded');
     if (!(await details.locator('#seat-layout').isVisible())) await details.getByText('Seat layout', { exact: true }).click({ timeout: this.timeout });
     if (!(await details.locator('#list-demand').isVisible())) await details.getByText('Todays demand', { exact: true }).click({ timeout: this.timeout });
     await details.locator('#seat-layout').waitFor({ state: 'visible', timeout: this.timeout });
@@ -106,7 +114,8 @@ export class DemandReader {
     if (text.codes.length !== 2 || [...text.codes].sort().join(':') !== [card.from, card.to].sort().join(':')) throw new Error('Route mismatch');
     const capacity = parseCapacity(text.seats as CabinText);
     const demand = parseDemand(text.demand as CabinText);
-    Object.assign(item, { capacity, ...demand, from: text.codes[0], to: text.codes[1], state: 'ready', observedAt: new Date().toISOString() });
+    if (card.inflight && (text.codes[0] !== card.from || text.codes[1] !== card.to)) throw new Error('Inflight direction mismatch');
+    Object.assign(item, { capacity, ...demand, from: text.codes[0], to: text.codes[1], state: card.inflight ? 'inflight' : 'ready', observedAt: new Date().toISOString() });
     item.operational = await readOperationalObservation(details);
     // Read only the inspected Auto callback and ticket inputs. Never click Auto/Save or fill inputs.
     try {

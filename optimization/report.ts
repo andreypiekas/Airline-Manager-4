@@ -36,11 +36,15 @@ export function analyzeOptimization(collection: CollectionResult, config: Optimi
     const origin = config.aircraftOrigins.get(a.aircraftId) ?? null;
     if (config.routesEnabled && !origin) route.reason = 'Origem operacional desta aeronave ainda nao cadastrada; nao inferir pelo hub atual ou sentido da rota.';
     const review = reviews[a.aircraftId];
-    const trustworthy = collection.complete && a.state === 'ready' && !a.issue && counts.get(a.aircraftId) === 1;
+    const snapshotAge = now.getTime() - Date.parse(a.observedAt);
+    const trustworthy = collection.complete && a.state === 'ready' && !a.issue && counts.get(a.aircraftId) === 1 &&
+      Number.isFinite(snapshotAge) && snapshotAge >= 0 && snapshotAge <= config.maxAgeSeconds * 1000;
     if (config.routesEnabled && trustworthy && review && origin) {
       if (review.position.homeBase !== origin || (review.previousPosition && review.previousPosition.homeBase !== origin)) {
         route.reason = 'Base informada nas observacoes diverge da origem operacional cadastrada para esta aeronave.';
-      } else if (review.position.aircraftId !== a.aircraftId || review.currentRouteId !== a.routeId || !a.capacity || ['Y', 'J', 'F'].some(k => a.capacity![k as keyof typeof a.capacity] !== review.capacity[k as keyof typeof review.capacity])) {
+      } else if (review.position.aircraftId !== a.aircraftId || review.position.state !== 'landed' || review.position.airport !== a.from ||
+          review.currentRouteId !== a.routeId || !a.capacity || ['Y', 'J', 'F'].some(k => a.capacity![k as keyof typeof a.capacity] !== review.capacity[k as keyof typeof review.capacity]) ||
+          a.operational && (review.rangeKm !== a.operational.rangeKm || review.minRunwayFt !== a.operational.minRunwayFt)) {
         route.reason = 'Contexto de otimizacao nao corresponde a aeronave/rota/layout coletados.';
       } else route = optimizer.review(review, now);
     }

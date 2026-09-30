@@ -39,6 +39,11 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
       '<div onclick="document.getElementById(\'seat-layout\').style.display=\'block\'">Seat layout</div>'+
       '<div id="seat-layout" style="display:none">'+['economy','business','first'].map((c,i)=>'<div><img src="assets/'+c+'_seat.png"><br>'+(i?0:100)+'<div>$<input value="9999"></div></div>').join('')+'</div>'+
       '<div>Todays demand</div><div id="list-demand">'+['economy','business','first'].filter((c,i)=>!options.missingCabin||i!==1).map((c,i)=>'<div><img src="assets/'+c+'_seat.png"><br>'+(i?'0/200':options.badDemand?'90/80':'90/1000')+'</div>').join('')+'</div>';
+      if(id===102) {
+        d.querySelector('#routeViewDepart').remove();
+        d.insertAdjacentHTML('beforeend', '<span id="timer">00:18:37</span><button onclick="/* fleet_details.php?id=1102&mode=reg& */">Rename aircraft</button><button onclick="/* fleet_details.php?id=102&mode=routeReg& */">Rename route</button>');
+        d.querySelectorAll('.col-5 .l-text').forEach((e,i)=>e.textContent=i?'BBB':'AAA');
+      }
       if(options.operational) d.insertAdjacentHTML('beforeend', '<span class="s-text">Range</span><br><span class="m-text">3,440km</span><br><span class="s-text">Min runway</span><br><span class="m-text">7,550ft</span><br><span class="s-text">Flight hours/Cycles</span><br><span class="m-text">682 / 206</span>');
       d.querySelector('#seat-layout').insertAdjacentHTML('beforeend', '<button onclick="'+(options.unknownAuto?'unknownCallback()':'ticketPriceSuggest(1234,3456,17890,this,291);')+'">Auto</button><button onclick="window.mutations++">Save</button>');
       d.querySelectorAll('#seat-layout input').forEach((el,i)=>el.id=['eTicket','bTicket','fTicket'][i]);
@@ -110,4 +115,15 @@ test('operational observations reach both JSON reports without authorizing opera
   expect(optimization.aircraft[0].operational).toEqual(demand.decisions[0].operational);
   expect(optimization.aircraft[0].route.decision).toBe('unavailable');
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
+
+test('optional inflight inspection reads capacity and operational data without authorizing departures', async ({ page }) => {
+  await fixture(page, { operational: true });
+  const result = await new DemandReader(page, 400, true).collect();
+  expect(result.complete).toBe(true);
+  expect(result.aircraft[1]).toMatchObject({ aircraftId: '1102', state: 'inflight', from: 'AAA', to: 'BBB',
+    capacity: {Y:100,J:0,F:0}, operational: {rangeKm:3440,cycles:206,flightId:null,homeBase:null} });
+  expect(result.aircraft[1].issue).toBeUndefined();
+  expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
 });

@@ -177,3 +177,19 @@ test('two aircraft returning to their distinct origins can each be reviewed', ()
   expect(r.aircraft.map(a=>a.route.decision)).toEqual(['would_reroute','would_reroute']);
   expect(r.aircraft.map(a=>a.operationalOrigin)).toEqual(['AAA','CCC']);
 });
+
+for (const mismatch of ['airport', 'snapshot-age', 'range', 'runway'] as const) test(`route review must agree with fresh collected aircraft evidence: ${mismatch}`, () => {
+  const a = aircraft();
+  const input = review();
+  if (mismatch === 'airport') a.from = 'BBB';
+  if (mismatch === 'snapshot-age') a.observedAt = older;
+  if (mismatch === 'range' || mismatch === 'runway') a.operational = {
+    rangeKm: mismatch === 'range' ? 1000 : input.rangeKm,
+    minRunwayFt: mismatch === 'runway' ? 10000 : input.minRunwayFt,
+    flightHours: 100, cycles: 10, homeBase: null, flightId: null,
+  };
+  const config = optimizationConfig({ AIRCRAFT_ORIGINS_JSON: '[{"aircraftId":"1","origin":"AAA"}]' });
+  const result = analyzeOptimization({ aircraft: [a], complete: true, expectedRoutes: 1, warnings: [] }, config, {'1': input}, now);
+  expect(result.aircraft[0].route.decision).toBe('unavailable');
+  expect(result.aircraft[0].route.mutationAuthorized).toBe(false);
+});
