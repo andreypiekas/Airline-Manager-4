@@ -48,6 +48,9 @@ jobs:
     - name: Verificar compilacao
       run: npm run typecheck
 
+    - name: Compilar transporte de estado
+      run: npm run build:state
+
     - name: Identificar versao do Playwright
       id: pw-version
       run: echo "version=$(npx playwright --version | awk '{print $2}')" >> $GITHUB_OUTPUT
@@ -79,10 +82,20 @@ jobs:
       # Xvfb fornece uma tela virtual para o navegador
       run: sudo apt-get update && sudo apt-get install -y xvfb
 
+    - name: Restaurar registro de retornos (opcional)
+      id: state_restore
+      if: vars.ENABLE_RETURN_JOURNAL == 'true' && vars.ENABLE_DEMAND_MANAGER != 'false'
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE }}
+      run: node .am4-tools/optimization/github-state.js restore
+
     # Secrets sao entregues diretamente ao processo, sem gravar senhas em .env.
     - name: Executar bot Airline Manager 4
       id: bot
       env:
+        ENABLE_RETURN_JOURNAL: ${{ vars.ENABLE_RETURN_JOURNAL || 'false' }}
+        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE }}
         ENABLE_TICKET_PRICING: ${{ vars.ENABLE_TICKET_PRICING || 'true' }}
         AIRCRAFT_ORIGINS_JSON: ${{ vars.AIRCRAFT_ORIGINS_JSON || '[]' }}
         ENABLE_ROUTE_OPTIMIZER: ${{ vars.ENABLE_ROUTE_OPTIMIZER || 'true' }}
@@ -120,6 +133,13 @@ jobs:
         mkdir -p test-results
         xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed 2>&1 | tee test-results/bot.log
       
+    - name: Persistir registro de retornos (opcional)
+      if: success() && steps.state_restore.outcome == 'success' && steps.bot.outcome == 'success'
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE }}
+      run: node .am4-tools/optimization/github-state.js save
+
     - name: Resumo de demanda
       if: always()
       run: |

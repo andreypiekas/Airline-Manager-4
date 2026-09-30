@@ -6,7 +6,7 @@ import { confirmedBaseReturn, RouteOptimizer, RoutePlan, RouteReview } from './r
 
 type CompletedDecision = 'would_reroute' | 'keep_route' | 'hold';
 interface Entry { aircraftId: string; origin: string; flightId: string; reviewedAt: string; decision: CompletedDecision }
-interface Journal { schemaVersion: 1; scope: string; entries: Entry[] }
+export interface Journal { schemaVersion: 1; scope: string; entries: Entry[] }
 export interface JournalOptions {
   /** Durable directory supplied by the caller; ephemeral Actions runners require explicit transport. */
   directory: string;
@@ -21,7 +21,7 @@ const completed = (d: string): d is CompletedDecision => ['would_reroute', 'keep
 const validId = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(v);
 const validOrigin = (v: unknown): v is string => typeof v === 'string' && /^[A-Z]{3}$/.test(v);
 const key = (e: Pick<Entry, 'aircraftId' | 'origin' | 'flightId'>) => JSON.stringify([e.aircraftId, e.origin, e.flightId]);
-function validate(value: unknown, scope: string, now: Date): Journal {
+export function validateReturnJournal(value: unknown, scope: string, now: Date): Journal {
   const data = value as Journal;
   if (!data || typeof data !== 'object' || Object.keys(data).sort().join(',') !== 'entries,schemaVersion,scope' || data.schemaVersion !== 1 || data.scope !== scope || !Array.isArray(data.entries) || data.entries.length > 100000) throw new Error('JOURNAL_INVALID');
   const seen = new Set<string>();
@@ -42,7 +42,7 @@ export async function reviewWithReturnJournal(input: RouteReview, options: Journ
   return withRunLock(async () => {
     const filename = join(directory, 'return-journal.json');
     let data: Journal;
-    try { data = validate(JSON.parse(await readFile(filename, 'utf8')), options.scope, now); }
+    try { data = validateReturnJournal(JSON.parse(await readFile(filename, 'utf8')), options.scope, now); }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') data = { schemaVersion: 1, scope: options.scope, entries: [] };
       else throw new Error('JOURNAL_UNAVAILABLE: registro invalido/inacessivel; revisao bloqueada.');

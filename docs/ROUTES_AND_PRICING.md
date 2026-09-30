@@ -143,8 +143,53 @@ Validação: `npm run typecheck`, `git diff --check` e 125 testes aprovados. Os 
 
 `options.directory` deve apontar para armazenamento persistente (por exemplo `.am4-state/<identificador-da-companhia>`); `options.scope` identifica companhia/ambiente sem usar e-mail ou outro segredo; `options.origin` deve vir do cadastro confirmado AIRCRAFT_ORIGINS_JSON. A pasta sugerida está ignorada pelo Git. O arquivo usa schemaVersion 1 e bloqueia novas gravações ao atingir 100 mil eventos, sem descartar eventos antigos silenciosamente.
 
-**Limite de integração:** o módulo está testado em reaberturas do arquivo local, mas ainda não está conectado ao coletor/workflow. Runners do GitHub Actions são efêmeros: é necessário implementar e validar restauração e gravação durável do estado, além do provedor de posição anterior/atual com ID real de voo. O primeiro arquivo ausente inicia um registro vazio; um transporte que perca estado NÃO pode fingir que se trata da primeira execução. A concorrência do workflow continua sendo necessária entre runners. Não há garantia de deduplicação entre runners antes dessa integração.
+**Situação na primeira entrega do registro:** o módulo foi inicialmente testado apenas em reaberturas locais. A continuação abaixo adiciona transporte e integração opcionais no workflow; falta validar esse transporte com estado real e fornecer posição anterior/atual com ID real de voo. O primeiro arquivo ausente inicia um registro vazio; um transporte que perca estado NÃO pode fingir que se trata da primeira execução. A concorrência do workflow continua sendo necessária entre runners. Não há garantia de deduplicação entre runners antes dessa integração.
 
 Nada nesta entrega habilita decolagens, mudanças de preço ou troca de rota. Não foram configuradas origens reais nem deduzidas a partir dos aeroportos alternados na interface.
 
 Validação do registro: `npm run typecheck` e `git diff --check` aprovados; 137 testes locais aprovados, incluindo 12 cenários de persistência/reabertura, repetição de voo antigo, concorrência, bloqueio por corrupção, identidade de ambiente e revisão indisponível com nova tentativa. A consulta ao jogo nesta retomada encontrou a tela pública, sem acesso autenticado à frota; não houve coleta adicional nem operações.
+
+
+## Transporte de estado no GitHub Actions — preparado, desligado
+
+`optimization/github-state.ts` implementa restauração e gravação pela API Contents do GitHub. O destino é fixo: branch **am4-runtime-state**, arquivo `return-journal-<scope>.json`. Nunca usa a branch padrão como destino implícito. O arquivo contém apenas o registro operacional; não inclui credenciais ou cookies. Se o repositório for público, esses IDs e eventos serão públicos nessa branch também.
+
+Fluxo preparado no workflow operacional:
+
+1. Compilar a ferramenta com `npm run build:state` (também validado pelo CI sem credenciais).
+2. Se habilitado explicitamente, restaurar o registro antes de entregar as credenciais do jogo ao processo do bot. Estado remoto ausente, inacessível ou inválido faz a etapa falhar e impede o bot.
+3. `runDemandSimulation` passa pela integração `analyzeOptimizationWithJournal`. Quando um provedor entrega `RouteReview` confirmado, a origem/identidade/layout/coleta são validados antes do registro da revisão. O fluxo atual ainda fornece contexto vazio porque esse provedor real está pendente; assim não inventa eventos nem recomenda trocas.
+4. Após sucesso do bot, salvar apenas acréscimos ao registro. Sem novos eventos não há commit. O SHA do arquivo restaurado acompanha a atualização: conflito resulta em falha, sem tentativa de sobrescrever o estado mais recente. A concorrência global do workflow foi preservada.
+
+Configurações, todas sem alterações nas variáveis reais do repositório:
+
+| Variável | Padrão | Significado |
+| --- | --- | --- |
+| ENABLE_RETURN_JOURNAL | false | Ativa exclusivamente o registro das revisões simuladas |
+| RETURN_JOURNAL_SCOPE | vazio | Identificador estável da companhia/ambiente, sem e-mail ou segredo |
+| AIRCRAFT_ORIGINS_JSON | [] | Cadastro confirmado de origem individual |
+
+`GITHUB_TOKEN` é disponibilizado somente às etapas de transporte; não é passado ao bot. O workflow já possuía `contents: write`; não houve ampliação das permissões. A ferramenta utiliza apenas api.github.com, rejeita redirecionamentos e não registra token/corpo de respostas de erro. O transporte usa arquivos abaixo de 900.000 bytes e bloqueia excesso em vez de truncar o histórico.
+
+### Inicialização posterior
+
+Não criamos a branch de estado e não inicializamos arquivos nesta entrega. Após revisão e autorização da ativação, será necessário criar a branch dedicada, selecionar um scope estável e inicializar **uma única vez** um arquivo vazio pela ferramenta:
+
+```sh
+npm run build:state
+node .am4-tools/optimization/github-state.js initialize
+```
+
+Esse comando exige `GITHUB_REPOSITORY`, `GITHUB_TOKEN` e `RETURN_JOURNAL_SCOPE` no ambiente. Não o use para substituir um registro existente: a inicialização não informa SHA para atualização e deve falhar se o arquivo já existir. O workflow nunca chama initialize. Não cole tokens em comandos, logs ou documentação; use ambiente protegido. Se uma inicialização falhar, verifique o estado existente antes de repetir.
+
+A restauração se recusa a sobrescrever uma pasta local existente, para não perder mudanças ainda não gravadas. No runner novo, `.am4-state/github` ainda não existe. A CLI `restore` e `save` está compilada em `.am4-tools/optimization/github-state.js`; ambas as pastas são ignoradas pelo Git.
+
+### Limites e validação
+
+O transporte está implementado e testado com API simulada e diretórios independentes representando runners distintos. Ainda **não foi executado contra a branch real de estado**, nem validado num ciclo automático autenticado. A escrita usa controle de versão do arquivo, mas não é uma transação com o jogo e não oferece garantia de execução única de operações reais. O código continua sem executor de troca de rota/decolagem inteligente.
+
+A origem por aeronave, o ID estável do voo e os dados completos dos candidatos continuam sendo requisitos para ativar a comparação real. A perda externa do estado exige recuperação deliberada; um 404 nunca é tratado como primeira execução.
+
+Referência da API utilizada: https://docs.github.com/en/rest/repos/contents#create-or-update-file-contents (branch explícita e SHA para atualizar arquivo).
+
+Validação desta integração: 150 testes locais aprovados (incluindo transporte remoto simulado, conflito de SHA e deduplicação no relatório após restauração em runner novo); `npm run typecheck`, `npm run build:state`, estrutura/condições do YAML e `git diff --check` aprovados. Nenhuma chamada de escrita à API de estado nem execução do workflow do jogo foi realizada.
