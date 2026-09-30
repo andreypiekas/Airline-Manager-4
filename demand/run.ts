@@ -1,3 +1,4 @@
+import { writeReferenceReport } from '../optimization/reference-report';
 import { RouteReview } from '../optimization/route-optimizer';
 import { writeFleetObservations } from '../optimization/fleet-observations';
 import { analyzeOptimizationWithJournal, optimizationConfig, writeOptimizationReport } from '../optimization/report';
@@ -14,6 +15,7 @@ export async function runDemandSimulation(page: Page, config: DemandConfig = rea
   const report = new DemandManager(config).analyze(collection);
   await writeDemandReport(report);
   await writeFleetObservations(collection, optimization.aircraftOrigins, 'test-results/demand', config.maxAgeSeconds, optimization.airlineBases);
+  await writeReferenceReport(collection, optimization);
   await writeOptimizationReport(await analyzeOptimizationWithJournal(collection, optimization, reviews));
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');
   return report;
