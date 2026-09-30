@@ -35,7 +35,7 @@ export function analyzeOptimization(collection: CollectionResult, config: Optimi
     let pricing = planTicketPrices(a, config.pricingEnabled, now, config.maxAgeSeconds);
     if (!trustworthy && config.pricingEnabled) pricing = { ...pricing, status: 'unavailable', proposed: null, reason: 'Coleta incompleta, duplicada ou aeronave indisponivel.' };
     if (route.decision === 'would_reroute') pricing = { ...pricing, status: 'unavailable', proposed: null, reason: 'Recalcular a tarifa Auto da NOVA rota somente apos confirmar a troca; nao usar tarifa da rota anterior.' };
-    return { aircraftId: a.aircraftId, registration: a.registration, route, pricing };
+    return { aircraftId: a.aircraftId, registration: a.registration, operational: a.operational ?? null, route, pricing };
   });
   return { schemaVersion: 1, generatedAt: now.toISOString(), dryRun: true, mutationAuthorized: false, collectionComplete: collection.complete, config,
     limitations: ['Comparacao somente entre candidatos fornecidos; nao garante otimo global.', 'Coletor de base, evento de retorno e candidatos ainda nao confirmado.', 'Nenhuma rota ou tarifa sera modificada.'], aircraft };

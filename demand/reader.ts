@@ -1,3 +1,4 @@
+import { readOperationalObservation } from '../optimization/observations';
 import { automaticFaresFromControl } from '../pricing/ticket-pricing';
 import { expect, Page } from '@playwright/test';
 import { AircraftSnapshot, CollectionResult } from './types';
@@ -106,6 +107,7 @@ export class DemandReader {
     const capacity = parseCapacity(text.seats as CabinText);
     const demand = parseDemand(text.demand as CabinText);
     Object.assign(item, { capacity, ...demand, from: text.codes[0], to: text.codes[1], state: 'ready', observedAt: new Date().toISOString() });
+    item.operational = await readOperationalObservation(details);
     // Read only the inspected Auto callback and ticket inputs. Never click Auto/Save or fill inputs.
     try {
       const auto = details.locator('#seat-layout').getByRole('button', { name: 'Auto', exact: true });

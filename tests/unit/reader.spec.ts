@@ -5,7 +5,7 @@ import { runDemandSimulation } from '../../demand/run';
 import { readDemandConfig } from '../../demand/config';
 import { readFile } from 'node:fs/promises';
 
-interface FixtureOptions { missingCabin?: boolean; badDemand?: boolean; wrongIdentity?: boolean; pages?: number; badCount?: boolean; loop?: boolean; missingDetails?: boolean; unknownAuto?: boolean }
+interface FixtureOptions { operational?: boolean; missingCabin?: boolean; badDemand?: boolean; wrongIdentity?: boolean; pages?: number; badCount?: boolean; loop?: boolean; missingDetails?: boolean; unknownAuto?: boolean }
 async function fixture(page: Page, options: FixtureOptions = {}) {
   await page.route('**/*', route => route.abort()); // Absolutely no game or other network access.
   const errors: string[] = [];
@@ -39,6 +39,7 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
       '<div onclick="document.getElementById(\'seat-layout\').style.display=\'block\'">Seat layout</div>'+
       '<div id="seat-layout" style="display:none">'+['economy','business','first'].map((c,i)=>'<div><img src="assets/'+c+'_seat.png"><br>'+(i?0:100)+'<div>$<input value="9999"></div></div>').join('')+'</div>'+
       '<div>Todays demand</div><div id="list-demand">'+['economy','business','first'].filter((c,i)=>!options.missingCabin||i!==1).map((c,i)=>'<div><img src="assets/'+c+'_seat.png"><br>'+(i?'0/200':options.badDemand?'90/80':'90/1000')+'</div>').join('')+'</div>';
+      if(options.operational) d.insertAdjacentHTML('beforeend', '<span class="s-text">Range</span><br><span class="m-text">3,440km</span><br><span class="s-text">Min runway</span><br><span class="m-text">7,550ft</span><br><span class="s-text">Flight hours/Cycles</span><br><span class="m-text">682 / 206</span>');
       d.querySelector('#seat-layout').insertAdjacentHTML('beforeend', '<button onclick="'+(options.unknownAuto?'unknownCallback()':'ticketPriceSuggest(1234,3456,17890,this,291);')+'">Auto</button><button onclick="window.mutations++">Save</button>');
       d.querySelectorAll('#seat-layout input').forEach((el,i)=>el.id=['eTicket','bTicket','fTicket'][i]);
     }
@@ -97,4 +98,16 @@ test('unknown Auto callback does not invalidate valid demand but blocks pricing'
   await fixture(page, { unknownAuto: true }); const result = await new DemandReader(page, 400).collect();
   expect(result.aircraft[0].state).toBe('ready'); expect(result.aircraft[0].fares?.source).toBe('unavailable');
   expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
+});
+
+
+test('operational observations reach both JSON reports without authorizing operations', async ({ page }) => {
+  await fixture(page, { operational: true });
+  await runDemandSimulation(page, readDemandConfig({}));
+  const demand = JSON.parse(await readFile('test-results/demand/demand-report.json', 'utf8'));
+  const optimization = JSON.parse(await readFile('test-results/demand/optimization-report.json', 'utf8'));
+  expect(demand.decisions[0].operational).toMatchObject({rangeKm:3440,minRunwayFt:7550,cycles:206,homeBase:null,flightId:null});
+  expect(optimization.aircraft[0].operational).toEqual(demand.decisions[0].operational);
+  expect(optimization.aircraft[0].route.decision).toBe('unavailable');
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
