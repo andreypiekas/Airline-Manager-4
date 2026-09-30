@@ -13,7 +13,7 @@ export async function runDemandSimulation(page: Page, config: DemandConfig = rea
   const collection = await new DemandReader(page, 10000, true).collect();
   const report = new DemandManager(config).analyze(collection);
   await writeDemandReport(report);
-  await writeFleetObservations(collection, optimization.aircraftOrigins, 'test-results/demand', config.maxAgeSeconds);
+  await writeFleetObservations(collection, optimization.aircraftOrigins, 'test-results/demand', config.maxAgeSeconds, optimization.airlineBases);
   await writeOptimizationReport(await analyzeOptimizationWithJournal(collection, optimization, reviews));
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');
   return report;

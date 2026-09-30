@@ -210,3 +210,15 @@ A comparacao agora exige que a posicao fornecida corresponda ao aeroporto atual 
 A leitura ampliada aumenta o tempo de coleta. Caso as primeiras leituras expirem, a politica continua bloqueando liberacoes em vez de aumentar automaticamente a janela. A integracao ampliada foi testada com DOM sintetico baseado na inspecao; ainda requer uma execucao de simulacao no Actions para validar a frota completa.
 
 Permanecem bloqueados: inferencia de origem, geracao de ID de voo a partir de ciclos/horarios relativos, confirmacao de retorno, busca automatica completa de candidatos, executor de decolagem e alteracoes reais. O journal existente deduplica revisoes fornecidas por um provedor; nao cria esse provedor. Manter `ENABLE_RETURN_JOURNAL=false` ate inicializacao e validacao explicitas.
+
+## Regra de origem atualizada pelo operador em 30/09/2026
+
+Esta regra substitui a exigencia anterior de cadastro manual de toda a frota. As bases informadas pelo operador sao Chapeco (XAP), Guarulhos (GRU) e Detroit Metropolitan (DTW). `AIRLINE_BASES_JSON` pode substituir essa lista, por exemplo `["XAP","GRU","DTW"]`.
+
+A origem e resolvida por prioridade:
+
+1. Cadastro explicito `AIRCRAFT_ORIGINS_JSON` por ID de aeronave.
+2. Exatamente uma base entre os dois aeroportos da rota: atribuir essa base, independentemente do sentido ou do estado de voo.
+3. Duas bases (GRU-XAP, por exemplo) ou nenhuma: bloquear a origem automatica e explicar o motivo. Coleta incompleta, dados inconsistentes e identidades duplicadas tambem bloqueiam inferencia.
+
+Os relatorios mostram `originResolution.source`: `registered`, `unique-route-base` ou `unavailable`, junto com a justificativa. A atribuicao pela rota e uma regra operacional autorizada pelo dono, nao um campo nativo confirmado do jogo. Nao comprova retorno, nao cria ID de voo e nao habilita operacoes. O modelo de origens passa a preencher os casos univocos e deixa `null` somente nos casos nao resolvidos. As atribuicoes pela rota sao recalculadas a cada coleta; o cadastro explicito tem prioridade e nao e sobrescrito.

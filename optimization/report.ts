@@ -1,13 +1,13 @@
 import { readFile } from 'node:fs/promises';
 import { reviewWithReturnJournal, validateReturnJournal } from './return-journal';
-import { readAircraftOrigins } from './aircraft-origins';
+import { readAircraftOrigins, readAirlineBases, resolveAircraftOrigin } from './aircraft-origins';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { CollectionResult } from '../demand/types';
 import { planTicketPrices } from '../pricing/ticket-pricing';
 import { RouteOptimizer, RoutePlan, RouteReview } from './route-optimizer';
 
-export interface OptimizationConfig { returnJournal: {directory: string; scope: string} | null; aircraftOrigins: ReadonlyMap<string, string>; pricingEnabled: boolean; routesEnabled: boolean; minOccupancy: number; minImprovementPercent: number; maxAgeSeconds: number }
+export interface OptimizationConfig { airlineBases: string[]; returnJournal: {directory: string; scope: string} | null; aircraftOrigins: ReadonlyMap<string, string>; pricingEnabled: boolean; routesEnabled: boolean; minOccupancy: number; minImprovementPercent: number; maxAgeSeconds: number }
 export function optimizationConfig(env: NodeJS.ProcessEnv = process.env): OptimizationConfig {
   const flag = (key: string) => {
     const v = env[key]?.trim().toLowerCase() || 'true';
@@ -23,7 +23,7 @@ export function optimizationConfig(env: NodeJS.ProcessEnv = process.env): Optimi
   const minImprovementPercent = Number(env.ROUTE_MIN_IMPROVEMENT_PERCENT?.trim() || '0');
   const maxAgeSeconds = Number(env.DEMAND_MAX_AGE_SECONDS?.trim() || '300');
   new RouteOptimizer(minOccupancy, minImprovementPercent, maxAgeSeconds); // Validate before any game navigation.
-  return { returnJournal, aircraftOrigins: readAircraftOrigins(env.AIRCRAFT_ORIGINS_JSON), pricingEnabled: flag('ENABLE_TICKET_PRICING'), routesEnabled: flag('ENABLE_ROUTE_OPTIMIZER'), minOccupancy, minImprovementPercent, maxAgeSeconds };
+  return { airlineBases: readAirlineBases(env.AIRLINE_BASES_JSON), returnJournal, aircraftOrigins: readAircraftOrigins(env.AIRCRAFT_ORIGINS_JSON), pricingEnabled: flag('ENABLE_TICKET_PRICING'), routesEnabled: flag('ENABLE_ROUTE_OPTIMIZER'), minOccupancy, minImprovementPercent, maxAgeSeconds };
 }
 /** The provider boundary deliberately accepts verified data, never guessed base/candidate selectors. */
 export function analyzeOptimization(collection: CollectionResult, config: OptimizationConfig, reviews: Record<string, RouteReview> = {}, now = new Date()) {
@@ -33,8 +33,9 @@ export function analyzeOptimization(collection: CollectionResult, config: Optimi
   const aircraft = collection.aircraft.filter(a => a.state !== 'inflight').map(a => {
     let route: RoutePlan = { aircraftId: a.aircraftId, arrivalKey: null, decision: 'unavailable', selectedRouteId: null, scores: [],
       reason: config.routesEnabled ? 'Pendente: base, retorno confirmado, demanda reservada e estimativas das rotas candidatas.' : 'Otimizador de rotas desativado.', dryRun: true, mutationAuthorized: false };
-    const origin = config.aircraftOrigins.get(a.aircraftId) ?? null;
-    if (config.routesEnabled && !origin) route.reason = 'Origem operacional desta aeronave ainda nao cadastrada; nao inferir pelo hub atual ou sentido da rota.';
+    const originResolution = resolveAircraftOrigin(a, collection, config.aircraftOrigins, config.airlineBases);
+    const origin = originResolution.origin;
+    if (config.routesEnabled && !origin) route.reason = originResolution.reason;
     const review = reviews[a.aircraftId];
     const snapshotAge = now.getTime() - Date.parse(a.observedAt);
     const trustworthy = collection.complete && a.state === 'ready' && !a.issue && counts.get(a.aircraftId) === 1 &&
@@ -51,10 +52,10 @@ export function analyzeOptimization(collection: CollectionResult, config: Optimi
     let pricing = planTicketPrices(a, config.pricingEnabled, now, config.maxAgeSeconds);
     if (!trustworthy && config.pricingEnabled) pricing = { ...pricing, status: 'unavailable', proposed: null, reason: 'Coleta incompleta, duplicada ou aeronave indisponivel.' };
     if (route.decision === 'would_reroute') pricing = { ...pricing, status: 'unavailable', proposed: null, reason: 'Recalcular a tarifa Auto da NOVA rota somente apos confirmar a troca; nao usar tarifa da rota anterior.' };
-    return { aircraftId: a.aircraftId, registration: a.registration, operationalOrigin: origin, operational: a.operational ?? null, route, pricing };
+    return { aircraftId: a.aircraftId, registration: a.registration, operationalOrigin: origin, originResolution, operational: a.operational ?? null, route, pricing };
   });
   return { schemaVersion: 1, generatedAt: now.toISOString(), dryRun: true, mutationAuthorized: false, collectionComplete: collection.complete, config: { ...config, aircraftOrigins: Array.from(config.aircraftOrigins, ([aircraftId, origin]) => ({ aircraftId, origin })) },
-    limitations: ['Comparacao somente entre candidatos fornecidos; nao garante otimo global.', 'Origem operacional por aeronave exige cadastro confirmado; coleta de retorno e candidatos completos ainda pendente.', 'Nenhuma rota ou tarifa sera modificada.'], aircraft };
+    limitations: ['Comparacao somente entre candidatos fornecidos; nao garante otimo global.', 'Origem atribuida pela unica base da rota ou cadastro explicito; duas bases exigem desambiguacao. Coleta de retorno e candidatos completos ainda pendente.', 'Nenhuma rota ou tarifa sera modificada.'], aircraft };
 }
 export async function writeOptimizationReport(report: ReturnType<typeof analyzeOptimization>, directory = 'test-results/demand') {
   await mkdir(directory, { recursive: true });
