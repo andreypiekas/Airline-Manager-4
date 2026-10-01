@@ -1,5 +1,5 @@
 import { test,expect,Page } from '@playwright/test';
-import { readMarketPriceReferences,readModelCostReference } from '../../optimization/cost-reference-reader';
+import { readMarketPriceReferences,readModelCostReference,readModelCostReferenceResult } from '../../optimization/cost-reference-reader';
 import { collectCandidateData } from '../../optimization/research-reader';
 const catalogTab="$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('ac_orders.php?first=true','routeAction',this,false,true);";
 const fleetTab="$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('routes.php','routeAction',this,false,false);";
@@ -14,7 +14,7 @@ async function fixture(page:Page,variant=''){
  function menuFleet(){if(document.querySelector('#fuelMain').style.display!=='none'){document.querySelector('#fuelMain').style.display='none';return}fleet()}
  function popup(url){if(url==='maintenance_main.php'){document.querySelector('#popTitle').style.display='block';document.querySelector('#popBtn2').style.display='block';document.querySelector('#popBtn2').setAttribute('onclick',"$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('maint_plan.php','maintAction',this,false,false);");return}document.querySelector('#popTitle').style.display='block';document.querySelector('#popBtn2').style.display='block';fuel(false)}
  function fuel(co2){document.querySelector('#fuelMain').style.display='block';document.querySelector('#fuelMain').innerHTML='<div><span>'+ (co2?'Quota cost':'Current price')+'</span><b>$ '+(co2?'133':'1,280')+'</b></div><div>'+(variant==='units'?'Unverified unit':co2?'Co2 quota cost per 1,000':'Fuel price per 1,000 Lbs')+'</div><button onclick="window.mutations++">Purchase</button><input placeholder="Amount to purchase">';document.querySelector('#popBtn2').setAttribute('onclick',"$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('co2.php','fuelMain',this,false,false);")}
- function Ajax(url){window.queries++;if(url==='maint_plan.php'){const m=document.querySelector('#maintAction');m.style.display='block';m.innerHTML='<span id="baseOnly">Showing all</span><div class="maint-list-sort" data-reg="SYNTHETIC" data-base="1" data-wear="2" data-hours="100"><span class="s-text">Flight hours</span><br><b>300</b><span class="badge">At base</span><span class="s-text">Hours to check</span><br><b>100</b><span class="s-text">Wear</span><br><b>2%</b><div id="controls101"><button onclick="window.mutations++">Repair</button></div></div>';return}if(url==='routes.php'){fleet();return}if(url==='co2.php'){fuel(true);return}if(url.includes('first=true')){document.querySelector('#routeAction').innerHTML='<div id="acListItems"><div id="listSection42"><b>ATR 72-500</b></div></div><div id="modelSelection"></div><div id="acListDetail"></div><div id="acModel"></div>';document.querySelector('#listSection42').setAttribute('onclick',variant==='control'?'window.mutations++':${JSON.stringify(catalog)});return}
+ function Ajax(url){window.queries++;if(url==='maint_plan.php'){const m=document.querySelector('#maintAction');m.style.display='block';m.innerHTML='<span id="baseOnly">Showing all</span><div class="maint-list-sort" data-reg="synthetic" data-base="1" data-wear="2" data-hours="100"><div class="col-sm-4">SYNTHETIC<br><span>Pax</span></div><span class="s-text">Flight hours</span><br><b>300</b><span class="badge">At base</span><span class="s-text">Hours to check</span><br><b>100</b><span class="s-text">Wear</span><br><b>2%</b><div id="controls101"><button onclick="window.mutations++">Repair</button></div></div>';return}if(url==='routes.php'){fleet();return}if(url==='co2.php'){fuel(true);return}if(url.includes('first=true')){document.querySelector('#routeAction').innerHTML='<div id="acListItems"><div id="listSection42"><b>ATR 72-500</b></div></div><div id="modelSelection"></div><div id="acListDetail"></div><div id="acModel"></div>';document.querySelector('#listSection42').setAttribute('onclick',variant==='control'?'window.mutations++':${JSON.stringify(catalog)});return}
  if(url.includes('mode=detail'))setTimeout(()=>{document.querySelector('#acModel').innerHTML='<table><tr><td>A-Check</td><td>$ '+(variant==='values'?'0':'20,125')+'</td></tr><tr><td>Maint check</td><td>480 Hours</td></tr></table><button onclick="window.mutations++">Order</button><button onclick="window.mutations++">Configuration</button>';if(variant==='identity')document.querySelector('#modelSelection').textContent='DC-9-10'},10)}
  fleet();if(variant==='overlay')document.querySelector('#viewOverlay').style.display='block';</script>`);
 }
@@ -53,4 +53,14 @@ test('validates markets and individual maintenance even without eligible route s
  expect(r).toMatchObject({uiRestored:true,candidates:[],models:[],market:{fuel:{pricePer1000:1280},co2:{pricePer1000:133}},
   maintenance:{status:'observed',complete:true,aircraft:[{aircraftId:'101',hoursToCheck:100,wearPercentage:2}]}});
  expect(await page.locator('#routesContainer').isVisible()).toBe(true);expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
+
+test('a model absent from the inspected catalog is reported as a cost gap without guessing another source',async({page})=>{
+ await fixture(page);expect(await readModelCostReferenceResult(page,999,500)).toEqual({modelId:999,status:'not_in_inspected_catalog',reference:null});
+ expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+test('broken catalog callbacks cannot masquerade as an intentionally absent model',async({page})=>{
+ await fixture(page,'control');expect(await readModelCostReferenceResult(page,999,500)).toEqual({modelId:999,status:'unavailable',reference:null});
+ expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });

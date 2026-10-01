@@ -42,10 +42,15 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
         maintenanceComplete:candidates.maintenance.complete,maintenanceAircraft:candidates.maintenance.aircraft.length,
         reservationScenarios:candidates.candidates.filter((c:any)=>c.reservations.status!=='unavailable').length,
         effectiveCostsComplete:candidates.candidates.filter((c:any)=>c.effectiveCosts.complete).length,
+        modelsNotInInspectedCatalog:candidates.modelReads.filter((m:any)=>m.status==='not_in_inspected_catalog').length,
+        modelSourcesComplete:candidates.models.length===expectedModels.size,
       });
       phase='data_validation';
       if(!report.collectionComplete||verified!==fleet.aircraft.length||!research.uiRestored||failed>0)throw new Error();
-      if(observed>0&&(!candidates.uiRestored||candidates.models.length!==expectedModels.size||!candidates.market.fuel||!candidates.market.co2))throw new Error();
+      const accountedModels=candidates.modelReads.filter((m:any)=>['observed','not_in_inspected_catalog'].includes(m.status));
+      if(observed>0&&(!candidates.uiRestored||accountedModels.length!==expectedModels.size||
+        new Set(accountedModels.map((m:any)=>m.modelId)).size!==expectedModels.size||
+        accountedModels.some((m:any)=>!expectedModels.has(m.modelId))||!candidates.market.fuel||!candidates.market.co2))throw new Error();
       if(!candidates.maintenance.complete||candidates.maintenance.aircraft.length!==fleet.aircraft.length||
         !candidates.market.fuel||!candidates.market.co2)throw new Error();
       if(candidates.candidates.some((c:any)=>c.comparisonReady||c.mutationAuthorized||c.reservations.futureScheduleComplete||

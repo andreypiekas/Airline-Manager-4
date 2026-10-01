@@ -13,10 +13,10 @@ async function fixture(page:Page,variant='') {
  function popup(){window.queries++;document.querySelector('#popTitle').style.display='block';const p=document.querySelector('#popBtn2');p.style.display='block';p.setAttribute('onclick',variant==='control'?'window.mutations++':"$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('maint_plan.php','maintAction',this,false,false);")}
  const popupOriginal=popup;popup=function(){popupOriginal();if(variant==='delayed_control'){const p=document.querySelector('#popBtn2'),callback=p.getAttribute('onclick');p.setAttribute('onclick','window.mutations++');setTimeout(()=>p.setAttribute('onclick',callback),30);}};
  function Ajax(){window.queries++;if(variant==='loading')return;
- document.querySelector('#maintAction').innerHTML='<span id="baseOnly">'+(variant==='filter'?'At base only':'Showing all')+'</span><div class="maint-list-sort" data-reg="'+(variant==='identity'?'OTHER':'SYNTHETIC')+'" data-base="1" data-wear="5.50" data-hours="200"><div><span class="s-text">Flight hours</span><br><b>100</b><span class="badge">At base</span></div><div><span class="s-text">Hours to check</span><br><b>200</b><span class="s-text">Wear</span><br><b>5.50%</b></div><div id="controls101"><button onclick="window.mutations++">A-Check</button><button onclick="window.mutations++">Repair</button><button onclick="window.mutations++">Modify</button></div></div>';
+ document.querySelector('#maintAction').innerHTML='<span id="baseOnly">'+(variant==='filter'?'At base only':'Showing all')+'</span><div class="maint-list-sort" data-reg="'+(variant==='identity'?'other':'synthetic')+'" data-base="1" data-wear="5.50" data-hours="200"><div class="col-sm-4">SYNTHETIC<br><span class="xs-text">Pax</span></div><div><span class="s-text">Flight hours</span><br><b>100</b><span class="badge">At base</span></div><div><span class="s-text">Hours to check</span><br><b>200</b><span class="s-text">Wear</span><br><b>5.50%</b></div><div id="controls101"><button onclick="window.mutations++">A-Check</button><button onclick="window.mutations++">Repair</button><button onclick="window.mutations++">Modify</button></div></div>';
  const row=document.querySelector('.maint-list-sort');if(variant==='hours')row.setAttribute('data-hours','201');if(variant==='wear')row.setAttribute('data-wear','6');
  if(variant==='duplicate')row.insertAdjacentHTML('afterend',row.outerHTML);if(variant==='id')row.querySelector('#controls101').id='controls102';if(variant==='base')row.setAttribute('data-base','0');
- if(variant==='hidden')row.style.display='none';
+ if(variant==='hidden')row.style.display='none';if(variant==='visible_identity')row.querySelector('.col-sm-4').firstChild.textContent='OTHER';
  }
  </script>`);
 }
@@ -26,8 +26,8 @@ test('reads aircraft maintenance status independently from operational controls 
   hoursToCheck:200,wearPercentage:5.5,atAnyBase:true,effectiveCheckPrice:null,effectiveRepairPrice:null}]});
  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);expect(await page.locator('#popTitle').isVisible()).toBe(false);
 });
-for(const variant of ['control','loading','filter','identity','hours','wear','duplicate','id','base','hidden'])test(`maintenance source fails closed without invoking a service: ${variant}`,async({page})=>{
- await fixture(page,variant);const r=await readAircraftMaintenanceReferences(page,collection,100);
+for(const variant of ['control','loading','filter','identity','hours','wear','duplicate','id','base','hidden','visible_identity'])test(`maintenance source fails closed without invoking a service: ${variant}`,async({page})=>{
+ await fixture(page,variant);const r=await readAircraftMaintenanceReferences(page,collection,500);
  expect(r).toMatchObject({status:'unavailable',complete:false,aircraft:[],uiClosed:true});
  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });

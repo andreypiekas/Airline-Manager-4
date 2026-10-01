@@ -46,7 +46,9 @@ export async function readAircraftMaintenanceReferences(page:Page,collection:Col
       };
       const controls=row.querySelectorAll('[id^="controls"]');if(controls.length!==1)throw new Error();
       const badges=Array.from(row.querySelectorAll('.badge')).filter(visible);if(badges.length!==1)throw new Error();
-      return {controlsId:controls[0].id,registration:row.getAttribute('data-reg'),base:row.getAttribute('data-base'),
+      const names=Array.from(row.querySelectorAll('.col-sm-4')).filter(visible);if(names.length!==1)throw new Error();
+      const registration=Array.from(names[0].childNodes).filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').trim();
+      return {controlsId:controls[0].id,registration,sortRegistration:row.getAttribute('data-reg'),base:row.getAttribute('data-base'),
         wearAttribute:row.getAttribute('data-wear'),hoursAttribute:row.getAttribute('data-hours'),
         hours:value('Flight hours'),remaining:value('Hours to check'),wear:value('Wear'),baseLabel:badges[0].textContent?.trim()};
     }));
@@ -55,7 +57,7 @@ export async function readAircraftMaintenanceReferences(page:Page,collection:Col
     const parsed=raw.map(r=>{
       const id=r.controlsId.match(/^controls([1-9]\d*)$/);const wear=r.wear.match(/^(\d+(?:\.\d+)?)%$/);
       const aircraft=collection.aircraft.find(a=>a.aircraftId===id?.[1]);
-      if(!id||!wear||!aircraft||aircraft.registration!==r.registration||!['0','1'].includes(r.base||'')||
+      if(!id||!wear||!aircraft||aircraft.registration!==r.registration||r.sortRegistration!==r.registration.toLowerCase()||!['0','1'].includes(r.base||'')||
         r.baseLabel!==(r.base==='1'?'At base':'Not at base'))throw new Error();
       const flightHours=integerText(r.hours),hoursToCheck=integerText(r.remaining),wearPercentage=Number(wear[1]);
       if(hoursToCheck!==Number(r.hoursAttribute)||wearPercentage!==Number(r.wearAttribute)||wearPercentage<0||wearPercentage>100)throw new Error();

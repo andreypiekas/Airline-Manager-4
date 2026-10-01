@@ -6,7 +6,7 @@ import { DemandReader } from '../demand/reader';
 import { OptimizationConfig } from './report';
 import { fleetObservations } from './fleet-observations';
 import { collectOpenRouteSuggestions } from './suggestion-reader';
-import { ModelCostReference, readMarketPriceReferences, readModelCostReference } from './cost-reference-reader';
+import { ModelCostReadResult, ModelCostReference, readMarketPriceReferences, readModelCostReferenceResult } from './cost-reference-reader';
 import { candidateDemandEvidence } from './candidate-evidence';
 import { candidateReservationScenario, reservationConfig } from './reservations';
 import { readAircraftMaintenanceReferences } from './maintenance-reader';
@@ -124,6 +124,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   const reservationsConfig=reservationConfig();
   const quotes=research.aircraft.flatMap(a=>a.result?.quotes||[]);
   const models:ModelCostReference[]=[];const warnings:string[]=[];
+  const modelReads:ModelCostReadResult[]=[];
   let uiRestored=research.uiRestored;
   let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true,stage:'not_requested',warnings:[],unitLabels:[]};
   let maintenance:Awaited<ReturnType<typeof readAircraftMaintenanceReferences>>={status:'not_requested',stage:'not_requested',observedAt:new Date().toISOString(),complete:false,uiClosed:true,aircraft:[],warnings:[]};
@@ -134,9 +135,9 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     for(const id of ids.slice(0,10)){
       try {
         await openList(page,research.config.timeout);
-        const model=await readModelCostReference(page,id,research.config.timeout);
-        if(model)models.push(model);else warnings.push(`MODEL_REFERENCE_UNAVAILABLE:${id}`);
-      }catch{warnings.push(`MODEL_REFERENCE_UNAVAILABLE:${id}`);}
+        const read=await readModelCostReferenceResult(page,id,research.config.timeout);modelReads.push(read);
+        if(read.reference)models.push(read.reference);else warnings.push(`MODEL_REFERENCE_${read.status.toUpperCase()}:${id}`);
+      }catch{modelReads.push({modelId:id,status:'unavailable',reference:null});warnings.push(`MODEL_REFERENCE_UNAVAILABLE:${id}`);}
       finally{try{await openList(page,research.config.timeout);}catch{uiRestored=false;warnings.push('COST_REFERENCE_LIST_RESTORE_FAILED');}}
       if(!uiRestored)break;
     }
@@ -171,7 +172,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
         ...(!demand.remaining?['DIRECTIONAL_REMAINING_DEMAND']:[]),...(fuel===null?['FUEL_MARKET_PRICE']:[])]};
   });
   return {schemaVersion:2,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
-    uiRestored,market,models,maintenance,warnings:[...warnings,...maintenance.warnings],candidates};
+    uiRestored,market,models,modelReads,maintenance,warnings:[...warnings,...maintenance.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
   await mkdir(directory,{recursive:true});

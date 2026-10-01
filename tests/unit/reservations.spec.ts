@@ -56,3 +56,9 @@ test('configuration bounds and unknown pool scopes fail closed',()=>{
   {ROUTE_RESERVATION_POOL_SCOPE:'daily'},{DEMAND_MAX_AGE_SECONDS:'0'}])expect(()=>reservationConfig(env)).toThrow();
  expect(()=>candidateReservationScenario(quote,collection(aircraft()),now,{nextLegs:0,poolScope:'directional',maxAgeSeconds:300})).toThrow();
 });
+
+
+test('empty or absent injected pool scopes cannot silently default to another allocation policy',()=>{
+ for(const poolScope of ['',undefined])expect(()=>candidateReservationScenario(quote,collection(aircraft()),now,
+  {nextLegs:2,poolScope:poolScope as any,maxAgeSeconds:300})).toThrow('RESERVATION_CONFIG_INVALID');
+});

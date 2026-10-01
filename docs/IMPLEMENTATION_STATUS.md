@@ -20,7 +20,7 @@ Todo gerenciamento novo permanece em simulação. Não houve operações no jogo
 
 ## Validação
 
-- 339 testes locais aprovados; typecheck, build:state e git diff --check aprovados. Validacao adicional das novas fontes no Actions ainda em andamento.
+- 343 testes locais aprovados; typecheck, build:state e git diff --check aprovados. Validacao adicional das novas fontes no Actions ainda em andamento.
 - CI de código aprovada: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36862961607
 - Coleta e fontes implementadas aprovadas: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36862952783
 - Commit de código validado: 0ee119a39c68375c1f01f0f7d5e7831707612fac.
@@ -31,6 +31,8 @@ A aprovação da coleta verifica o percurso de leitura, cada identidade, as font
 O workflow isolado validate-collection.yml importa apenas módulos de leitura, força simulação/fail-safe, compartilha concurrency com o bot operacional, não envia Telegram nem persiste eventos reais. Usa secrets existentes por variáveis de ambiente sem expor seus valores. Trace, vídeo e screenshots do login ficam desligados. Nenhum conteúdo de sessão é incluído nos relatórios.
 
 ## Correções confirmadas
+
+O leitor de manutencao compara ID e registro visivel exatos; data-reg e conferido como chave de ordenacao em minusculas. O leitor do catalogo distingue modelo ausente da lista inspecionada de falha de coleta, mantendo custos desconhecidos bloqueados.
 
 Cartões em voo podem não conter o span acRegList usado nos cartões em solo. O leitor obtém o ID no callback de consulta fleet_details.php, confirma o registro no painel e rejeita IDs conflitantes ou links duplicados. Contar cartões não substitui verificar seus detalhes.
 

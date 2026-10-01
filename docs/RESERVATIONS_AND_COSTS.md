@@ -30,9 +30,11 @@ DEMAND_MAX_AGE_SECONDS=300
 
 ## Manutencao observada
 
-`optimization/maintenance-reader.ts` consulta o menu Maintenance e a aba Plan. Aguarda o callback da aba anterior ser substituido pelo callback confirmado de Plan, sem clicar no controle antigo. Le os cartoes `.maint-list-sort`, `data-reg`, `data-base`, `data-wear`, `data-hours` e `controls<ID>`, conferindo registro, identidade e labels visiveis. Rejeita filtro diferente de Showing all, cartoes ocultos, duplicados e valores divergentes. Fecha o popup e o chamador restaura Fleet. Diagnosticos registram somente a etapa de falha; nunca HTML, formularios ou dados de sessao.
+`optimization/maintenance-reader.ts` consulta o menu Maintenance e a aba Plan. Aguarda o callback da aba anterior ser substituido pelo callback confirmado de Plan, sem clicar no controle antigo. Le os cartoes `.maint-list-sort`, `data-reg`, `data-base`, `data-wear`, `data-hours` e `controls<ID>`, conferindo registro, identidade e labels visiveis. O registro visivel preserva maiusculas/minusculas; data-reg e somente uma chave de ordenacao em minusculas. A identidade exige ID e registro visivel exatos, alem de conferir a chave de ordenacao. Rejeita filtro diferente de Showing all, cartoes ocultos, duplicados e valores divergentes. Fecha o popup e o chamador restaura Fleet. Diagnosticos registram somente a etapa de falha; nunca HTML, formularios ou dados de sessao.
 
 Os campos Flight hours, Hours to check e Wear sao referencias de estado. At base nao define a origem propria da aeronave. A-Check, Repair, Modify e controles Bulk nunca sao clicados. Precos efetivos de check/reparo continuam indisponiveis; as horas restantes nao permitem deduzir com seguranca o intervalo ou os ajustes de custo da aeronave. Com pesquisa habilitada, manutencao e mercados sao consultados mesmo sem candidatas elegiveis; o teste isolado exige essas fontes e nao considera sua ausencia uma validacao bem-sucedida.
+
+O leitor do catalogo distingue modelo observado, modelo ausente da lista inspecionada e falha de coleta. Ausencia nessa lista nao prova inexistencia do modelo: nenhuma fonte alternativa e presumida. A validacao isolada pode aprovar o tratamento seguro dessa lacuna, mas registra modelSourcesComplete=false e mantem a manutencao efetiva e a comparacao economica bloqueadas.
 
 ## Custos e origem das formulas
 

@@ -26,8 +26,9 @@ const map = (fn: (k: typeof CLASSES[number]) => number): Cabins => ({Y:fn('Y'),J
 export function candidateReservationScenario(quote: CandidateQuote, collection: CollectionResult,
   now = new Date(), config = reservationConfig()) {
   // Validate injected settings too; this function performs no navigation or mutations.
-  reservationConfig({ROUTE_RESERVATION_NEXT_LEGS:String(config.nextLegs),ROUTE_RESERVATION_POOL_SCOPE:config.poolScope,
-    DEMAND_MAX_AGE_SECONDS:String(config.maxAgeSeconds)});
+  if(!Number.isSafeInteger(config.nextLegs)||config.nextLegs<1||config.nextLegs>20||
+    !['airport-pair','directional'].includes(config.poolScope)||!Number.isSafeInteger(config.maxAgeSeconds)||config.maxAgeSeconds<1)
+    throw new Error('RESERVATION_CONFIG_INVALID');
   const result = { status:'unavailable', config, scope:'bounded-next-legs' as const,
     currentFlightPassengersAlreadyDebited:true, futureScheduleComplete:false, demandNetOfOtherAircraft:false,
     comparisonReady:false, mutationAuthorized:false, reservations:[] as {

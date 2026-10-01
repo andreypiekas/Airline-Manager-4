@@ -29,12 +29,18 @@ export function verifiedCatalogControl(callback:string,modelId:number,modelName:
   return normalize(callback)===normalize(expected);
 }
 /** Start on the Fleet popup. Opens catalog DETAILS only; never Order/Configuration. */
-export async function readModelCostReference(page:Page,modelId:number,timeout=10000):Promise<ModelCostReference|null>{
+export type ModelCostReadResult = {modelId:number;status:'observed';reference:ModelCostReference} |
+  {modelId:number;status:'not_in_inspected_catalog'|'unavailable';reference:null};
+export async function readModelCostReferenceResult(page:Page,modelId:number,timeout=10000):Promise<ModelCostReadResult>{
   try {
     if(!Number.isSafeInteger(modelId)||modelId<1)throw new Error();
     await checkedClick(page,'#popBtn2',"$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('ac_orders.php?first=true','routeAction',this,false,true);",timeout);
     await page.locator('#acListItems [id^="listSection"]').first().waitFor({state:'visible',timeout});
     const rows=await page.locator('#acListItems [id^="listSection"]').evaluateAll(elements=>elements.map(e=>({id:e.id,name:e.querySelector('b')?.textContent?.trim()||'',callback:e.getAttribute('onclick')||''})));
+    const listedIds=rows.map(r=>r.callback.match(/Ajax\('ac_orders\.php\?mode=detail&id=([1-9]\d*)&charter=0'/)?.[1]);
+    if(!rows.length||listedIds.some(id=>!id))throw new Error();
+    // Absence from this inspected list is an explicit data gap, not proof that a model does not exist.
+    if(!listedIds.includes(String(modelId)))return {modelId,status:'not_in_inspected_catalog',reference:null};
     const matches=rows.filter(r=>verifiedCatalogControl(r.callback,modelId,r.name));
     if(matches.length!==1||!/^listSection\d+$/.test(matches[0].id))throw new Error();
     const selected=matches[0];const control=page.locator('#'+selected.id);
@@ -53,8 +59,11 @@ export async function readModelCostReference(page:Page,modelId:number,timeout=10
     if(!price||!hours)throw new Error();
     const aCheckPrice=integerText(price[1]),checkIntervalHours=integerText(hours[1]);
     if(aCheckPrice<=0||checkIntervalHours<=0)throw new Error();
-    return {modelId,modelName:selected.name,observedAt:new Date().toISOString(),aCheckPrice,checkIntervalHours,source:'inspected-catalog',effectiveAircraftMaintenanceCost:null};
-  }catch{return null;}
+    return {modelId,status:'observed',reference:{modelId,modelName:selected.name,observedAt:new Date().toISOString(),aCheckPrice,checkIntervalHours,source:'inspected-catalog',effectiveAircraftMaintenanceCost:null}};
+  }catch{return {modelId,status:'unavailable',reference:null};}
+}
+export async function readModelCostReference(page:Page,modelId:number,timeout=10000):Promise<ModelCostReference|null>{
+  return (await readModelCostReferenceResult(page,modelId,timeout)).reference;
 }
 /** Menu and tabs are queries only. No purchase input is read/filled or Purchase clicked. */
 export async function readMarketPriceReferences(page:Page,timeout=10000){
