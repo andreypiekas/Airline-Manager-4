@@ -1,4 +1,5 @@
 name: Validar coleta integral em simulacao
+# Revisao: identidade de cartões em voo pelo callback de consulta confirmado.
 on:
   workflow_dispatch:
   push:

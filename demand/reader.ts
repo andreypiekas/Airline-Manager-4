@@ -3,6 +3,7 @@ import { automaticFaresFromControl } from '../pricing/ticket-pricing';
 import { expect, Page } from '@playwright/test';
 import { AircraftSnapshot, CollectionResult } from './types';
 import { CabinText, integerText, parseCapacity, parseDemand, parseOnboard } from './parsing';
+import { AIRCRAFT_DETAILS_CONTROL, aircraftIdFromDetailsControl } from './identity';
 
 interface RouteCard {
   routeId: string; aircraftId: string; registration: string; routeLabel: string;
@@ -22,19 +23,22 @@ export class DemandReader {
       for (let pageIndex = 0; pageIndex < 100; pageIndex++) {
         const rows = this.page.locator('#routesContainer [id^="routeMainList"]');
         if (result.expectedRoutes > 0) await rows.first().waitFor({ state: 'visible', timeout: this.timeout });
-        const cards: RouteCard[] = await rows.evaluateAll(elements => elements.map(el => {
+        const cards: RouteCard[] = await rows.evaluateAll((elements, pattern) => elements.map(el => {
           const routeId = el.id.replace(/^routeMainList/, '');
-          const registration = el.querySelector('a [id^="acRegList"]');
+          const links = Array.from(el.querySelectorAll('a')).map(link => ({link,
+            id:(link.getAttribute('onclick')||'').replace(/\s/g,'').match(new RegExp(pattern))?.[1]})).filter(a=>a.id);
+          const registration = links.length === 1 ? links[0].link.querySelector('[id^="acRegList"]') : null;
+          const aircraftId = links.length === 1 && (!registration || registration.id === `acRegList${links[0].id}`) ? links[0].id! : '';
           const routeLabel = Array.from(el.querySelectorAll('span.s-text')).map(e => e.textContent?.trim() || '').find(t => /^[A-Z0-9]{3}\s*-\s*[A-Z0-9]{3}$/.test(t)) || '';
           const codes = routeLabel.split(/\s*-\s*/);
           const depart = el.querySelector<HTMLButtonElement>(`#listDepart${routeId}`);
           const visible = !!el.getClientRects().length;
-          return { routeId, aircraftId: registration?.id.replace(/^acRegList/, '') || '', registration: registration?.textContent?.trim() || '', routeLabel,
+          return { routeId, aircraftId, registration: registration?.textContent?.trim() || '', routeLabel,
             from: codes[0] || '', to: codes[1] || '', pax: el.classList.contains('classPAX'),
             ready: visible && el.classList.contains('listDepartable') && !!depart && !depart.disabled && !!depart.getClientRects().length,
             onboardText: ((el as HTMLElement).innerText.match(/Onboard:[^\n]*/) || [''])[0].trim(),
             inflight: visible && /Onboard\s*:/.test((el as HTMLElement).innerText) };
-        }));
+        }), AIRCRAFT_DETAILS_CONTROL);
         for (const card of cards) {
           if (seenRoutes.has(card.routeId)) throw new Error('PAGINATION_DUPLICATE');
           seenRoutes.add(card.routeId);
@@ -93,8 +97,11 @@ export class DemandReader {
   private async readDetails(card: RouteCard, item: AircraftSnapshot): Promise<void> {
     if (!/^\d+$/.test(card.routeId) || !/^\d+$/.test(card.aircraftId)) throw new Error('Invalid identity');
     const cardLocator = this.page.locator(`#routeMainList${card.routeId}`);
-    const link = cardLocator.locator('a').filter({ has: this.page.locator(`#acRegList${card.aircraftId}`) });
-    if (await link.count() !== 1) throw new Error('Ambiguous aircraft link');
+    const links = cardLocator.locator('a');
+    const callbacks = await links.evaluateAll(es=>es.map(e=>e.getAttribute('onclick')||''));
+    const matching = callbacks.map((callback,index)=>({index,id:aircraftIdFromDetailsControl(callback)})).filter(a=>a.id===card.aircraftId);
+    if (matching.length !== 1) throw new Error('Ambiguous aircraft link');
+    const link = links.nth(matching[0].index);
     const callback = (await link.getAttribute('onclick') || '').replace(/\s/g, '');
     const expected = `playSound('neutral_click');Ajax('fleet_details.php?id=${card.aircraftId}','detailsAction');if(intro==0){$('#routeAction').hide();}`;
     if (callback !== expected) throw new Error('Unverified details callback');
@@ -113,7 +120,9 @@ export class DemandReader {
       if (!callbacks.some(s => s.includes(`fleet_details.php?id=${card.aircraftId}&mode=reg&`)) ||
           !callbacks.some(s => s.includes(`fleet_details.php?id=${card.routeId}&mode=routeReg&`)) || await depart.isVisible()) throw new Error('Inflight identity not confirmed');
     }
-    await expect(details.locator('#ff-name')).toHaveText(card.registration, { timeout: this.timeout });
+    const observedRegistration = (await details.locator('#ff-name').innerText({timeout:this.timeout})).trim();
+    if (!observedRegistration || (card.registration && observedRegistration !== card.registration) ||
+      !(await link.innerText()).trim().startsWith(`${observedRegistration} - `)) throw new Error('Registration mismatch');
     if (!(await details.locator('#seat-layout').isVisible())) await details.getByText('Seat layout', { exact: true }).click({ timeout: this.timeout });
     if (!(await details.locator('#list-demand').isVisible())) await details.getByText('Todays demand', { exact: true }).click({ timeout: this.timeout });
     await details.locator('#seat-layout').waitFor({ state: 'visible', timeout: this.timeout });
@@ -136,7 +145,7 @@ export class DemandReader {
     const capacity = parseCapacity(text.seats as CabinText);
     const demand = parseDemand(text.demand as CabinText);
     if (card.inflight && (text.codes[0] !== card.from || text.codes[1] !== card.to)) throw new Error('Inflight direction mismatch');
-    Object.assign(item, { capacity, ...demand, from: text.codes[0], to: text.codes[1], state: card.inflight ? 'inflight' : 'ready', observedAt: new Date().toISOString() });
+    Object.assign(item, { registration:observedRegistration, capacity, ...demand, from: text.codes[0], to: text.codes[1], state: card.inflight ? 'inflight' : 'ready', observedAt: new Date().toISOString() });
     item.operational = await readOperationalObservation(details);
     // Read only the inspected Auto callback and ticket inputs. Never click Auto/Save or fill inputs.
     try {

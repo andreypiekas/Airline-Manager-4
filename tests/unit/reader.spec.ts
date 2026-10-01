@@ -134,3 +134,18 @@ test('unknown aircraft link callback is rejected before a click',async({page})=>
  const r=await new DemandReader(page,400).collect();expect(r.aircraft[0].state).toBe('unavailable');
  expect(r.warnings).toContain('DETAILS_UNAVAILABLE:101');expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
+
+test('bare inflight link supplies ID through the confirmed callback and registration through details',async({page})=>{
+ await fixture(page,{operational:true});await page.locator('#routeMainList102 a').evaluate(e=>e.textContent='TEST-102 - Test aircraft');
+ const r=await new DemandReader(page,500,true).collect();expect(r.complete).toBe(true);
+ expect(r.aircraft[1]).toMatchObject({aircraftId:'1102',registration:'TEST-102',state:'inflight',capacity:{Y:100,J:0,F:0},remaining:{Y:90,J:0,F:0}});
+ expect(r.warnings).toEqual([]);expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+test('card ID conflicting with callback is blocked without clicking',async({page})=>{
+ await fixture(page);await page.locator('#acRegList1101').evaluate(e=>e.id='acRegList9999');
+ const r=await new DemandReader(page,400,true).collect();expect(r.aircraft[0].state).toBe('unavailable');expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+test('multiple aircraft callbacks on a card cannot select an arbitrary identity',async({page})=>{
+ await fixture(page);await page.locator('#routeMainList101 a').evaluate(e=>e.after(e.cloneNode(true)));
+ const r=await new DemandReader(page,400,true).collect();expect(r.aircraft[0].state).toBe('unavailable');expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
