@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: diagnostico restrito das unidades de precos, sem dados de sessao.
+# Revisao: fechar o popup de consulta antes de trocar para o mercado.
 on:
   workflow_dispatch:
   push:

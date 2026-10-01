@@ -15,6 +15,14 @@ async function checkedClick(page:Page,selector:string,callback:string,timeout:nu
   if(await c.count()!==1||!await c.isVisible()||normalize(await c.getAttribute('onclick')||'')!==normalize(callback))throw new Error('REFERENCE_CONTROL_UNVERIFIED');
   await c.click({timeout});
 }
+async function closeReadOnlyPopup(page:Page,timeout:number){
+  const title=page.locator('#popTitle');
+  if(!await title.isVisible())return;
+  const close=title.locator('..').locator('[onclick]');
+  if(await close.count()!==1||!await close.isVisible()||
+    normalize(await close.getAttribute('onclick')||'')!=="closePop();document.getElementById('rewardPopup').style.display='none';")throw new Error('REFERENCE_CLOSE_UNVERIFIED');
+  await close.click({timeout});await expect(title).not.toBeVisible({timeout});
+}
 export function verifiedCatalogControl(callback:string,modelId:number,modelName:string){
   if(!Number.isSafeInteger(modelId)||modelId<1||!modelName||!/^[A-Za-z0-9 .()/-]+$/.test(modelName))return false;
   const expected=`if(intro==0) { $('#modelSelection').html('${modelName}');playSound('neutral_click');$('#acListDetail').slideUp('slow');Ajax('ac_orders.php?mode=detail&id=${modelId}&charter=0','acModel',false,false,false);$('#acModel').html('<div class=text-center><img src=assets/img/loaders/flight_info_loader.gif></div>').show();}`;
@@ -54,6 +62,11 @@ export async function readMarketPriceReferences(page:Page,timeout=10000){
     stage:'menu',warnings:[] as string[],unitLabels:[] as string[]};
   const menu=page.locator('#smallMainMenu').getByText('Fuel',{exact:true}).locator('../..');
   try {
+    // An open Fleet popup intercepts menu clicks. Use the observed close-only
+    // control first, rather than forcing a click through its overlay.
+    result.stage='popup_close';
+    await closeReadOnlyPopup(page,timeout);
+    result.stage='menu';
     if(await menu.count()!==1||!await menu.isVisible()||normalize(await menu.getAttribute('onclick')||'')!=="hideAllWhenClick();popup('fuel.php','Fuel',false,false,true);")throw new Error();
     await menu.click({timeout});
     const read=async(commodity:'fuel'|'co2')=>{
@@ -84,7 +97,7 @@ export async function readMarketPriceReferences(page:Page,timeout=10000){
   finally {
     try {
       if(await page.locator('#fuelMain').isVisible()){
-        await checkedClick(page,'#mapRoutes',"hideAllWhenClick();menuFleet('Routes');",timeout);
+        await closeReadOnlyPopup(page,timeout);
         await expect(page.locator('#fuelMain')).not.toBeVisible({timeout});
       }
       result.uiClosed=true;
