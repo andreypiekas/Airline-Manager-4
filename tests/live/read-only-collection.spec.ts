@@ -42,6 +42,25 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       const config=readDemandConfig();
       await loginForReadOnlyCollection(page,process.env,90000,stage=>{phase=`login_${stage}`;});
       await writeSourceNavigation('after_login');
+      phase='finance_source_discovery';
+      const finance=page.locator('[id="mapMaint"][data-original-title="Finance, Marketing & Stock"]');
+      if(await finance.count()!==1||!await finance.isVisible())throw new Error();
+      const financeCallback=(await finance.getAttribute('onclick')||'').trim();
+      const financeShape=financeCallback.replace(/'[^']*'/g,"''").replace(/\s/g,'');
+      if(!financeCallback.startsWith("hideAllWhenClick();popup('finances.php',")||
+        !/^hideAllWhenClick\(\);popup\('',''(?:,(?:false|true|null|\d+|'')){1,9}\);$/.test(financeShape))throw new Error();
+      const financeBeforeIds=await page.locator('[id]').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.id));
+      await finance.click({timeout:10000});
+      await page.locator('#popTitle').waitFor({state:'visible',timeout:10000});
+      await expect(page.locator('#popTitle')).toContainText(/Finance|Marketing|Stock/i,{timeout:10000});
+      await expect.poll(()=>page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id)).some(e=>(e as HTMLElement).innerText?.length>30),financeBeforeIds),{timeout:10000}).toBe(true);
+      const financeScreen=await page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id))
+        .filter(e=>!e.matches('input,textarea,select,form,script')).slice(0,100).map(e=>({id:e.id,tag:e.tagName,text:(e as HTMLElement).innerText.trim().slice(0,2500)})),financeBeforeIds);
+      const financeTabs=await page.locator('.popMenuBtn').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>({id:e.id,text:(e as HTMLElement).innerText.trim(),
+        queryPaths:Array.from((e.getAttribute('onclick')||'').matchAll(/'([a-z_0-9]+\.php)(?:\?[^']*)?'/gi),m=>m[1])})));
+      await writeFile('test-results/demand/finance-source-discovery.json',JSON.stringify({schemaVersion:1,observedAt:new Date().toISOString(),dryRun:true,
+        mutationAuthorized:false,screen:financeScreen,tabs:financeTabs},null,2)+'\n');
+      await closeReadOnlyPopup(page,10000);
       phase='mcdu_source_discovery';
       await closeReadOnlyPopup(page,10000);
       phase='mcdu_control';
@@ -55,6 +74,8 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
           hit:p?{id:p.id,tag:p.tagName,className:p.className}:null,ownHit:!!p&&(p===e||e.contains(p))};
       });
       await writeFile('test-results/demand/mcdu-control.json',JSON.stringify({schemaVersion:1,dryRun:true,mutationAuthorized:false,hit},null,2)+'\n');
+      phase='mcdu_wait_uncovered';
+      await expect.poll(()=>mcdu.evaluate(e=>{const r=e.getBoundingClientRect(),p=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !!p&&(p===e||e.contains(p));}),{timeout:45000}).toBe(true);
       phase='mcdu_click';
       await mcdu.click({timeout:10000});
       phase='mcdu_screen';
