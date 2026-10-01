@@ -46,7 +46,8 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       phase='data_validation';
       if(!report.collectionComplete||verified!==fleet.aircraft.length||!research.uiRestored||failed>0)throw new Error();
       if(observed>0&&(!candidates.uiRestored||candidates.models.length!==expectedModels.size||!candidates.market.fuel||!candidates.market.co2))throw new Error();
-      if(observed>0&&(!candidates.maintenance.complete||candidates.maintenance.aircraft.length!==fleet.aircraft.length))throw new Error();
+      if(!candidates.maintenance.complete||candidates.maintenance.aircraft.length!==fleet.aircraft.length||
+        !candidates.market.fuel||!candidates.market.co2)throw new Error();
       if(candidates.candidates.some((c:any)=>c.comparisonReady||c.mutationAuthorized||c.reservations.futureScheduleComplete||
         c.effectiveCosts.complete||c.costScenarios.totalOperatingCost!==null))throw new Error();
       evidence.status='passed';

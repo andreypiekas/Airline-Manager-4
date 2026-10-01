@@ -32,7 +32,7 @@ DEMAND_MAX_AGE_SECONDS=300
 
 `optimization/maintenance-reader.ts` consulta o menu Maintenance e a aba Plan. Le os cartoes `.maint-list-sort`, `data-reg`, `data-base`, `data-wear`, `data-hours` e `controls<ID>`, conferindo registro, identidade e labels visiveis. Rejeita filtro diferente de Showing all, cartoes ocultos, duplicados e valores divergentes. Fecha o popup e o chamador restaura Fleet.
 
-Os campos Flight hours, Hours to check e Wear sao referencias de estado. At base nao define a origem propria da aeronave. A-Check, Repair, Modify e controles Bulk nunca sao clicados. Precos efetivos de check/reparo continuam indisponiveis; as horas restantes nao permitem deduzir com seguranca o intervalo ou os ajustes de custo da aeronave.
+Os campos Flight hours, Hours to check e Wear sao referencias de estado. At base nao define a origem propria da aeronave. A-Check, Repair, Modify e controles Bulk nunca sao clicados. Precos efetivos de check/reparo continuam indisponiveis; as horas restantes nao permitem deduzir com seguranca o intervalo ou os ajustes de custo da aeronave. Com pesquisa habilitada, manutencao e mercados sao consultados mesmo sem candidatas elegiveis; o teste isolado exige essas fontes e nao considera sua ausencia uma validacao bem-sucedida.
 
 ## Custos e origem das formulas
 
