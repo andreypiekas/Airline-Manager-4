@@ -4,6 +4,7 @@ import { runDemandSimulation } from '../../demand/run';
 import { readDemandConfig } from '../../demand/config';
 import { loginForReadOnlyCollection } from '../../utils/read-only-login';
 import { withRunLock } from '../../utils/run-lock';
+import { closeReadOnlyPopup } from '../../optimization/cost-reference-reader';
 
 // This entry point imports no legacy operations and cannot select the operational path.
 test('coleta integral das rotas — somente leitura',async({page})=>{
@@ -13,6 +14,24 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       ENABLE_RETURN_JOURNAL:'false',ENABLE_ROUTE_OPTIMIZER:'true',ENABLE_TICKET_PRICING:'true',
       ENABLE_ROUTE_RESEARCH:'true',ROUTE_RESEARCH_MAX_AIRCRAFT:'3',ROUTE_RESEARCH_MAX_SUGGESTIONS:'1',
     });
+    const navigationViews:unknown[]=[];
+    const writeSourceNavigation=async(view:string)=>{
+      // Only rendered navigation labels; never forms, page scripts, storage, profile or session data.
+      const navigation=await page.locator('[onclick]').evaluateAll(elements=>elements.filter(e=>e.getClientRects().length)
+        .flatMap(e=>{
+          const labels=[(e as HTMLElement).innerText,e.getAttribute('title')||'',e.getAttribute('aria-label')||'',e.getAttribute('data-original-title')||'',...Array.from(e.querySelectorAll('span')).filter(n=>n.getClientRects().length).map(n=>n.textContent||'')]
+            .map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>/^(?:Fleet|Routes|Finance|Finances|Banking|Staff|MCDU|Search|Research|Maintenance|Statistics|Transactions)$/i.test(s));
+          if(!labels.length)return [];
+          const callback=(e.getAttribute('onclick')||'').trim();
+          const safe=/^(?:hideAllWhenClick\(\);)?popup\('[a-z_]+\.php','[A-Za-z ]+',false,false,true\);$/.test(callback)||
+            /^(?:[A-Za-z][A-Za-z0-9_]*\(\);)+$/.test(callback);
+          return [{id:/^[A-Za-z][A-Za-z0-9_-]*$/.test(e.id)?e.id:null,label:labels[0],callback:safe?callback:null}];
+        }));
+      navigationViews.push({view,navigation});
+      await mkdir('test-results/demand',{recursive:true});
+      await writeFile('test-results/demand/source-navigation.json',JSON.stringify({schemaVersion:1,
+        observedAt:new Date().toISOString(),dryRun:true,mutationAuthorized:false,views:navigationViews},null,2)+'\n');
+    };
     let phase='login';
     const evidence:{schemaVersion:number;dryRun:true;mutationAuthorized:false;status:string;phase:string;summary:unknown;fleetDetails:unknown;research:unknown}={
       schemaVersion:1,dryRun:true,mutationAuthorized:false,status:'blocked',phase,summary:null,fleetDetails:null,research:null,
@@ -20,6 +39,7 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
     try {
       const config=readDemandConfig();
       await loginForReadOnlyCollection(page,process.env,90000,stage=>{phase=`login_${stage}`;});
+      await writeSourceNavigation('after_login');
       phase='fleet_open';
       const menu=page.locator('#mapRoutes');
       if ((await menu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');") throw new Error();
@@ -33,7 +53,9 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       const verified=fleet.aircraft.filter((a:{detailsVerified:boolean})=>a.detailsVerified).length;
       const observed=research.aircraft.filter((a:{status:string})=>a.status==='observed').length;
       const failed=research.aircraft.filter((a:{status:string})=>['unavailable','partial'].includes(a.status)).length;
-      evidence.fleetDetails={seen:fleet.aircraft.length,verified,unverified:fleet.aircraft.length-verified};
+      evidence.fleetDetails={seen:fleet.aircraft.length,verified,unverified:fleet.aircraft.length-verified,
+        inflight:fleet.aircraft.filter((a:any)=>a.state==='inflight').length,
+        countdownsObserved:fleet.aircraft.filter((a:any)=>!!a.timing).length};
       const expectedModels=new Set(research.aircraft.flatMap((a:any)=>(a.result?.quotes||[]).flatMap((q:any)=>q.autopriceReference?[q.autopriceReference.modelId]:[])));
       evidence.research={observed,failed,uiRestored:research.uiRestored,comparisonReady:false,
         candidateSources:{uiRestored:candidates.uiRestored,modelsObserved:candidates.models.length,modelsExpected:expectedModels.size,
@@ -45,18 +67,15 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
         modelsNotInInspectedCatalog:candidates.modelReads.filter((m:any)=>m.status==='not_in_inspected_catalog').length,
         modelSourcesComplete:candidates.models.length===expectedModels.size,
       });
-      // Discover rendered navigation only; never read forms, scripts, storage or session data.
-      const navigation=await page.locator('#smallMainMenu [onclick]').evaluateAll(elements=>elements
-        .filter(e=>e.getClientRects().length)
-        .map(e=>({id:e.id,label:(e as HTMLElement).innerText.trim(),callback:e.getAttribute('onclick')||''}))
-        .filter(e=>/^(?:Fleet|Routes|Finance|Finances|Banking|Staff|MCDU|Search|Research|Maintenance|Statistics|Transactions)$/.test(e.label))
-        .map(e=>({id:/^[A-Za-z][A-Za-z0-9_-]*$/.test(e.id)?e.id:null,label:e.label,
-          // Only navigation-shaped callbacks without arguments that could hold identifiers/secrets.
-          callback:/^(?:hideAllWhenClick\(\);)?popup\('[a-z_]+\.php','[A-Za-z ]+',false,false,true\);$/.test(e.callback)||
-            /^[A-Za-z][A-Za-z0-9_]*\(\);$/.test(e.callback)?e.callback:null})));
-      await writeFile('test-results/demand/source-navigation.json',JSON.stringify({schemaVersion:1,
-        observedAt:new Date().toISOString(),dryRun:true,mutationAuthorized:false,navigation},null,2)+'\n');
+      phase='source_navigation';
+      await closeReadOnlyPopup(page,10000);
+      await writeSourceNavigation('after_collection');
+      if ((await menu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');") throw new Error();
+      await menu.click();
+      await page.locator('#routesContainer').waitFor({state:'visible',timeout:10000});
       phase='data_validation';
+      if(fleet.aircraft.some((a:any)=>a.timing&&(a.timing.aircraftId!==a.aircraftId||a.timing.routeId!==a.routeId||
+        a.timing.futureDepartureAt!==null||a.timing.returnConfirmed||a.timing.mutationAuthorized)))throw new Error();
       if(!report.collectionComplete||verified!==fleet.aircraft.length||!research.uiRestored||failed>0)throw new Error();
       const accountedModels=candidates.modelReads.filter((m:any)=>['observed','not_in_inspected_catalog'].includes(m.status));
       if(observed>0&&(!candidates.uiRestored||accountedModels.length!==expectedModels.size||

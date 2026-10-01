@@ -7,6 +7,8 @@ export interface AircraftMaintenanceReference {
   aircraftId:string;registration:string;observedAt:string;
   flightHours:number;hoursToCheck:number;wearPercentage:number;atAnyBase:boolean;
   source:'inspected-maintenance-plan';effectiveCheckPrice:null;effectiveRepairPrice:null;
+  /** Visible service labels for source inspection; no inferred price and no service click. */
+  visibleServiceLabels?:string[];
 }
 /** Reads the Plan TAB only. A-Check/Repair/Modify/Bulk controls are never clicked. */
 export async function readAircraftMaintenanceReferences(page:Page,collection:CollectionResult,timeout=10000) {
@@ -48,7 +50,9 @@ export async function readAircraftMaintenanceReferences(page:Page,collection:Col
       const badges=Array.from(row.querySelectorAll('.badge')).filter(visible);if(badges.length!==1)throw new Error();
       const names=Array.from(row.querySelectorAll('.col-sm-4')).filter(visible);if(names.length!==1)throw new Error();
       const registration=Array.from(names[0].childNodes).filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').trim();
-      return {controlsId:controls[0].id,registration,sortRegistration:row.getAttribute('data-reg'),base:row.getAttribute('data-base'),
+      const serviceLabels=Array.from(controls[0].querySelectorAll('button')).filter(visible)
+        .map(e=>(e as HTMLElement).innerText.replace(/\s+/g,' ').trim()).filter(s=>/^(?:A-Check|Repair|Modify)(?:\b|\s)/.test(s)).map(s=>s.slice(0,100));
+      return {controlsId:controls[0].id,registration,sortRegistration:row.getAttribute('data-reg'),base:row.getAttribute('data-base'),serviceLabels,
         wearAttribute:row.getAttribute('data-wear'),hoursAttribute:row.getAttribute('data-hours'),
         hours:value('Flight hours'),remaining:value('Hours to check'),wear:value('Wear'),baseLabel:badges[0].textContent?.trim()};
     }));
@@ -62,7 +66,7 @@ export async function readAircraftMaintenanceReferences(page:Page,collection:Col
       const flightHours=integerText(r.hours),hoursToCheck=integerText(r.remaining),wearPercentage=Number(wear[1]);
       if(hoursToCheck!==Number(r.hoursAttribute)||wearPercentage!==Number(r.wearAttribute)||wearPercentage<0||wearPercentage>100)throw new Error();
       return {aircraftId:id[1],registration:aircraft.registration,observedAt:stamp,flightHours,hoursToCheck,wearPercentage,
-        atAnyBase:r.base==='1',source:'inspected-maintenance-plan' as const,effectiveCheckPrice:null,effectiveRepairPrice:null};
+        atAnyBase:r.base==='1',source:'inspected-maintenance-plan' as const,effectiveCheckPrice:null,effectiveRepairPrice:null,visibleServiceLabels:r.serviceLabels};
     });
     report.stage='card_count';
     if(parsed.length!==collection.aircraft.length||new Set(parsed.map(a=>a.aircraftId)).size!==parsed.length)throw new Error();

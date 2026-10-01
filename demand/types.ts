@@ -1,5 +1,6 @@
 import type { AircraftOperationalObservation } from '../optimization/observations';
 import type { FareObservation } from '../pricing/ticket-pricing';
+import type { FlightTimingObservation } from '../optimization/flight-timing';
 export const CLASSES = ['Y', 'J', 'F'] as const;
 export type Cabin = typeof CLASSES[number];
 export type Cabins = Record<Cabin, number>;
@@ -21,6 +22,7 @@ export interface AircraftSnapshot {
   issue?: string;
   fares?: FareObservation;
   operational?: AircraftOperationalObservation | null;
+  timing?: FlightTimingObservation | null;
 }
 export interface DemandConfig {
   enabled: boolean;

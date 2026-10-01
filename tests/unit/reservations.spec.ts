@@ -2,6 +2,7 @@ import { test,expect } from '@playwright/test';
 import { AircraftSnapshot,CollectionResult } from '../../demand/types';
 import { CandidateQuote } from '../../optimization/quote-reader';
 import { candidateReservationScenario,reservationConfig } from '../../optimization/reservations';
+import { flightCountdownObservation } from '../../optimization/flight-timing';
 const now=new Date('2026-10-01T12:00:00Z');
 const quote={aircraftId:'1',registration:'SYNTHETIC-1',from:'AAA',to:'BBB',observedAt:now.toISOString()} as CandidateQuote;
 function aircraft(id='1',state:AircraftSnapshot['state']='ready',reverse=false):AircraftSnapshot{return {
@@ -9,6 +10,19 @@ function aircraft(id='1',state:AircraftSnapshot['state']='ready',reverse=false):
   capacity:{Y:40,J:10,F:0},remaining:{Y:200,J:50,F:0},dailyTotal:{Y:400,J:100,F:0},observedAt:now.toISOString(),
   operational:{rangeKm:5000,minRunwayFt:5000,flightHours:100,cycles:20,homeBase:null,flightId:null}};}
 const collection=(...aircraft:AircraftSnapshot[]):CollectionResult=>({aircraft,complete:true,expectedRoutes:aircraft.length,warnings:[]});
+test('first return-leg timing uses matching fresh countdown but cannot invent later departures',()=>{
+ const b=aircraft('2','inflight');b.timing=flightCountdownObservation('2','2','00:18:37',now.toISOString());
+ const r=candidateReservationScenario(quote,collection(aircraft(),b),now);
+ expect(r.reservations[0]).toMatchObject({from:'BBB',to:'AAA',notBeforeEstimatedAt:'2026-10-01T12:18:37.000Z',availabilitySource:'flight-countdown-estimate'});
+ expect(r.reservations[1]).toMatchObject({notBeforeEstimatedAt:null,availabilitySource:'unavailable'});
+ expect(r.futureScheduleComplete).toBe(false);expect(r.comparisonReady).toBe(false);
+});
+for(const variant of ['identity','stale','inconsistent','elapsed'])test(`unverified countdown cannot schedule a reservation: ${variant}`,()=>{
+ const b=aircraft('2','inflight');b.timing=flightCountdownObservation('2','2','00:18:37',now.toISOString())!;
+ if(variant==='identity')b.timing.aircraftId='3';if(variant==='stale')b.timing.observedAt='2000-01-01T00:00:00Z';
+ if(variant==='inconsistent')b.timing.arrivalEstimatedAt='2026-10-01T14:00:00Z';if(variant==='elapsed')b.timing.remainingSeconds=0;
+ expect(candidateReservationScenario(quote,collection(aircraft(),b),now).reservations[0]).toMatchObject({notBeforeEstimatedAt:null,availabilitySource:'unavailable'});
+});
 test('reserves two future legs per other aircraft, excludes candidate, never consumes current onboard passengers',()=>{
  const data=collection(aircraft(),{...aircraft('2','inflight'),onboard:{Y:35,J:5,F:0}});
  const before=JSON.stringify(data);const r=candidateReservationScenario(quote,data,now);

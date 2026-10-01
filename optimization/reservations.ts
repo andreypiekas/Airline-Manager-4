@@ -33,6 +33,7 @@ export function candidateReservationScenario(quote: CandidateQuote, collection: 
     currentFlightPassengersAlreadyDebited:true, futureScheduleComplete:false, demandNetOfOtherAircraft:false,
     comparisonReady:false, mutationAuthorized:false, reservations:[] as {
       aircraftId:string; leg:number; from:string; to:string; poolKey:string; capacity:Cabins; claimed:Cabins|null;
+      notBeforeEstimatedAt:string|null;availabilitySource:'observed-ready'|'flight-countdown-estimate'|'unavailable';
     }[], forwardAfterReservations:null as Cabins|null, reverseAfterReservations:null as Cabins|null,
     reason:'' };
   const fresh = (s:string) => {const age=now.getTime()-Date.parse(s);return Number.isFinite(age)&&age>=0&&age<=config.maxAgeSeconds*1000;};
@@ -57,6 +58,12 @@ export function candidateReservationScenario(quote: CandidateQuote, collection: 
   }
   const others=collection.aircraft.filter(a=>a.aircraftId!==quote.aircraftId).sort((a,b)=>a.aircraftId.localeCompare(b.aircraftId));
   for (const aircraft of others) {
+    const timing=aircraft.timing;
+    const validTiming=aircraft.state==='inflight'&&!!timing&&timing.source==='inspected-flight-countdown'&&
+      timing.aircraftId===aircraft.aircraftId&&timing.routeId===aircraft.routeId&&fresh(timing.observedAt)&&
+      Number.isSafeInteger(timing.remainingSeconds)&&timing.remainingSeconds>0&&
+      Date.parse(timing.arrivalEstimatedAt)===Date.parse(timing.observedAt)+timing.remainingSeconds*1000&&
+      Date.parse(timing.arrivalEstimatedAt)>now.getTime();
     // For an airborne aircraft reserve the next leg AFTER landing, not its ongoing flight.
     let from=aircraft.state==='inflight'?aircraft.to:aircraft.from;
     let to=aircraft.state==='inflight'?aircraft.from:aircraft.to;
@@ -65,7 +72,9 @@ export function candidateReservationScenario(quote: CandidateQuote, collection: 
       if (poolKey===forwardKey || poolKey===reverseKey) {
         const available=pools.get(poolKey);
         const claimed=available?map(k=>Math.min(available[k],aircraft.capacity![k])):null;
-        result.reservations.push({aircraftId:aircraft.aircraftId,leg,from,to,poolKey,capacity:{...aircraft.capacity!},claimed});
+        result.reservations.push({aircraftId:aircraft.aircraftId,leg,from,to,poolKey,capacity:{...aircraft.capacity!},claimed,
+          notBeforeEstimatedAt:leg!==1?null:aircraft.state==='ready'?now.toISOString():validTiming?timing!.arrivalEstimatedAt:null,
+          availabilitySource:leg!==1?'unavailable':aircraft.state==='ready'?'observed-ready':validTiming?'flight-countdown-estimate':'unavailable'});
         if (claimed) pools.set(poolKey,map(k=>available![k]-claimed[k]));
       }
       [from,to]=[to,from];

@@ -4,6 +4,7 @@ import { expect, Page } from '@playwright/test';
 import { AircraftSnapshot, CollectionResult } from './types';
 import { CabinText, integerText, parseCapacity, parseDemand, parseOnboard } from './parsing';
 import { AIRCRAFT_DETAILS_CONTROL, aircraftIdFromDetailsControl } from './identity';
+import { flightCountdownObservation } from '../optimization/flight-timing';
 
 interface RouteCard {
   routeId: string; aircraftId: string; registration: string; routeLabel: string;
@@ -147,6 +148,9 @@ export class DemandReader {
     if (card.inflight && (text.codes[0] !== card.from || text.codes[1] !== card.to)) throw new Error('Inflight direction mismatch');
     Object.assign(item, { registration:observedRegistration, capacity, ...demand, from: text.codes[0], to: text.codes[1], state: card.inflight ? 'inflight' : 'ready', observedAt: new Date().toISOString() });
     item.operational = await readOperationalObservation(details);
+    // Countdown was inspected in flight. Zero/malformed values never confirm landing or departure.
+    item.timing = card.inflight && await details.locator('#timer').count()===1 ?
+      flightCountdownObservation(item.aircraftId,item.routeId,await details.locator('#timer').innerText(),new Date().toISOString()) : null;
     // Read only the inspected Auto callback and ticket inputs. Never click Auto/Save or fill inputs.
     try {
       const auto = details.locator('#seat-layout').getByRole('button', { name: 'Auto', exact: true });
