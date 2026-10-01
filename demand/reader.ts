@@ -147,6 +147,8 @@ export class DemandReader {
     const demand = parseDemand(text.demand as CabinText);
     if (card.inflight && (text.codes[0] !== card.from || text.codes[1] !== card.to)) throw new Error('Inflight direction mismatch');
     Object.assign(item, { registration:observedRegistration, capacity, ...demand, from: text.codes[0], to: text.codes[1], state: card.inflight ? 'inflight' : 'ready', observedAt: new Date().toISOString() });
+    item.demandResetHints=(await details.locator('#list-demand').innerText()).split(/\r?\n/)
+      .map(s=>s.trim()).filter(s=>/\b(?:reset|renewal|renews?|renewed|refill|replenishment)\b/i.test(s)).slice(0,10).map(s=>s.slice(0,200));
     item.operational = await readOperationalObservation(details);
     // Countdown was inspected in flight. Zero/malformed values never confirm landing or departure.
     item.timing = card.inflight && await details.locator('#timer').count()===1 ?

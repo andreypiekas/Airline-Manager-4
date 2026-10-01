@@ -23,6 +23,8 @@ export interface AircraftSnapshot {
   fares?: FareObservation;
   operational?: AircraftOperationalObservation | null;
   timing?: FlightTimingObservation | null;
+  /** Rendered reset/renewal notices in the inspected demand panel, not an inferred clock. */
+  demandResetHints?: string[];
 }
 export interface DemandConfig {
   enabled: boolean;

@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: validar historico financeiro estruturado e restauracao, sem MCDU ou operacoes.
+# Revisao: conferir avisos de renovacao e metadados passivos de servicos, sem operacoes.
 on:
   workflow_dispatch:
   push:

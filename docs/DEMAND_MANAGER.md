@@ -2,22 +2,24 @@
 
 ## Estado e limites de ativação
 
-O módulo está implementado para **leitura e simulação**. Nenhuma decisão concede autorização real (`departureAuthorized=false`). `DEMAND_DRY_RUN=false` ou `DEMAND_FAIL_SAFE=false` provoca erro antes do login no fluxo principal. Não há código de clique individual habilitado. A ativação real exige autorização posterior, implementação do executor e validação do resultado de cada decolagem.
+O módulo está implementado para **leitura e simulação**. Nenhuma decisão concede autorização real (`departureAuthorized=false`). `DEMAND_DRY_RUN=false` ou `DEMAND_FAIL_SAFE=false` provoca erro antes do login no fluxo principal. Não há código de clique individual habilitado. A ativação real exige implementação e validação do executor e do resultado de cada decolagem, além de autorização para operar.
+
+O fluxo principal com DemandManager utiliza o mesmo login normal validado na coleta isolada. Valida tipos dos campos, aguarda o carregamento e descarta mensagens de erro que poderiam conter valores preenchidos. Nao grava formularios, trace, video, screenshots ou dados de sessao. O menu Fleet tambem precisa corresponder ao callback nativo inspecionado antes do clique.
 
 Com `ENABLE_DEMAND_MANAGER=true` (padrão desta entrega), a rotina faz login, abre Fleet/Routes, coleta dados e termina. Não executa combustível, CO₂, manutenção, campanhas, decolagens, alteração de preços, Ground, Reroute, compra ou venda. `ENABLE_DEPART` não impede a análise somente de leitura. Falhas **nunca** caem em `departAll`.
 
-O fluxo legado continua no código, acessível exclusivamente com `ENABLE_DEMAND_MANAGER=false`. Ele executa operações reais conforme os antigos `ENABLE_*`; não deve ser usado para testar esta entrega. Essa configuração não ativa decolagem inteligente. O PR não altera variáveis, secrets, cron-job.org nem executa workflows da companhia.
+O fluxo legado continua no código, acessível exclusivamente com `ENABLE_DEMAND_MANAGER=false`. Ele executa operações reais conforme os antigos `ENABLE_*`; não deve ser usado para testar esta entrega. Essa configuração não ativa decolagem inteligente. O PR nao altera variaveis, secrets ou cron-job.org. A validacao isolada usa um workflow dedicado de leitura e nao chama a rotina operacional.
 
 ## Inspeção em 29/09/2026
 
 Confirmado por navegação autenticada somente de leitura:
 
 - Fleet contém Routes, Fleet (inventário por modelo), Parked e Pending.
-- Havia 26 rotas em duas páginas (20 + 6); cinco cartões com Depart e 21 com Onboard/contador de voo. Pending estava vazio; não foi confirmado agendamento futuro.
+- Fleet/Routes possui paginacao e cartoes em solo com Depart e em voo com Onboard/contador. Agendamento futuro nao foi confirmado.
 - Cartão em solo mostra `Demand: Y / J / F`. Cartão em voo mostra `Onboard`, que **não é demanda restante**.
-- Detalhes mostram `Todays demand` como restante/total, distinguindo as três classes por imagens de assentos. Um exemplo era 34/993 na econômica; capacidade 99/0/0. Portanto o teto coberto por demanda era 34,34%.
-- Outro exemplo tinha capacidade 131/0/0 e demanda 0/352/383: a demanda das outras classes não permite transportar passageiros em assentos econômicos.
-- Duas aeronaves da mesma ligação mostravam exatamente 412/299/168 restantes e 1333/418/273 totais, mas layouts diferentes (90/9/9 e 81/12/10).
+- Detalhes mostram `Todays demand` como restante/total, distinguindo as tres classes por imagens de assentos. O teto coberto por demanda depende do saldo e da configuracao de assentos da aeronave.
+- Demanda de outras classes nao permite transportar passageiros em assentos economicos; classes sem assentos nao vetam o voo por si mesmas.
+- Aeronaves na mesma ligacao podem apresentar saldos iguais e layouts diferentes; as leituras nao devem ser somadas.
 - A tela contém `Ground`, `Grounded` e `Depart`. Os controles Ground e Depart são mutações e **não foram acionados**. O efeito e a reversão do estado Grounded permanecem não testados. Manter em solo neste projeto significa não decolar, sem alterar o estado nativo Ground.
 - O histórico continha voos com Y0/J0/F0. Não se deve assumir que o jogo bloqueia automaticamente voos vazios.
 - Os aeroportos nos detalhes podem aparecer na ordem inversa ao cartão. O relatório preserva o texto do cartão; `from`/`to` representam a ordem mostrada nos detalhes, sem afirmar que esse sentido foi validado por decolagem.
@@ -27,7 +29,7 @@ Ainda não confirmado:
 - Horário/fuso exato de renovação, eventual reposição gradual, efeito de eventos ou diferenças de modo de jogo. O rótulo diário não prova reset à meia-noite UTC.
 - Compartilhamento efetivo do consumo entre sentidos e entre aeronaves. Os valores coincidentes são evidência visual, não um experimento de consumo. Por segurança, o padrão agrega os dois sentidos do mesmo par e reserva passageiros uma única vez.
 - Ocupação real: reputação, preço e outras regras podem reduzir embarques. O percentual do relatório é **limite por disponibilidade**, não garantia ou previsão calibrada de ocupação nem teste de rentabilidade.
-- Resultado/confirmacão de decolagem individual, reação a concorrência externa e coleta automática ponta a ponta no runner GitHub. Nenhuma operação real foi testada.
+- Resultado/confirmacao de decolagem individual e reacao a concorrencia externa. A coleta de leitura foi validada no Actions; nenhuma operacao real foi testada.
 - Não houve captura de tráfego de rede: os endpoints abaixo foram identificados nos atributos dos controles DOM. Não foram feitas chamadas diretas, acessos a cookies/tokens ou exploração de APIs internas.
 
 ## Seletores observados

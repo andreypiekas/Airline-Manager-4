@@ -40,6 +40,8 @@ O contador #timer foi inspecionado nos detalhes de aeronaves em voo. flight-timi
 
 Os campos Flight hours, Hours to check e Wear sao referencias de estado. At base nao define a origem propria da aeronave. A-Check, Repair, Modify e controles Bulk nunca sao clicados. Os textos visiveis dos botoes de servico sao registrados para inspecao da fonte; nao sao clicados e nenhum preco e inferido desses textos. Precos efetivos de check/reparo continuam indisponiveis; as horas restantes nao permitem deduzir com seguranca o intervalo ou os ajustes de custo da aeronave. Com pesquisa habilitada, manutencao e mercados sao consultados mesmo sem candidatas elegiveis; o teste isolado exige essas fontes e nao considera sua ausencia uma validacao bem-sucedida.
 
+`serviceHints` registra somente trechos monetarios dos tooltips e nomes de atributos relacionados a preco/custo. Nao exporta valores ocultos, callbacks de servico ou atributos de autenticacao. Esses metadados passivos nao preenchem effectiveCheckPrice/effectiveRepairPrice e nao acionam nenhum servico. `demandResetHints` registra apenas avisos renderizados de renovacao/reset no painel #list-demand; lista vazia indica que nao houve aviso correspondente nesse painel inspecionado, sem supor horario ou comportamento global de renovacao.
+
 O leitor do catalogo distingue modelo observado, modelo ausente da lista inspecionada e falha de coleta. Ausencia nessa lista nao prova inexistencia do modelo: nenhuma fonte alternativa e presumida. A validacao isolada pode aprovar o tratamento seguro dessa lacuna, mas registra modelSourcesComplete=false e mantem a manutencao efetiva e a comparacao economica bloqueadas.
 
 ## Custos e origem das formulas

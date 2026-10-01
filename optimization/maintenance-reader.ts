@@ -9,6 +9,8 @@ export interface AircraftMaintenanceReference {
   source:'inspected-maintenance-plan';effectiveCheckPrice:null;effectiveRepairPrice:null;
   /** Visible service labels for source inspection; no inferred price and no service click. */
   visibleServiceLabels?:string[];
+  /** Passive source hints only; currency substrings never become effective prices. */
+  serviceHints?:{label:string;monetaryTooltipHints:string[];priceAttributeNames:string[]}[];
 }
 /** Reads the Plan TAB only. A-Check/Repair/Modify/Bulk controls are never clicked. */
 export async function readAircraftMaintenanceReferences(page:Page,collection:CollectionResult,timeout=10000) {
@@ -52,7 +54,15 @@ export async function readAircraftMaintenanceReferences(page:Page,collection:Col
       const registration=Array.from(names[0].childNodes).filter(n=>n.nodeType===Node.TEXT_NODE).map(n=>n.textContent).join('').trim();
       const serviceLabels=Array.from(controls[0].querySelectorAll('button')).filter(visible)
         .map(e=>(e as HTMLElement).innerText.replace(/\s+/g,' ').trim()).filter(s=>/^(?:A-Check|Repair|Modify)(?:\b|\s)/.test(s)).map(s=>s.slice(0,100));
-      return {controlsId:controls[0].id,registration,sortRegistration:row.getAttribute('data-reg'),base:row.getAttribute('data-base'),serviceLabels,
+      const serviceHints=Array.from(controls[0].querySelectorAll('button')).filter(visible).flatMap(e=>{
+        const label=(e as HTMLElement).innerText.replace(/\s+/g,' ').trim();
+        if(!/^(?:A-Check|Repair|Modify)(?:\b|\s)/.test(label))return [];
+        const monetaryTooltipHints=Array.from(((e.getAttribute('title')||'')+' '+(e.getAttribute('data-original-title')||'')).matchAll(/\$\s*(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d{1,2})?/g),m=>m[0]).slice(0,10);
+        // Attribute NAMES only, never hidden values, callbacks, forms or tokens.
+        const priceAttributeNames=Array.from(e.attributes).map(a=>a.name).filter(n=>/^data-(?:[a-z]+-)*(?:price|cost|fee)(?:-[a-z]+)*$/.test(n));
+        return [{label:label.slice(0,100),monetaryTooltipHints,priceAttributeNames}];
+      });
+      return {controlsId:controls[0].id,registration,sortRegistration:row.getAttribute('data-reg'),base:row.getAttribute('data-base'),serviceLabels,serviceHints,
         wearAttribute:row.getAttribute('data-wear'),hoursAttribute:row.getAttribute('data-hours'),
         hours:value('Flight hours'),remaining:value('Hours to check'),wear:value('Wear'),baseLabel:badges[0].textContent?.trim()};
     }));
@@ -66,7 +76,7 @@ export async function readAircraftMaintenanceReferences(page:Page,collection:Col
       const flightHours=integerText(r.hours),hoursToCheck=integerText(r.remaining),wearPercentage=Number(wear[1]);
       if(hoursToCheck!==Number(r.hoursAttribute)||wearPercentage!==Number(r.wearAttribute)||wearPercentage<0||wearPercentage>100)throw new Error();
       return {aircraftId:id[1],registration:aircraft.registration,observedAt:stamp,flightHours,hoursToCheck,wearPercentage,
-        atAnyBase:r.base==='1',source:'inspected-maintenance-plan' as const,effectiveCheckPrice:null,effectiveRepairPrice:null,visibleServiceLabels:r.serviceLabels};
+        atAnyBase:r.base==='1',source:'inspected-maintenance-plan' as const,effectiveCheckPrice:null,effectiveRepairPrice:null,visibleServiceLabels:r.serviceLabels,serviceHints:r.serviceHints};
     });
     report.stage='card_count';
     if(parsed.length!==collection.aircraft.length||new Set(parsed.map(a=>a.aircraftId)).size!==parsed.length)throw new Error();

@@ -17,6 +17,7 @@ async function fixture(page:Page,variant='') {
  const row=document.querySelector('.maint-list-sort');if(variant==='hours')row.setAttribute('data-hours','201');if(variant==='wear')row.setAttribute('data-wear','6');
  if(variant==='duplicate')row.insertAdjacentHTML('afterend',row.outerHTML);if(variant==='id')row.querySelector('#controls101').id='controls102';if(variant==='base')row.setAttribute('data-base','0');
  if(variant==='hidden')row.style.display='none';if(variant==='visible_identity')row.querySelector('.col-sm-4').firstChild.textContent='OTHER';
+ if(variant==='hints'){const button=row.querySelector('button');button.setAttribute('title','Synthetic note: $ 1,234');button.setAttribute('data-cost','UNREAD-SYNTHETIC-VALUE');button.setAttribute('data-token','UNREAD-SYNTHETIC-TOKEN');}
  }
  </script>`);
 }
@@ -41,4 +42,12 @@ test('waits for the new Plan callback without clicking a stale popup tab',async(
  await fixture(page,'delayed_control');const r=await readAircraftMaintenanceReferences(page,collection,500);
  expect(r).toMatchObject({status:'observed',complete:true,stage:'observed'});
  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
+test('passive monetary hints retain no hidden values and cannot supply effective prices or run services',async({page})=>{
+ await fixture(page,'hints');const r=await readAircraftMaintenanceReferences(page,collection,500);
+ expect(r.aircraft[0]).toMatchObject({effectiveCheckPrice:null,effectiveRepairPrice:null,
+  serviceHints:[{label:'A-Check',monetaryTooltipHints:['$ 1,234'],priceAttributeNames:['data-cost']},
+   {label:'Repair',monetaryTooltipHints:[],priceAttributeNames:[]},{label:'Modify',monetaryTooltipHints:[],priceAttributeNames:[]}]});
+ expect(JSON.stringify(r)).not.toMatch(/UNREAD|data-token/);expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });

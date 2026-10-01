@@ -21,6 +21,7 @@ export function fleetObservations(collection: CollectionResult, origins: Readonl
       destination: detailsVerified ? a.to : null, routeAirports: [a.from, a.to],
       detailsVerified, capacity: a.capacity, operational: a.operational ?? null,
       timing: detailsVerified ? a.timing ?? null : null,
+      demandResetHints: detailsVerified ? a.demandResetHints ?? [] : [],
       flightId: null, returnConfirmed: false, mutationAuthorized: false,
       blockers: [...(!validIdentity ? ['INVALID_IDENTITY'] : []), ...(!origin ? ['ORIGIN_NOT_REGISTERED'] : []),
         ...(!detailsVerified ? ['DETAILS_UNVERIFIED'] : []), 'FLIGHT_EVENT_ID_UNVERIFIED'] };

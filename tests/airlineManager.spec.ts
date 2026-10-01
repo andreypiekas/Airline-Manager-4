@@ -3,6 +3,7 @@ import { optimizationConfig } from '../optimization/report';
 import { readDemandConfig } from '../demand/config';
 import { runDemandSimulation } from '../demand/run';
 import { withRunLock } from '../utils/run-lock';
+import { loginForReadOnlyCollection } from '../utils/read-only-login';
 import { test } from '@playwright/test';
 import { GeneralUtils } from '../utils/general.utils';
 import { FuelUtils } from '../utils/fuel.utils';
@@ -21,9 +22,12 @@ test('All Operations', async ({ page }) => {
     optimizationConfig(); // Reject invalid optimization settings before login.
     researchConfig();
     test.setTimeout(600000);
-    await new GeneralUtils(page).login(page);
-    await page.locator('#mapRoutes').waitFor({ state: 'visible', timeout: 30000 });
-    await page.locator('#mapRoutes').click();
+    await loginForReadOnlyCollection(page,process.env,90000);
+    const fleetMenu=page.locator('#mapRoutes');
+    if(await fleetMenu.count()!==1||!await fleetMenu.isVisible()||
+      (await fleetMenu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');")
+      throw new Error('[Demand] Menu Fleet nao confirmado; nenhuma operacao autorizada.');
+    await fleetMenu.click();
     await runDemandSimulation(page, demandConfig);
     return; // Simulation bypasses every financial, maintenance, campaign and departure module.
   }
