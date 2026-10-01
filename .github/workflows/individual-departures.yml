@@ -1,0 +1,72 @@
+name: Decolagens individuais controladas
+on:
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: 'Executar decolagens reais de retorno; false = simulacao'
+        type: boolean
+        default: false
+      max_departures:
+        description: 'Limite de decolagens nesta execucao (1 a 20)'
+        type: number
+        default: 1
+permissions:
+  contents: read
+concurrency:
+  group: airline-manager-4-main
+  cancel-in-progress: false
+jobs:
+  depart:
+    # Explicit manual/API invocation only. Never repeat a real run attempt.
+    if: github.repository == 'andreypiekas/Airline-Manager-4' && github.run_attempt == 1 && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:state
+      - run: npx playwright install --with-deps chromium
+      - name: Testar protecoes sem credenciais
+        run: npm test
+      - name: Limpar somente relatorios de testes sinteticos
+        run: rm -rf test-results/demand
+      - name: Executar somente o executor individual
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          ENABLE_DEMAND_MANAGER: 'true'
+          DEMAND_FAIL_SAFE: 'true'
+          DEMAND_DRY_RUN: ${{ inputs.execute && 'false' || 'true' }}
+          DEMAND_EXECUTION_ACK: individual-return-legs-v1
+          DEMAND_MAX_DEPARTURES_PER_RUN: ${{ inputs.max_departures || '1' }}
+          MIN_DEMAND_PERCENTAGE: '80'
+          DEMAND_THRESHOLD_MODE: aggregate
+          DEMAND_POOL_SCOPE: airport-pair
+          DEMAND_MAX_AGE_SECONDS: '300'
+          AIRLINE_BASES_JSON: ${{ vars.AIRLINE_BASES_JSON }}
+          AIRCRAFT_ORIGINS_JSON: ${{ vars.AIRCRAFT_ORIGINS_JSON || '[]' }}
+          ENABLE_RETURN_JOURNAL: 'false'
+        run: npx playwright test -c playwright.execution.config.ts
+      - name: Resumo individual
+        if: always()
+        run: |
+          if [ -f test-results/demand/execution-report.md ]; then
+            cat test-results/demand/execution-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Relatorios sem credenciais ou gravacao de login
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: individual-departures-report
+          path: |
+            test-results/demand/execution-report.json
+            test-results/demand/execution-report.md
+          if-no-files-found: warn
+          retention-days: 7

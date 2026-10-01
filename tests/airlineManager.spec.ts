@@ -1,3 +1,10 @@
+import { researchConfig } from '../optimization/research-reader';
+import { optimizationConfig } from '../optimization/report';
+import { readDemandConfig } from '../demand/config';
+import { runDemandSimulation } from '../demand/run';
+import { executionEnvironment, runDemandExecution } from '../demand/execute-run';
+import { withRunLock } from '../utils/run-lock';
+import { loginForReadOnlyCollection } from '../utils/read-only-login';
 import { test } from '@playwright/test';
 import { GeneralUtils } from '../utils/general.utils';
 import { FuelUtils } from '../utils/fuel.utils';
@@ -10,6 +17,25 @@ import * as path from 'path';
 require('dotenv').config();
 
 test('All Operations', async ({ page }) => {
+  await withRunLock(async () => {
+  const demandConfig = readDemandConfig();
+  if (demandConfig.enabled) {
+    executionEnvironment(demandConfig);
+    optimizationConfig(); // Reject invalid optimization settings before login.
+    researchConfig();
+    test.setTimeout(demandConfig.dryRun ? 600000 : 900000);
+    await loginForReadOnlyCollection(page,process.env,90000);
+    const fleetMenu=page.locator('#mapRoutes');
+    if(await fleetMenu.count()!==1||!await fleetMenu.isVisible()||
+      (await fleetMenu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');")
+      throw new Error('[Demand] Menu Fleet nao confirmado; nenhuma operacao autorizada.');
+    await fleetMenu.click();
+    await runDemandSimulation(page, demandConfig);
+    if (!demandConfig.dryRun && (process.env.ENABLE_DEPART || 'true').trim().toLowerCase() === 'true') {
+      await runDemandExecution(page,demandConfig);
+    }
+    return; // Both modes bypass every legacy financial/maintenance/campaign/bulk-departure module.
+  }
   // Timeout 3 menit karena simulasi gerakan kursor dan delay manusia butuh waktu lebih lama
   test.setTimeout(600000);
 
@@ -72,7 +98,7 @@ test('All Operations', async ({ page }) => {
   };
 
   // Kumpulan lokator ubin menu utama di peta untuk pancingan anti-freeze
-  const menuTiles = {
+  const menuTiles: Record<string, import('@playwright/test').Locator> = {
     fuel: page.locator('#mapMaint > img').first(),
     maintenance: page.locator('div:nth-child(4) > #mapMaint > img'),
     campaign: page.locator('div:nth-child(5) > #mapMaint > img'),
@@ -276,5 +302,5 @@ test('All Operations', async ({ page }) => {
   console.log('--- Rotina de operacoes concluida ---');
   await GeneralUtils.randomSleep(1000, 2000);
   await page.close();
+  });
 });
-

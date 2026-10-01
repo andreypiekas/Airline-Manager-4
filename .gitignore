@@ -4,3 +4,10 @@ node_modules/
 /blob-report/
 /playwright/.cache/
 .env
+
+
+.am4-run.lock/
+
+.am4-state/
+
+.am4-tools/

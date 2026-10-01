@@ -1,0 +1,61 @@
+name: Validar persistencia real sem acessar jogo
+on:
+  push:
+    branches: [feat/demand-manager-dry-run]
+    paths:
+      - '.github/workflows/validate-state.yml'
+      - 'scripts/validate-remote-state.ts'
+      - 'optimization/github-state.ts'
+permissions:
+  contents: write
+concurrency:
+  group: am4-synthetic-state-validation
+  cancel-in-progress: false
+jobs:
+  seed:
+    if: github.repository == 'andreypiekas/Airline-Manager-4'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:state
+      - name: Gravar evento sintetico
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RETURN_JOURNAL_SCOPE: ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node .am4-tools/scripts/validate-remote-state.js seed
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-state-seed
+          path: test-results/remote-state/seed.json
+  restore:
+    needs: seed
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run build:state
+      - name: Restaurar em outro runner e validar nova gravacao
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          RETURN_JOURNAL_SCOPE: ci-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node .am4-tools/scripts/validate-remote-state.js restore
+      - uses: actions/upload-artifact@v4
+        with:
+          name: remote-state-restored
+          path: test-results/remote-state/restore.json

@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": ".am4-tools",
+    "rootDir": "."
+  },
+  "include": [
+    "optimization/github-state.ts",
+    "scripts/validate-remote-state.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".am4-tools"
+  ]
+}

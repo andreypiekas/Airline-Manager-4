@@ -1,0 +1,67 @@
+name: Validar coleta integral em simulacao
+# Revisao: confirmar seletores estaticos, referencia e indice do controle individual, sem decolar.
+on:
+  workflow_dispatch:
+  push:
+    branches: [feat/demand-manager-dry-run]
+    paths: [.github/workflows/validate-collection.yml]
+
+permissions:
+  contents: read
+
+# Same account lock as the operational workflow; never overlap their sessions.
+concurrency:
+  group: airline-manager-4-main
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    if: github.repository == 'andreypiekas/Airline-Manager-4'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run build:state
+      - run: npx playwright install --with-deps chromium
+      - name: Coletar sem qualquer modulo operacional
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+          AIRLINE_BASES_JSON: ${{ vars.AIRLINE_BASES_JSON }}
+          AIRCRAFT_ORIGINS_JSON: ${{ vars.AIRCRAFT_ORIGINS_JSON || '[]' }}
+          ROUTE_REVIEW_TIMEZONE: America/Sao_Paulo
+          MIN_DEMAND_PERCENTAGE: '80'
+          DEMAND_MAX_AGE_SECONDS: '300'
+          ROUTE_RESERVATION_NEXT_LEGS: ${{ vars.ROUTE_RESERVATION_NEXT_LEGS || '2' }}
+          ROUTE_RESERVATION_POOL_SCOPE: ${{ vars.ROUTE_RESERVATION_POOL_SCOPE || 'airport-pair' }}
+        run: npx playwright test -c playwright.collection.config.ts
+      - name: Resumo da coleta
+        if: always()
+        run: |
+          if [ -f test-results/demand/demand-report.md ]; then
+            cat test-results/demand/demand-report.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f test-results/demand/route-research.md ]; then
+            cat test-results/demand/route-research.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f test-results/demand/candidate-data.md ]; then
+            cat test-results/demand/candidate-data.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Relatorios de leitura sem gravacoes de login
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-read-only-collection
+          path: |
+            test-results/demand/*.json
+            test-results/demand/*.md
+          if-no-files-found: warn
+          retention-days: 7

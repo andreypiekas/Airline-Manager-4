@@ -6,22 +6,21 @@ import { defineConfig, devices } from '@playwright/test';
  */
 // require('dotenv').config();
 
-// Membaca variabel PAKSI_VIDEO yang dikirim dari file .yml
-const isPaksaNonton = process.env.PAKSI_VIDEO === 'true';
 
 /**
  * See https://playwright.dev.
  */
 export default defineConfig({
   testDir: './tests',
-  /* Run tests in files in parallel */
-  fullyParallel: true,
+  testMatch: 'airlineManager.spec.ts',
+  /* A single account must use one worker, with no retries of mutations. */
+  fullyParallel: false,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
   /* Retry on CI only */
   retries: process.env.CI ? 0 : 0,
   /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   /* Reporter to use. See https://playwright.dev */
   reporter: 'html',
   /* Shared settings for all the projects below. See https://playwright.dev. */
@@ -29,14 +28,14 @@ export default defineConfig({
     /* Base URL to use in actions like `await page.goto('/')`. */
     // baseURL: 'http://127.0.0.1:3000',
 
-    /* Collect trace when retrying the failed test. See https://playwright.dev */
-    trace: 'on-first-retry',
-    
-    // Jika tombol dicentang, paksa ambil screenshot selalu. Jika tidak, pakai bawaan Anda (only-on-failure).
-    screenshot: isPaksaNonton ? 'on' : 'only-on-failure',
-    
-    // Jika tombol dicentang, paksa rekam video selalu agar bisa ditonton. Jika tidak, pakai bawaan Anda (retain-on-failure).
-    video: isPaksaNonton ? 'on' : 'retain-on-failure'
+    /* Do not record credentials during login. */
+    trace: 'off',
+
+    // Automatic login screenshots and video are disabled.
+    screenshot: 'off',
+
+
+    video: 'off'
   },
 
   /* Configure projects for major browsers */
@@ -74,3 +73,4 @@ export default defineConfig({
   //   reuseExistingServer: !process.env.CI,
   // },
 });
+

@@ -3,13 +3,20 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "playwright test -c playwright.unit.config.ts",
+    "test:unit": "playwright test -c playwright.unit.config.ts",
+    "typecheck": "tsc --noEmit",
+    "bot": "playwright test tests/airlineManager.spec.ts",
+    "build:state": "tsc -p tsconfig.state.json"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@playwright/test": "^1.44.0",
-    "@types/node": "^20.12.12"
+    "@types/node": "^20.12.12",
+    "typescript": "5.9.3"
   },
   "dependencies": {
     "dotenv": "^16.4.5"

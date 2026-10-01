@@ -1,5 +1,11 @@
 # Operacao automatica do Airline Manager 4
 
+## Gerenciamento de demanda (nova rotina padrão)
+
+Esta versão inicia com `ENABLE_DEMAND_MANAGER=true`, `DEMAND_DRY_RUN=true` e `DEMAND_FAIL_SAFE=true`: somente login, leitura de rotas e relatório. **Nenhuma compra, manutenção, campanha ou decolagem é executada nesse modo**, mesmo que os antigos `ENABLE_*` estejam ativos. Não há fallback para `departAll`. Veja [configurações, inspeção, seletores e pendências](docs/DEMAND_MANAGER.md).
+
+O workflow principal fixa gerenciador e fail-safe ativos. Para executar retornos individuais reais, use o input `execute_individual=true`, inicialmente com `max_individual_departures=1`; o workflow isolado usa `execute=true`. Sem esse input, continua simulacao. Rotas, tarifas, compras e revisoes economicas incompletas permanecem bloqueadas. Veja [producao controlada e payload do cron](docs/PRODUCTION_DEPARTURES.md). O `validate.yml` testa fixtures sem conta do jogo.
+
 ## Situacao
 
 - A execucao e iniciada manualmente pela aba **Actions** ou pela API `workflow_dispatch` utilizada no **cron-job.org**.
@@ -37,7 +43,7 @@ Em **Settings > Secrets and variables > Actions > Variables**:
 | `ENABLE_DEPART` | `true` | Habilita decolagens |
 | `ALERT_CASH_ABOVE` | `5000000` | Alerta opcional por Telegram se o saldo detectado for igual/maior |
 
-Variaveis `ENABLE_*` omitidas equivalem a `true`, preservando o comportamento anterior. Coloque `false` para desligar algum modulo. O alerta de saldo so funciona se houver Telegram configurado e o modulo de combustivel conseguir registrar o saldo. Ele nao dispara sozinho fora dos ciclos do bot.
+No fluxo legado, variaveis `ENABLE_*` omitidas equivalem a `true`, preservando o comportamento anterior. Coloque `false` para desligar algum modulo. O alerta de saldo so funciona se houver Telegram configurado e o modulo de combustivel conseguir registrar o saldo. Ele nao dispara sozinho fora dos ciclos do bot.
 
 **Atencao:** o algoritmo original tambem permite compras emergenciais por limites fixos, separados de `MAX_FUEL_PRICE` e `MAX_CO2_PRICE`. Revise antes de usar com uma companhia com pouco saldo.
 
@@ -63,3 +69,8 @@ O workflow tenta enviar uma mensagem no Telegram ao final, mas essa notificacao 
 Este repositorio ja automatiza as operacoes de combustivel/CO2, manutencao, campanhas e decolagens. Compra automatica de novas aeronaves, abertura de rotas, alteracao de precos e outras operacoes de investimento **nao foram habilitadas**: exigem seletores testados e limites financeiros especificos para evitar gastos irreversiveis.
 
 Nao existe garantia de ausencia de banimento, disponibilidade 24h, sucesso de login ou horarios exatos de execucao. O uso do bot pode contrariar as regras do jogo.
+
+
+## Revisão de rotas e tarifas PAX
+
+A simulação também gera `optimization-report.json/.md` com tarifas Auto × Y1,10/J1,08/F1,06, arredondadas para baixo em dezenas. O comparador independente de rotas usa lucro líquido estimado por hora no ciclo de ida e volta, condicionado a retorno confirmado à base. A coleta da base e dos candidatos ainda está pendente; o relatório sinaliza isso e nenhuma troca é executada. Veja [regras, exemplos e limites](docs/ROUTES_AND_PRICING.md).
