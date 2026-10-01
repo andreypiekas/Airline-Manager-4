@@ -1,0 +1,25 @@
+name: Disparar validacao de producao uma vez
+on:
+  push:
+    branches: [ops/production-validation-20261001-2125]
+    paths: [.github/workflows/dispatch-production-once.yml]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  dispatch:
+    if: github.repository == 'andreypiekas/Airline-Manager-4' && github.run_attempt == 1 && github.event.head_commit.message == 'dispatch authorized main production validation 20261001-2125'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 3
+    steps:
+      - name: Verificar versao e solicitar uma execucao limitada
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_MAIN_SHA: ebbf08a186dfdf76959f35c87db915fce4e1c2e1
+        run: |
+          CURRENT_MAIN_SHA="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          if [ "$CURRENT_MAIN_SHA" != "$EXPECTED_MAIN_SHA" ]; then
+            echo "::error::A main mudou; disparo interrompido."
+            exit 1
+          fi
+          gh workflow run playwright.yml --repo "$GITHUB_REPOSITORY" --ref main -f departure_mode=production -f max_individual_departures=1
