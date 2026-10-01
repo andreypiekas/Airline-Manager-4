@@ -31,7 +31,7 @@ export async function runDemandExecution(page:Page,config=readDemandConfig(),env
       '| Aeronave | Trecho | Estado | Motivo |','| --- | --- | --- | --- |',
       ...report.entries.map(e=>`| ${safe(e.registration)} | ${safe(e.from)} → ${safe(e.to)} | ${e.status} | ${safe(e.reason)} |`),'',
       'A cobertura por demanda nao e previsao de ocupacao. Embarque observado consta no JSON apos a decolagem.',
-      'Na propria base, revisao incompleta de candidatas/custos mantem a aeronave em solo. Rotas, tarifas e compras continuam sem alteracoes.',''
+      'Na propria base, revisao incompleta de candidatas/custos mantem a aeronave em solo. Rotas e tarifas continuam sem alteracoes. No workflow principal, abastecimento e documentado separadamente em supply-report.json.',''
     ].join('\n'));
   };
   const report=await new IndividualDepartureExecutor(new PlaywrightDeparturePort(page),config,{...settings,

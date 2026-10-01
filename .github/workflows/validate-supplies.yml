@@ -1,0 +1,35 @@
+name: Validar controles de abastecimento sem comprar
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: airline-manager-4-main
+  cancel-in-progress: false
+jobs:
+  inspect:
+    if: github.repository == 'andreypiekas/Airline-Manager-4'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      - run: npm run build:state
+      - run: npm test
+      - run: npx playwright test -c playwright.supplies.config.ts
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: supplies-controls
+          path: test-results/supplies/
+          retention-days: 7

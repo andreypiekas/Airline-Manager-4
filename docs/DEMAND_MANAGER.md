@@ -6,7 +6,7 @@ O motor de analise e puro: `departureAuthorized=false` em seus relatorios. Um ex
 
 O fluxo principal com DemandManager utiliza o mesmo login normal validado na coleta isolada. Valida tipos dos campos, aguarda o carregamento e descarta mensagens de erro que poderiam conter valores preenchidos. Nao grava formularios, trace, video, screenshots ou dados de sessao. O menu Fleet tambem precisa corresponder ao callback nativo inspecionado antes do clique.
 
-Com `ENABLE_DEMAND_MANAGER=true` e `DEMAND_DRY_RUN=true` (padrao), a rotina faz login, abre Fleet/Routes, coleta dados e termina. Não executa combustível, CO₂, manutenção, campanhas, decolagens, alteração de preços, Ground, Reroute, compra ou venda. `ENABLE_DEPART` não impede a análise somente de leitura. Falhas **nunca** caem em `departAll`.
+Com `ENABLE_DEMAND_MANAGER=true` e `DEMAND_DRY_RUN=true` (padrao), a rotina faz login, simula abastecimento no workflow principal, abre Fleet/Routes, coleta dados e termina. Não executa combustível, CO₂, manutenção, campanhas, decolagens, alteração de preços, Ground, Reroute, compra ou venda. `ENABLE_DEPART` não impede a análise somente de leitura. Falhas **nunca** caem em `departAll`.
 
 O fluxo legado continua no codigo para compatibilidade, mas os workflows publicados fixam o DemandManager e o fail-safe ativos. Os inputs `execute_individual` (principal) ou `execute` (isolado), ou a variavel `EXECUTE_INDIVIDUAL=true`, permitem selecionar explicitamente o executor real. `departure_mode=simulation` sobrepoe a ativacao; `MAX_INDIVIDUAL_DEPARTURES` define o limite quando o input de limite e zero. Variaveis antigas nao restauram decolagens em massa nos workflows. Nao foram alterados secrets nem a configuracao do cron-job.org. A validacao isolada de fontes continua somente de leitura.
 
@@ -116,7 +116,7 @@ Criados: `demand/types.ts`, `demand/config.ts`, `demand/manager.ts`, `demand/par
 
 Modificados: `utils/fleet.utils.ts`, `tests/airlineManager.spec.ts`, `.github/workflows/playwright.yml`, `playwright.config.ts`, `tsconfig.json`, `package.json`, `package-lock.json`, `.gitignore`, `AUTOMACAO.md` e `README.md`.
 
-`utils/general.utils.ts` foi inspecionado; o fluxo de demanda usa o login normal sanitizado de `utils/read-only-login.ts`. Os módulos financeiros não foram modificados nem executados.
+`utils/general.utils.ts` foi inspecionado; o fluxo de demanda usa o login normal sanitizado de `utils/read-only-login.ts`. O workflow principal integra agora o modulo limitado `supplies/`, documentado em [SUPPLIES.md](SUPPLIES.md). O legado financeiro continua fora do fluxo de demanda.
 
 ## Extensão: rotas e tarifas
 

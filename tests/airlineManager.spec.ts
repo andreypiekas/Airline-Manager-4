@@ -1,3 +1,5 @@
+import { runSupplies } from '../supplies/run';
+import { supplyConfig } from '../supplies/policy';
 import { researchConfig } from '../optimization/research-reader';
 import { optimizationConfig } from '../optimization/report';
 import { readDemandConfig } from '../demand/config';
@@ -21,10 +23,12 @@ test('All Operations', async ({ page }) => {
   const demandConfig = readDemandConfig();
   if (demandConfig.enabled) {
     executionEnvironment(demandConfig);
+    supplyConfig(); // Validate purchase policy before login.
     optimizationConfig(); // Reject invalid optimization settings before login.
     researchConfig();
     test.setTimeout(demandConfig.dryRun ? 600000 : 900000);
     await loginForReadOnlyCollection(page,process.env,90000);
+    await runSupplies(page,demandConfig.dryRun);
     const fleetMenu=page.locator('#mapRoutes');
     if(await fleetMenu.count()!==1||!await fleetMenu.isVisible()||
       (await fleetMenu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');")
@@ -34,7 +38,7 @@ test('All Operations', async ({ page }) => {
     if (!demandConfig.dryRun && (process.env.ENABLE_DEPART || 'true').trim().toLowerCase() === 'true') {
       await runDemandExecution(page,demandConfig);
     }
-    return; // Both modes bypass every legacy financial/maintenance/campaign/bulk-departure module.
+    return; // Supplies use the bounded module above; legacy maintenance/campaign/bulk operations remain bypassed.
   }
   // Timeout 3 menit karena simulasi gerakan kursor dan delay manusia butuh waktu lebih lama
   test.setTimeout(600000);

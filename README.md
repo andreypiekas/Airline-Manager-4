@@ -1,3 +1,5 @@
+> **Current demand workflow:** Fuel and CO2 replenishment runs before individual departures, with strict configured price ceilings, cash/storage limits and post-purchase confirmation. Simulation never buys. Legacy emergency exceptions, maintenance and campaigns are not enabled in this path. See [supplies settings](docs/SUPPLIES.md). The legacy features below describe the original flow.
+
 # Airline Manager 4 Bot
 
 > Default: read-only demand simulation. Explicit workflow inputs or `EXECUTE_INDIVIDUAL=true` can enable validated individual departures returning to the aircraft's own base on its existing route. Financial modules, automatic rerouting and tariff changes remain disabled. See [production scope and controls](docs/PRODUCTION_DEPARTURES.md) and [DemandManager](docs/DEMAND_MANAGER.md). `npm test` runs offline fixtures.
