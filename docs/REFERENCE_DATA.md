@@ -8,7 +8,7 @@ Importação de `All_routes.xlsx`: 1.003.236 linhas examinadas, 4.651 registros 
 
 Para cada aeronave com origem resolvida, configuração válida e alcance conhecido, o relatório lista até dez destinos dentro do alcance direto. Prioriza cobertura dos assentos configurados pela demanda de referência, com desempate por distância menor e código do destino. Classes sem assentos não penalizam a avaliação. Registros invertidos preservam `sourceDirection`: isso não confirma a demanda do sentido inverso. A lista é uma fila de pesquisa, não uma classificação de lucro ou garantia das melhores rotas.
 
-A coleta incompleta impede a criação da lista. A origem continua sendo resolvida pelas bases XAP/GRU/DTW e pelas configurações explícitas, incluindo BC-605/22316469 em GRU. Duas bases na mesma rota exigem desambiguação. Revisão no retorno e revisão diária continuam sob a política existente.
+A coleta incompleta impede a criação da lista. A origem continua sendo resolvida pelas bases XAP/GRU/DTW e pelas configurações explícitas, incluindo exceções cadastradas explicitamente pelo operador. Duas bases na mesma rota exigem desambiguação. Revisão no retorno e revisão diária continuam sob a política existente.
 
 Antes de avaliar uma troca, faltam cotações atuais por sentido, demanda restante por classe, reservas de outras aeronaves, preços automáticos, tempos, pistas e custos completos. Por isso `remainingDemand` e `estimatedProfit` ficam nulos e `mutationAuthorized` é sempre falso. O catálogo não alimenta artificialmente o DemandManager nem marca uma revisão econômica como concluída.
 

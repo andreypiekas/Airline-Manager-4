@@ -76,14 +76,7 @@ Arquivos novos: `pricing/ticket-pricing.ts`, `optimization/route-optimizer.ts`, 
 
 ## Continuação da inspeção — 2026-09-30 UTC
 
-Consulta somente de leitura na companhia xPiekas. A tela listava 27 aeronaves, 26 rotas e 14 disponíveis para decolagem. Esses números são uma observação da tela, não uma nova análise completa de demanda da frota.
-
-- B737-100-1: a lista mostrava JAU–GRU; os detalhes mostravam GRU à esquerda, JAU à direita; o painel de pesquisa indicava São Paulo Guarulhos como localização. O último histórico era JAU–GRU. Isso sustenta que, neste caso em solo, o primeiro aeroporto dos detalhes é a localização atual/próxima origem. Não prova a semântica em voo nem qual é a base atribuída à aeronave.
-- Alcance 3.440 km, pista mínima 7.550 ft e horas/ciclos 682/206 foram lidos pelos labels `Range`, `Min runway`, `Flight hours/Cycles` e seus `span.m-text` adjacentes. O contador de ciclos não foi promovido a ID de voo.
-- A demanda Y de JAU/GRU apareceu renovada em 802/802, comparada à observação anterior de 34/802. Isso confirma mudança de saldo entre as observações; não determina o horário exato da renovação.
-- Reroute abriu pesquisa; Suggest route mostrou GRU–COR; Next abriu orçamento. Nenhum Create route, Save, Auto, Autoprice, Depart, Ground ou Ferry flight foi executado. O orçamento foi fechado sem salvar.
-
-Orçamento observado para GRU–COR: 1.955 km; 01:38:14; 23.695 lb de combustível; 0,15 kg/pax/km de CO₂; cost index 200; taxa $45.716; A/C on route 0; Daily pax demand Y431/J169/F162. A tabela **diária não comprova saldo restante**. A taxa de rota não substitui os custos de operação. Não foi inferido lucro a partir de custos ausentes, nem estendida a cotação de ida ao retorno.
+Consulta somente de leitura confirmou os percursos de detalhes e orçamento. A demanda diária do orçamento não comprova demanda restante; taxa de criação não substitui custos operacionais. Dados da conta foram omitidos desta documentação pública.
 
 ### Leitores adicionados
 
@@ -105,10 +98,10 @@ Orçamento observado para GRU–COR: 1.955 km; 01:38:14; 23.695 lb de combustív
 | Taxa | valor adjacente ao label Route fee |
 | Aeronaves na rota | valor adjacente ao label A/C on route |
 
-A saída mantém `remainingDemand=null`, `netProfit=null`, `comparisonReady=false`, `mutationAuthorized=false`. O callback é analisado como texto, nunca executado. Esse leitor não foi ligado à navegação automática do workflow: ainda não há coleta abrangente de candidatos, base confirmada, persistência dos retornos e custos/ocupação confiáveis para alimentar RouteReview. Assim a revisão automática permanece indisponível no relatório, não é apresentada como concluída.
+A saída mantém `remainingDemand=null`, `netProfit=null`, `comparisonReady=false`, `mutationAuthorized=false`. O callback é analisado como texto, nunca executado. Esse leitor está ligado à consulta opcional ENABLE_ROUTE_RESEARCH, validada em simulação no Actions. Ainda faltam coleta abrangente de candidatos e custos/ocupação confiáveis para alimentar RouteReview. Assim a revisão automática permanece indisponível no relatório, não é apresentada como concluída.
 
 
-A tela Hubs confirmou São Paulo Guarulhos como **(Base)**, além de Chapecó e Detroit Metrop. como hubs. Isso identifica a base da companhia, mas não atribui automaticamente todas as aeronaves a GRU. Regra esclarecida pelo usuário: revisar no retorno à origem operacional individual de cada aeronave, incluindo aeronaves baseadas em outros hubs; não limitar a GRU. Falta confirmar e cadastrar o vínculo real de cada ID de aeronave à sua origem.
+A origem operacional é individual por aeronave; a lista de hubs não determina esse vínculo.
 
 Validação da continuação: TypeScript sem erros; 115 testes locais aprovados, incluindo 28 testes de interface em Chromium com rede bloqueada. Há testes de identidade divergente, orçamento oculto, números inválidos, ordem das classes, ausência de dados e propagação das observações aos dois relatórios JSON. Nenhuma chamada ao jogo é feita pelos testes.
 
@@ -223,9 +216,9 @@ A origem e resolvida por prioridade:
 
 Os relatorios mostram `originResolution.source`: `registered`, `unique-route-base` ou `unavailable`, junto com a justificativa. A atribuicao pela rota e uma regra operacional autorizada pelo dono, nao um campo nativo confirmado do jogo. Nao comprova retorno, nao cria ID de voo e nao habilita operacoes. O modelo de origens passa a preencher os casos univocos e deixa `null` somente nos casos nao resolvidos. As atribuicoes pela rota sao recalculadas a cada coleta; o cadastro explicito tem prioridade e nao e sobrescrito.
 
-## Revisao diaria e excecao BC-605 — 30/09/2026
+## Revisao diaria e cadastro explícito — 30/09/2026
 
-O operador confirmou GRU como origem da BC-605, ID `22316469`. Essa excecao acompanha o codigo; entradas em `AIRCRAFT_ORIGINS_JSON` podem sobrescreve-la explicitamente. O nome/registro da aeronave nao e usado como chave.
+Cadastros explícitos fornecidos pelo operador têm prioridade. AIRCRAFT_ORIGINS_JSON pode sobrescrever o cadastro padrão. Identificadores reais foram omitidos desta documentação pública; nome/registro não é chave de identidade.
 
 A cada execucao, o relatorio agora verifica a necessidade de revisao diaria para todas as aeronaves coletadas. O dia segue `ROUTE_REVIEW_TIMEZONE` (padrao `America/Sao_Paulo`). Uma revisao completa por retorno a base tambem satisfaz a revisao daquele dia. Ausencia de historico persistente e marcada como `historyAvailable=false`; nao e apresentada como revisao realizada.
 
@@ -246,4 +239,14 @@ A persistência real com eventos sintéticos foi validada em dois runners do Git
 
 `ENABLE_ROUTE_RESEARCH=false` mantém a pesquisa nativa desligada inicialmente. Com `true`, a simulação consulta até `ROUTE_RESEARCH_MAX_AIRCRAFT=3` aeronaves elegíveis na própria origem, até `ROUTE_RESEARCH_MAX_SUGGESTIONS=3` orçamentos cada. Os dois limites aceitam 1–10. Gera `route-research.json` e `route-research.md` no artefato demand-report. Dados ausentes, aeronave fora da base e callbacks desconhecidos bloqueiam a consulta; falha de restauração interrompe a fila.
 
-O percurso reabre a lista pela aba Fleet quando o popup já está aberto, confirma a identidade por ID/registro e relê posição/layout antes do planejador. Retorna à primeira página de uma lista nova. A consulta não fornece RouteReview completo e não altera o histórico de revisões bem-sucedidas. Sugestões limitadas não garantem melhor rota nem revisão de toda a frota no dia. A validação integral dessa integração no Actions continua pendente. A alteração não habilita trocas, tarifas ou decolagens.
+O percurso reabre a lista pela aba Fleet quando o popup já está aberto, confirma a identidade por ID/registro e relê posição/layout antes do planejador. Retorna à primeira página de uma lista nova. A consulta não fornece RouteReview completo e não altera o histórico de revisões bem-sucedidas. Sugestões limitadas não garantem melhor rota nem revisão de toda a frota no dia. A coleta e as fontes implementadas foram aprovadas no Actions 36862952783; os custos completos da comparação permanecem pendentes. A alteração não habilita trocas, tarifas ou decolagens.
+
+## Evidências adicionais das candidatas
+
+Com ENABLE_ROUTE_RESEARCH=true, o fluxo também produz candidate-data.json e candidate-data.md. O relatório relaciona a candidata a rotas existentes por origem/destino e guarda fonte, data, demanda restante e sentido observado. Usa o mínimo por classe entre observações do mesmo sentido; não soma demandas compartilhadas. Um dado apenas do sentido inverso fica em reverseRemaining, nunca em remaining do sentido solicitado. Ausência de observação, duplicidade, valores inválidos, expiração ou coleta incompleta bloqueiam esse enriquecimento. As reservas futuras das outras aeronaves continuam pendentes.
+
+O catálogo fornece referência de A-check e intervalo por modelo; os painéis Fuel/Co2 fornecem preços de mercado e suas unidades. Os leitores verificam os callbacks de consulta e não clicam controles de compra, configuração ou manutenção. Até dez modelos diferentes são consultados por execução; excedentes aparecem como pendência. Os limites de aeronaves e sugestões continuam valendo, sem garantir pesquisa exaustiva nem revisão diária de toda a frota.
+
+fuelAtObservedMarketPrice é somente a quantidade em lbs do orçamento vezes o preço observado por 1.000 lbs. Não representa custo histórico do estoque. A-check do catálogo não é convertido por divisão linear em manutenção efetiva por voo. Taxa de criação fica em setupFee, separada de despesas recorrentes. Não há conversão confirmada de kg de emissão para quotas de CO₂, nem custos completos de manutenção e demais despesas. Assim costsComplete=false, netProfit=null e comparisonReady=false continuam obrigatórios; o relatório não é usado como RouteReview.
+
+Validação isolada no Actions: validate-collection.yml força DEMAND_DRY_RUN=true e DEMAND_FAIL_SAFE=true, registra collection-validation.json, verifica cada identidade da coleta e consulta opcionalmente três aeronaves/uma sugestão por aeronave. A coleta inclui as aeronaves vinculadas às rotas, excluindo pendentes de entrega e sem rota. Evidências e resultados atualizados: IMPLEMENTATION_STATUS.md.
