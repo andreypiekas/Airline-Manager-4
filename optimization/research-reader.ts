@@ -11,6 +11,7 @@ import { candidateDemandEvidence } from './candidate-evidence';
 import { candidateReservationScenario, reservationConfig } from './reservations';
 import { readAircraftMaintenanceReferences } from './maintenance-reader';
 import { candidateCostScenarios, effectiveCostBudget } from './cost-budget';
+import { emptyFinanceHistory, readFinanceHistoryReference } from './finance-reader';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -128,6 +129,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   let uiRestored=research.uiRestored;
   let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true,stage:'not_requested',warnings:[],unitLabels:[]};
   let maintenance:Awaited<ReturnType<typeof readAircraftMaintenanceReferences>>={status:'not_requested',stage:'not_requested',observedAt:new Date().toISOString(),complete:false,uiClosed:true,aircraft:[],warnings:[]};
+  let financeHistory=emptyFinanceHistory();
   // Market and maintenance sources must be validated even when no aircraft is eligible for research.
   if(research.config.enabled&&uiRestored){
     const ids=[...new Set(quotes.flatMap(q=>q.autopriceReference?[q.autopriceReference.modelId]:[]))];
@@ -151,6 +153,11 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
       try{if(!maintenance.uiClosed)throw new Error();await openList(page,research.config.timeout);}
       catch{uiRestored=false;warnings.push('MAINTENANCE_LIST_RESTORE_FAILED');}
     }
+    if(uiRestored){
+      financeHistory=await readFinanceHistoryReference(page,research.config.timeout);
+      try{if(!financeHistory.uiClosed)throw new Error();await openList(page,research.config.timeout);}
+      catch{uiRestored=false;warnings.push('FINANCE_LIST_RESTORE_FAILED');}
+    }
   }
   const now=new Date();
   const fresh=(stamp:string)=>{const age=now.getTime()-Date.parse(stamp);return Number.isFinite(age)&&age>=0&&age<=reservationsConfig.maxAgeSeconds*1000;};
@@ -172,14 +179,17 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
         ...(!demand.remaining?['DIRECTIONAL_REMAINING_DEMAND']:[]),...(fuel===null?['FUEL_MARKET_PRICE']:[])]};
   });
   return {schemaVersion:2,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
-    uiRestored,market,models,modelReads,maintenance,warnings:[...warnings,...maintenance.warnings],candidates};
+    uiRestored,market,models,modelReads,maintenance,financeHistory,
+    warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
   await mkdir(directory,{recursive:true});
   await writeFile(join(directory,'candidate-data.json'),JSON.stringify(report,null,2)+'\n');
+  await writeFile(join(directory,'finance-history.json'),JSON.stringify(report.financeHistory,null,2)+'\n');
   await writeFile(join(directory,'candidate-data.md'),['# Evidencias das candidatas — simulacao','',
     ...report.candidates.map(c=>`- ${c.aircraftId} ${c.from}–${c.to}: demanda ${c.demand.status}; reservas ${c.reservations.status} (${c.reservations.reservations.length} trechos); saldo simulado ${JSON.stringify(c.reservations.forwardAfterReservations)}; combustivel ao preco observado ${c.costs.fuelAtObservedMarketPrice??'indisponivel'}; CO2 de referencia ${c.costScenarios.co2.atDemandCeiling??'indisponivel'}; A-check de referencia ${c.costScenarios.aCheck.catalogProration??'indisponivel'}; custos efetivos faltantes ${c.effectiveCosts.missing.join(', ')}; pendencias ${c.missing.join(', ')}.`),'',
     `Manutencao: ${report.maintenance.status}; referencias individuais ${report.maintenance.aircraft.length}. Reservas sao cenarios limitados de capacidade antes da candidata; nao sao previsao de horarios nem reservas feitas no jogo.`,
+    `Historico financeiro: ${report.financeHistory.status}; lancamentos visiveis ${report.financeHistory.transactions.length}. Compras observadas sao referencias de pagamentos; nao comprovam custo medio do estoque, despesa por trecho ou historico completo.`,
     'Referencia de A-check do catalogo nao confirma o custo efetivo da aeronave. Preco de mercado nao confirma o custo de aquisicao do estoque. Taxa de criacao nao e custo recorrente. Nenhum lucro liquido ou troca de rota autorizado.',
     ...report.warnings.map(w=>'- '+w),''].join('\n'));
 }

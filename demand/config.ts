@@ -12,7 +12,7 @@ export function readDemandConfig(env: NodeJS.ProcessEnv = process.env): DemandCo
   const dryRun = booleanValue(env, 'DEMAND_DRY_RUN', true);
   const failSafe = booleanValue(env, 'DEMAND_FAIL_SAFE', true);
   if (!dryRun || !failSafe) {
-    throw new Error('[Demand] Esta versao exige DEMAND_DRY_RUN=true e DEMAND_FAIL_SAFE=true. Execucao real nao implementada/autorizada.');
+    throw new Error('[Demand] Esta versao exige DEMAND_DRY_RUN=true e DEMAND_FAIL_SAFE=true. Integracao operacional ainda nao validada para execucao real.');
   }
   const minPercentage = Number(env.MIN_DEMAND_PERCENTAGE?.trim() || '80');
   if (!Number.isFinite(minPercentage) || minPercentage <= 0 || minPercentage > 100) {

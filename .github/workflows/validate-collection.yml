@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: callback nativo Finance com dois argumentos; MCDU opcional, sem compra.
+# Revisao: validar historico financeiro estruturado e restauracao, sem MCDU ou operacoes.
 on:
   workflow_dispatch:
   push:

@@ -62,6 +62,14 @@ O orcamento efetivo exige oito componentes: fuel, co2, aCheck, wearRepair, airpo
 
 O coletor atual nao fornece essas evidencias efetivas e nao cria um RouteReview completo. Historico financeiro agregado de salarios, marketing ou Bulk Repairs nao determina despesa de uma aeronave/trecho, nem custo medio de estoque. Despesas ausentes nao recebem zero automatico.
 
+## Historico financeiro observado
+
+`optimization/finance-reader.ts` consulta o menu Finance pelo ID e tooltip observados, pois Maintenance e Finance compartilham o ID mapMaint. Exige o callback exato `hideAllWhenClick();popup('finances.php','Finances');`, o titulo Finances e `#financeAction #transactionContainer`. Le as tres colunas visiveis (tempo relativo, tipo e valor). Fecha o popup pelo controle nativo e o chamador restaura Fleet. Nao clica em Expenses, Marketing, Stock, servicos, compras ou formularios.
+
+Os tipos inspecionados incluem compras de Fuel/Co2, Bulk A-Check, Staff salary, Marketing, Lounge maintenance, New route fee, A/C Purchased, Daily Gift e creditos de partidas agrupadas. Tipos desconhecidos ficam unclassified, sem reter sua descricao; valores invalidos ou sinais conflitantes invalidam a leitura. Aquisoes de aeronaves e taxas iniciais nao sao convertidas em despesas recorrentes do voo.
+
+`finance-history.json` e `candidate-data.json.financeHistory` registram os lancamentos visiveis e referencias de preco pago por mil unidades nas compras visiveis de Fuel/Co2. Nao leem saldo, pontos, credenciais ou dados de sessao. Esses pagamentos sao evidencia de uma transacao; nao comprovam o custo medio do estoque, o historico completo ou o custo de um trecho futuro. Horarios como "hours ago" sao arredondados e nao geram timestamps exatos. Bulk A-Check nao identifica aeronaves/ciclos; salarios, campanhas e lounges nao possuem alocacao confirmada por voo. `historyComplete=false`, `exactTransactionTimesAvailable=false`, `perLegCostsComplete=false` e `comparisonReady=false` permanecem obrigatorios. Essa fonte e referencia contabil, nao preenche automaticamente nenhum dos oito componentes efetivos.
+
 ## Validacao e pendencias
 
 Os testes usam dados sinteticos, exercitam reservas entre aeronaves em solo/em voo, sentidos separados/compartilhados, esgotamento, alternativas independentes, coleta incompleta e dados invalidos. Os testes de custo cobrem as oito despesas, zeros explicitos, identidade, unidades, expiracao e aritmetica. Os testes HTML de manutencao verificam que nenhum servico e acionado. A coleta isolada do Actions exige leitura integral dos cartoes de manutencao e bloqueios economicos preservados.

@@ -44,31 +44,6 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       const config=readDemandConfig();
       await loginForReadOnlyCollection(page,process.env,90000,stage=>{phase=`login_${stage}`;});
       await writeSourceNavigation('after_login');
-      phase='finance_source_discovery';
-      const finance=page.locator('[id="mapMaint"][data-original-title="Finance, Marketing & Stock"]');
-      phase='finance_control';
-      if(await finance.count()!==1||!await finance.isVisible())throw new Error();
-      const financeCallback=(await finance.getAttribute('onclick')||'').trim();
-      const financeShape=financeCallback.replace(/'[^']*'/g,"''").replace(/\s/g,'');
-      await writeFile('test-results/demand/finance-control.json',JSON.stringify({schemaVersion:1,dryRun:true,mutationAuthorized:false,
-        callbackShape:financeShape,queryPaths:Array.from(financeCallback.matchAll(/'([a-z_0-9]+\.php)(?:\?[^']*)?'/gi),m=>m[1])},null,2)+'\n');
-      phase='finance_callback';
-      if(!financeCallback.replace(/\s/g,'').startsWith("hideAllWhenClick();popup('finances.php',")||
-        financeShape!=="hideAllWhenClick();popup('','');")throw new Error();
-      const financeBeforeIds=await page.locator('[id]').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.id));
-      phase='finance_click';
-      await finance.click({timeout:10000});
-      phase='finance_screen';
-      await page.locator('#popTitle').waitFor({state:'visible',timeout:10000});
-      await expect(page.locator('#popTitle')).toContainText(/Finance|Marketing|Stock/i,{timeout:10000});
-      await expect.poll(()=>page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id)).some(e=>(e as HTMLElement).innerText?.length>30),financeBeforeIds),{timeout:10000}).toBe(true);
-      const financeScreen=await page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id))
-        .filter(e=>!e.matches('input,textarea,select,form,script')).slice(0,100).map(e=>({id:e.id,tag:e.tagName,text:(e as HTMLElement).innerText.trim().slice(0,2500)})),financeBeforeIds);
-      const financeTabs=await page.locator('.popMenuBtn').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>({id:e.id,text:(e as HTMLElement).innerText.trim(),
-        queryPaths:Array.from((e.getAttribute('onclick')||'').matchAll(/'([a-z_0-9]+\.php)(?:\?[^']*)?'/gi),m=>m[1])})));
-      await writeFile('test-results/demand/finance-source-discovery.json',JSON.stringify({schemaVersion:1,observedAt:new Date().toISOString(),dryRun:true,
-        mutationAuthorized:false,screen:financeScreen,tabs:financeTabs},null,2)+'\n');
-      await closeReadOnlyPopup(page,10000);
       // MCDU is an optional paid feature. Presence of its menu does not prove ownership.
       // Do not open a purchase flow or make it a requirement for the normal collection.
       await writeFile('test-results/demand/mcdu-source-discovery.json',JSON.stringify({schemaVersion:1,
@@ -97,6 +72,8 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
           fuelPriceObserved:!!candidates.market.fuel,co2PriceObserved:!!candidates.market.co2,candidates:candidates.candidates.length}};
       Object.assign((evidence.research as any).candidateSources,{
         maintenanceComplete:candidates.maintenance.complete,maintenanceAircraft:candidates.maintenance.aircraft.length,
+        financeHistoryObserved:candidates.financeHistory.status==='observed',
+        financeVisibleTransactions:candidates.financeHistory.transactions.length,
         reservationScenarios:candidates.candidates.filter((c:any)=>c.reservations.status!=='unavailable').length,
         effectiveCostsComplete:candidates.candidates.filter((c:any)=>c.effectiveCosts.complete).length,
         modelsNotInInspectedCatalog:candidates.modelReads.filter((m:any)=>m.status==='not_in_inspected_catalog').length,
@@ -118,6 +95,9 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
         accountedModels.some((m:any)=>!expectedModels.has(m.modelId))||!candidates.market.fuel||!candidates.market.co2))throw new Error();
       if(!candidates.maintenance.complete||candidates.maintenance.aircraft.length!==fleet.aircraft.length||
         !candidates.market.fuel||!candidates.market.co2)throw new Error();
+      if(candidates.financeHistory.status!=='observed'||!candidates.financeHistory.uiClosed||
+        candidates.financeHistory.historyComplete||candidates.financeHistory.perLegCostsComplete||
+        candidates.financeHistory.comparisonReady||candidates.financeHistory.mutationAuthorized)throw new Error();
       if(candidates.candidates.some((c:any)=>c.comparisonReady||c.mutationAuthorized||c.reservations.futureScheduleComplete||
         c.effectiveCosts.complete||c.costScenarios.totalOperatingCost!==null))throw new Error();
       evidence.status='passed';
