@@ -23,7 +23,7 @@ jobs:
     # One dedicated validation push; other pushes and all real reruns cannot operate.
     if: >-
       github.repository == 'andreypiekas/Airline-Manager-4' && github.run_attempt == 1 &&
-      (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'validate individual executor 20261001-2010')
+      (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'run authorized individual departure 20261001-2015')
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
@@ -48,7 +48,7 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
           ENABLE_DEMAND_MANAGER: 'true'
           DEMAND_FAIL_SAFE: 'true'
-          DEMAND_DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.execute && 'false' || 'true' }}
+          DEMAND_DRY_RUN: ${{ github.event_name == 'push' && 'false' || (inputs.execute && 'false' || 'true') }}
           DEMAND_EXECUTION_ACK: individual-return-legs-v1
           DEMAND_MAX_DEPARTURES_PER_RUN: ${{ inputs.max_departures || '1' }}
           MIN_DEMAND_PERCENTAGE: '80'

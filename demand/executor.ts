@@ -82,7 +82,10 @@ export class IndividualDepartureExecutor {
       entry.demand=decision;
       if(decision.decision!=='would_depart'){entry.reason=decision.reason;continue;}
       entry.reason=decision.reason;
-      if(this.settings.dryRun){entry.status='would_depart';await persist();continue;}
+      if(this.settings.dryRun){
+        this.attemptedAircraft.add(fresh.aircraftId);this.attemptedRoutes.add(fresh.routeId);
+        entry.status='would_depart';await persist();continue;
+      }
       this.attemptedAircraft.add(fresh.aircraftId);this.attemptedRoutes.add(fresh.routeId);
       entry.status='attempting';
       // A persistence failure throws BEFORE any click. A crash after this point must never be retried.
@@ -90,7 +93,11 @@ export class IndividualDepartureExecutor {
       try {
         await this.port.depart(fresh);
         const after=await this.port.confirm(fresh);
-        if(!after||after.state!=='inflight'||after.issue||!sameContext(fresh,after)||!after.timing||!after.onboard)
+        const timing=after?.timing,age=timing?Date.now()-Date.parse(timing.observedAt):NaN;
+        if(!after||after.state!=='inflight'||after.issue||!sameContext(fresh,after)||!timing||!after.onboard||
+          timing.source!=='inspected-flight-countdown'||timing.aircraftId!==fresh.aircraftId||timing.routeId!==fresh.routeId||
+          !Number.isSafeInteger(timing.remainingSeconds)||timing.remainingSeconds<=0||!Number.isFinite(age)||age<0||age>this.demand.maxAgeSeconds*1000||
+          (['Y','J','F'] as const).some(k=>!Number.isSafeInteger(after.onboard![k])||after.onboard![k]<0||after.onboard![k]>after.capacity![k]))
           throw new Error('UNCONFIRMED');
         entry.status='departed';entry.actualOnboard=after.onboard;entry.reason='NATIVE_INFLIGHT_IDENTITY_COUNTDOWN_AND_ONBOARD_CONFIRMED';
       } catch {entry.status='outcome_unknown';entry.reason='NO_RETRY_AFTER_CLICK_ATTEMPT';report.halted=true;}

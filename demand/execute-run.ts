@@ -11,7 +11,7 @@ export function executionEnvironment(config:DemandConfig,env:NodeJS.ProcessEnv=p
   const maxDepartures=Number(env.DEMAND_MAX_DEPARTURES_PER_RUN||'1');
   if(!Number.isSafeInteger(maxDepartures)||maxDepartures<1||maxDepartures>20)throw Error('DEMAND_EXECUTION_LIMIT_INVALID');
   if(!config.enabled||!config.failSafe)throw Error('DEMAND_EXECUTION_DISABLED');
-  if(!config.dryRun&&(env.DEMAND_EXECUTION_ACK!=='individual-return-legs-v1'||env.GITHUB_ACTIONS!=='true'||
+  if(!config.dryRun&&(config.poolScope!=='airport-pair'||env.DEMAND_EXECUTION_ACK!=='individual-return-legs-v1'||env.GITHUB_ACTIONS!=='true'||
     env.GITHUB_REPOSITORY!=='andreypiekas/Airline-Manager-4'||!/^[1-9]\d*$/.test(env.GITHUB_RUN_ID||'')||
     env.GITHUB_RUN_ATTEMPT!=='1'))throw Error('DEMAND_REAL_EXECUTION_CONTEXT_INVALID_OR_RERUN');
   return {dryRun:config.dryRun,maxDepartures};

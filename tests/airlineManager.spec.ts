@@ -2,6 +2,7 @@ import { researchConfig } from '../optimization/research-reader';
 import { optimizationConfig } from '../optimization/report';
 import { readDemandConfig } from '../demand/config';
 import { runDemandSimulation } from '../demand/run';
+import { executionEnvironment, runDemandExecution } from '../demand/execute-run';
 import { withRunLock } from '../utils/run-lock';
 import { loginForReadOnlyCollection } from '../utils/read-only-login';
 import { test } from '@playwright/test';
@@ -19,9 +20,10 @@ test('All Operations', async ({ page }) => {
   await withRunLock(async () => {
   const demandConfig = readDemandConfig();
   if (demandConfig.enabled) {
+    executionEnvironment(demandConfig);
     optimizationConfig(); // Reject invalid optimization settings before login.
     researchConfig();
-    test.setTimeout(600000);
+    test.setTimeout(demandConfig.dryRun ? 600000 : 900000);
     await loginForReadOnlyCollection(page,process.env,90000);
     const fleetMenu=page.locator('#mapRoutes');
     if(await fleetMenu.count()!==1||!await fleetMenu.isVisible()||
@@ -29,7 +31,10 @@ test('All Operations', async ({ page }) => {
       throw new Error('[Demand] Menu Fleet nao confirmado; nenhuma operacao autorizada.');
     await fleetMenu.click();
     await runDemandSimulation(page, demandConfig);
-    return; // Simulation bypasses every financial, maintenance, campaign and departure module.
+    if (!demandConfig.dryRun && (process.env.ENABLE_DEPART || 'true').trim().toLowerCase() === 'true') {
+      await runDemandExecution(page,demandConfig);
+    }
+    return; // Both modes bypass every legacy financial/maintenance/campaign/bulk-departure module.
   }
   // Timeout 3 menit karena simulasi gerakan kursor dan delay manusia butuh waktu lebih lama
   test.setTimeout(600000);

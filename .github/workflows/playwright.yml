@@ -2,6 +2,16 @@ name: Automacao Airline Manager 4
 on:
   workflow_dispatch:
     inputs:
+      execute_individual:
+        description: 'Executar retornos individuais reais (sem compras ou alteracoes de rotas/tarifas)'
+        type: boolean
+        required: false
+        default: false
+      max_individual_departures:
+        description: 'Limite de decolagens individuais (1 a 20)'
+        type: number
+        required: false
+        default: 1
       aktifkan_random_delay:
         description: 'Ativar atraso aleatorio na execucao manual (padrao: desligado)'
         type: boolean
@@ -108,9 +118,11 @@ jobs:
         ENABLE_ROUTE_OPTIMIZER: ${{ vars.ENABLE_ROUTE_OPTIMIZER || 'true' }}
         ROUTE_MIN_OCCUPANCY_PERCENT: ${{ vars.ROUTE_MIN_OCCUPANCY_PERCENT || '80' }}
         ROUTE_MIN_IMPROVEMENT_PERCENT: ${{ vars.ROUTE_MIN_IMPROVEMENT_PERCENT || '0' }}
-        ENABLE_DEMAND_MANAGER: ${{ vars.ENABLE_DEMAND_MANAGER || 'true' }}
-        DEMAND_DRY_RUN: ${{ vars.DEMAND_DRY_RUN || 'true' }}
-        DEMAND_FAIL_SAFE: ${{ vars.DEMAND_FAIL_SAFE || 'true' }}
+        ENABLE_DEMAND_MANAGER: 'true'
+        DEMAND_DRY_RUN: ${{ inputs.execute_individual == true && 'false' || 'true' }}
+        DEMAND_FAIL_SAFE: 'true'
+        DEMAND_EXECUTION_ACK: individual-return-legs-v1
+        DEMAND_MAX_DEPARTURES_PER_RUN: ${{ inputs.max_individual_departures || '1' }}
         MIN_DEMAND_PERCENTAGE: ${{ vars.MIN_DEMAND_PERCENTAGE || '80' }}
         DEMAND_THRESHOLD_MODE: ${{ vars.DEMAND_THRESHOLD_MODE || 'aggregate' }}
         DEMAND_POOL_SCOPE: ${{ vars.DEMAND_POOL_SCOPE || 'airport-pair' }}
@@ -158,6 +170,9 @@ jobs:
         fi
         if [ -f test-results/demand/optimization-report.md ]; then
           cat test-results/demand/optimization-report.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/execution-report.md ]; then
+          cat test-results/demand/execution-report.md >> "$GITHUB_STEP_SUMMARY"
         fi
 
     - name: Enviar JSON e Markdown de demanda
