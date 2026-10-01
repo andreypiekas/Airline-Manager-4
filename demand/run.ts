@@ -1,4 +1,4 @@
-import { researchConfig, researchFleetCandidates, writeRouteResearchReport } from '../optimization/research-reader';
+import { collectCandidateData, writeCandidateDataReport, researchConfig, researchFleetCandidates, writeRouteResearchReport } from '../optimization/research-reader';
 import { writeOccupancyAudit } from './occupancy-audit';
 import { writeReferenceReport } from '../optimization/reference-report';
 import { RouteReview } from '../optimization/route-optimizer';
@@ -21,7 +21,11 @@ export async function runDemandSimulation(page: Page, config: DemandConfig = rea
   await writeFleetObservations(collection, optimization.aircraftOrigins, 'test-results/demand', config.maxAgeSeconds, optimization.airlineBases);
   await writeReferenceReport(collection, optimization);
   await writeOptimizationReport(await analyzeOptimizationWithJournal(collection, optimization, reviews));
-  await writeRouteResearchReport(await researchFleetCandidates(page, collection, optimization, research));
+  const researchReport=await researchFleetCandidates(page, collection, optimization, research);
+  await writeRouteResearchReport(researchReport);
+  const candidateData=await collectCandidateData(page,collection,researchReport);
+  await writeCandidateDataReport(candidateData);
+  if(!candidateData.uiRestored)throw new Error('[Demand] Painel nao restaurado apos consulta; nenhuma operacao autorizada.');
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');
   return report;
 }

@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: identidade de cartões em voo pelo callback de consulta confirmado.
+# Revisao: fontes de demanda das candidatas, A-check e precos de mercado em leitura.
 on:
   workflow_dispatch:
   push:
@@ -49,6 +49,9 @@ jobs:
           fi
           if [ -f test-results/demand/route-research.md ]; then
             cat test-results/demand/route-research.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -f test-results/demand/candidate-data.md ]; then
+            cat test-results/demand/candidate-data.md >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Relatorios de leitura sem gravacoes de login
         if: always()

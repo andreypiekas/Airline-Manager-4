@@ -1,0 +1,83 @@
+import { expect, Page } from '@playwright/test';
+import { integerText } from '../demand/parsing';
+
+export interface ModelCostReference {
+  modelId:number;modelName:string;observedAt:string;aCheckPrice:number;checkIntervalHours:number;
+  source:'inspected-catalog';effectiveAircraftMaintenanceCost:null;
+}
+export interface MarketPriceReference {
+  commodity:'fuel'|'co2';pricePer1000:number;unit:'lbs'|'quotas';observedAt:string;
+  source:'inspected-market';inventoryAcquisitionPrice:null;
+}
+const normalize=(s:string)=>s.replace(/\s/g,'');
+async function checkedClick(page:Page,selector:string,callback:string,timeout:number){
+  const c=page.locator(selector);
+  if(await c.count()!==1||!await c.isVisible()||normalize(await c.getAttribute('onclick')||'')!==normalize(callback))throw new Error('REFERENCE_CONTROL_UNVERIFIED');
+  await c.click({timeout});
+}
+export function verifiedCatalogControl(callback:string,modelId:number,modelName:string){
+  if(!Number.isSafeInteger(modelId)||modelId<1||!modelName||!/^[A-Za-z0-9 .()/-]+$/.test(modelName))return false;
+  const expected=`if(intro==0) { $('#modelSelection').html('${modelName}');playSound('neutral_click');$('#acListDetail').slideUp('slow');Ajax('ac_orders.php?mode=detail&id=${modelId}&charter=0','acModel',false,false,false);$('#acModel').html('<div class=text-center><img src=assets/img/loaders/flight_info_loader.gif></div>').show();}`;
+  return normalize(callback)===normalize(expected);
+}
+/** Start on the Fleet popup. Opens catalog DETAILS only; never Order/Configuration. */
+export async function readModelCostReference(page:Page,modelId:number,timeout=10000):Promise<ModelCostReference|null>{
+  try {
+    if(!Number.isSafeInteger(modelId)||modelId<1)throw new Error();
+    await checkedClick(page,'#popBtn2',"$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('ac_orders.php?first=true','routeAction',this,false,true);",timeout);
+    await page.locator('#acListItems [id^="listSection"]').first().waitFor({state:'visible',timeout});
+    const rows=await page.locator('#acListItems [id^="listSection"]').evaluateAll(elements=>elements.map(e=>({id:e.id,name:e.querySelector('b')?.textContent?.trim()||'',callback:e.getAttribute('onclick')||''})));
+    const matches=rows.filter(r=>verifiedCatalogControl(r.callback,modelId,r.name));
+    if(matches.length!==1||!/^listSection\d+$/.test(matches[0].id))throw new Error();
+    const selected=matches[0];const control=page.locator('#'+selected.id);
+    if(await control.getAttribute('onclick')!==selected.callback)throw new Error();
+    await control.click({timeout});
+    const label=page.locator('#acModel').getByText('A-Check',{exact:true});
+    await label.waitFor({state:'visible',timeout});
+    if((await page.locator('#modelSelection').innerText()).trim()!==selected.name)throw new Error();
+    const value=async(name:string)=>{
+      const l=page.locator('#acModel').getByText(name,{exact:true});
+      if(await l.count()!==1||!await l.isVisible())throw new Error();
+      const cells=await l.locator('..').locator('td').allTextContents();
+      if(cells.length!==2||cells[0].trim()!==name)throw new Error();return cells[1].trim();
+    };
+    const price=(await value('A-Check')).match(/^\$\s*([\d,]+)$/),hours=(await value('Maint check')).match(/^([\d,]+) Hours$/);
+    if(!price||!hours)throw new Error();
+    const aCheckPrice=integerText(price[1]),checkIntervalHours=integerText(hours[1]);
+    if(aCheckPrice<=0||checkIntervalHours<=0)throw new Error();
+    return {modelId,modelName:selected.name,observedAt:new Date().toISOString(),aCheckPrice,checkIntervalHours,source:'inspected-catalog',effectiveAircraftMaintenanceCost:null};
+  }catch{return null;}
+}
+/** Menu and tabs are queries only. No purchase input is read/filled or Purchase clicked. */
+export async function readMarketPriceReferences(page:Page,timeout=10000){
+  const result={fuel:null as MarketPriceReference|null,co2:null as MarketPriceReference|null,uiClosed:false};
+  const menu=page.locator('#smallMainMenu').getByText('Fuel',{exact:true}).locator('../..');
+  try {
+    if(await menu.count()!==1||!await menu.isVisible()||normalize(await menu.getAttribute('onclick')||'')!=="hideAllWhenClick();popup('fuel.php','Fuel',false,false,true);")throw new Error();
+    await menu.click({timeout});
+    const read=async(commodity:'fuel'|'co2')=>{
+      const panel=page.locator('#fuelMain');const name=commodity==='fuel'?'Current price':'Quota cost';
+      const label=panel.getByText(name,{exact:true});await label.waitFor({state:'visible',timeout});
+      if(await label.count()!==1)throw new Error();
+      const unitLabel=commodity==='fuel'?'Fuel price per 1,000 Lbs':'Co2 quota cost per 1,000';
+      await panel.getByText(unitLabel,{exact:true}).waitFor({state:'visible',timeout});
+      const text=await label.locator('..').innerText();
+      const match=text.trim().match(commodity==='fuel'?/^CURRENT PRICE\s+\$\s*([\d,]+)$/i:/^QUOTA COST\s+\$\s*([\d,]+)$/i);
+      if(!match)throw new Error();const price=integerText(match[1]);if(price<=0)throw new Error();
+      return {commodity,pricePer1000:price,unit:commodity==='fuel'?'lbs':'quotas',observedAt:new Date().toISOString(),source:'inspected-market',inventoryAcquisitionPrice:null} as MarketPriceReference;
+    };
+    result.fuel=await read('fuel');
+    await checkedClick(page,'#popBtn2',"$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('co2.php','fuelMain',this,false,false);",timeout);
+    result.co2=await read('co2');
+  }catch{/* Partial observations remain labelled; they never become complete costs. */}
+  finally {
+    try {
+      if(await page.locator('#fuelMain').isVisible()){
+        await checkedClick(page,'#mapRoutes',"hideAllWhenClick();menuFleet('Routes');",timeout);
+        await expect(page.locator('#fuelMain')).not.toBeVisible({timeout});
+      }
+      result.uiClosed=true;
+    }catch{result.uiClosed=false;}
+  }
+  return result;
+}

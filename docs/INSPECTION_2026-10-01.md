@@ -15,4 +15,16 @@ Navegação confirmada: link da aeronave → detalhes → Reroute (abre planejad
 
 Constatação para a integração: o menu principal Fleet alterna o popup e pode fechá-lo quando já aberto. A aba `#popBtn1` usa consulta `Ajax('routes.php','routeAction',this,false,false)` para retornar à primeira página quando o painel está aberto. Paginação Next usa consulta `routes.php?start=20&sort=`. O retorno ao detalhe após o planejador pode recriar a lista; não se deve reutilizar o cursor de paginação anterior.
 
-A inspeção foi manual por controles de leitura. Os testes de integração usam DOM sintético e rede bloqueada. Ainda falta validar a coleta integral no GitHub Actions; este documento não comprova execução integral do bot na companhia.
+A inspeção foi manual por controles de leitura. Os testes de integração usam DOM sintético e rede bloqueada. A coleta integral das 29 rotas foi posteriormente validada no Actions 36859515879, com 29/29 detalhes verificados. Isso comprova o percurso de leitura nessa execução, sem comprovar a comparação econômica completa ou qualquer operação real.
+
+## Inspeção de custos e identidade dos cartões em voo
+
+O cartão em voo do DC-9-10 não tem span acRegList, mas seu link tem callback de consulta fleet_details.php?id=21038003. Seu registro foi confirmado no detalhe. Essa observação orientou a correção posteriormente aprovada no Actions.
+
+Maintenance e Plan mostram horas, wear e disponibilidade em base, sem orçamento completo. A-Check/Repair chamam maint_plan_do.php, endpoint de serviço que NÃO foi acionado. At base nesse painel não foi usado para inferir a origem operacional própria de cada aeronave.
+
+Na aba Order, apenas o cartão de detalhes do ATR 72-500 foi aberto; o botão Order não foi acionado. #acModel contém linhas com células A-Check / $20,125 e Maint check / 480 Hours; #modelSelection confirma o nome, e o callback da consulta contém model ID 22. As referências não bastam para computar toda a manutenção por voo.
+
+Fuel: Current price $1,280 e gráfico Fuel price per 1,000 Lbs. Co2: Quota cost $133 e gráfico Co2 quota cost per 1,000. Os campos de compra não foram alterados. A conversão entre emissão kg/pax/km e quotas cobradas não foi confirmada.
+
+A documentação oficial [How does demand work](https://airlinemanager.zendesk.com/hc/en-us/articles/21732303589138-How-does-demand-work) confirma demanda diária por classe e ausência de passageiros após esgotamento; não fornece, nessa página, horário de renovação nem regra de compartilhamento por sentido. Referência de custo por hora baseada numa divisão linear do A-check seria uma hipótese, portanto não foi usada como custo confirmado.

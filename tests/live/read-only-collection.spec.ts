@@ -29,13 +29,18 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       evidence.summary=report.summary;
       const fleet=JSON.parse(await readFile('test-results/demand/fleet-observations.json','utf8'));
       const research=JSON.parse(await readFile('test-results/demand/route-research.json','utf8'));
+      const candidates=JSON.parse(await readFile('test-results/demand/candidate-data.json','utf8'));
       const verified=fleet.aircraft.filter((a:{detailsVerified:boolean})=>a.detailsVerified).length;
       const observed=research.aircraft.filter((a:{status:string})=>a.status==='observed').length;
       const failed=research.aircraft.filter((a:{status:string})=>['unavailable','partial'].includes(a.status)).length;
       evidence.fleetDetails={seen:fleet.aircraft.length,verified,unverified:fleet.aircraft.length-verified};
-      evidence.research={observed,failed,uiRestored:research.uiRestored,comparisonReady:false};
+      const expectedModels=new Set(research.aircraft.flatMap((a:any)=>(a.result?.quotes||[]).flatMap((q:any)=>q.autopriceReference?[q.autopriceReference.modelId]:[])));
+      evidence.research={observed,failed,uiRestored:research.uiRestored,comparisonReady:false,
+        candidateSources:{uiRestored:candidates.uiRestored,modelsObserved:candidates.models.length,modelsExpected:expectedModels.size,
+          fuelPriceObserved:!!candidates.market.fuel,co2PriceObserved:!!candidates.market.co2,candidates:candidates.candidates.length}};
       phase='data_validation';
       if(!report.collectionComplete||verified!==fleet.aircraft.length||!research.uiRestored||failed>0)throw new Error();
+      if(observed>0&&(!candidates.uiRestored||candidates.models.length!==expectedModels.size||!candidates.market.fuel||!candidates.market.co2))throw new Error();
       evidence.status='passed';
     } catch {
       throw new Error(`[ReadOnly] Validacao bloqueada na fase ${phase}; consulte os relatorios estruturados.`);

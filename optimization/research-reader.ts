@@ -6,6 +6,8 @@ import { DemandReader } from '../demand/reader';
 import { OptimizationConfig } from './report';
 import { fleetObservations } from './fleet-observations';
 import { collectOpenRouteSuggestions } from './suggestion-reader';
+import { ModelCostReference, readMarketPriceReferences, readModelCostReference } from './cost-reference-reader';
+import { candidateDemandEvidence } from './candidate-evidence';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -112,4 +114,53 @@ export async function writeRouteResearchReport(report: Awaited<ReturnType<typeof
   await writeFile(join(directory,'route-research.md'),['# Consulta de rotas — somente leitura','',...rows,'',
     'Sugestoes limitadas nao demonstram a melhor rota. Demanda restante, custos completos e tarifas efetivas ainda precisam ser confirmados.',
     ...report.warnings.map(w => '- '+w),''].join('\n'));
+}
+
+/** Adds available sources without manufacturing a complete RouteReview. */
+export async function collectCandidateData(page:Page,collection:CollectionResult,research:Awaited<ReturnType<typeof researchFleetCandidates>>){
+  const quotes=research.aircraft.flatMap(a=>a.result?.quotes||[]);
+  const models:ModelCostReference[]=[];const warnings:string[]=[];
+  let uiRestored=research.uiRestored;
+  let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true};
+  if(research.config.enabled&&uiRestored&&quotes.length){
+    const ids=[...new Set(quotes.flatMap(q=>q.autopriceReference?[q.autopriceReference.modelId]:[]))];
+    if(ids.length>10)warnings.push('MODEL_REFERENCE_LIMIT');
+    for(const id of ids.slice(0,10)){
+      try {
+        await openList(page,research.config.timeout);
+        const model=await readModelCostReference(page,id,research.config.timeout);
+        if(model)models.push(model);else warnings.push(`MODEL_REFERENCE_UNAVAILABLE:${id}`);
+      }catch{warnings.push(`MODEL_REFERENCE_UNAVAILABLE:${id}`);}
+      finally{try{await openList(page,research.config.timeout);}catch{uiRestored=false;warnings.push('COST_REFERENCE_LIST_RESTORE_FAILED');}}
+      if(!uiRestored)break;
+    }
+    if(uiRestored){
+      market=await readMarketPriceReferences(page,research.config.timeout);
+      try{if(!market.uiClosed)throw new Error();await openList(page,research.config.timeout);}
+      catch{uiRestored=false;warnings.push('MARKET_LIST_RESTORE_FAILED');}
+    }
+  }
+  const now=new Date();
+  const fresh=(stamp:string)=>{const age=now.getTime()-Date.parse(stamp);return Number.isFinite(age)&&age>=0&&age<=300000;};
+  const candidates=quotes.map(quote=>{
+    const demand=candidateDemandEvidence(quote,collection,now);
+    const model=models.find(m=>m.modelId===quote.autopriceReference?.modelId)||null;
+    const fuel=market.fuel&&fresh(market.fuel.observedAt)&&fresh(quote.observedAt)?quote.fuelLbs*market.fuel.pricePer1000/1000:null;
+    return {aircraftId:quote.aircraftId,from:quote.from,to:quote.to,quoteObservedAt:quote.observedAt,
+      demand,modelCostReference:model,costs:{fuelAtObservedMarketPrice:fuel,co2:null,maintenance:null,airportAndOther:null},
+      setupFee:quote.routeFee,costsComplete:false,netProfit:null,comparisonReady:false,mutationAuthorized:false,
+      missing:['FUTURE_OTHER_AIRCRAFT_RESERVATIONS','REVERSE_LEG_ECONOMICS','EFFECTIVE_FARES_AND_LOAD_FACTOR',
+        'CO2_QUOTA_CONVERSION','AIRCRAFT_EFFECTIVE_MAINTENANCE','AIRPORT_AND_OTHER_COSTS',
+        ...(!demand.remaining?['DIRECTIONAL_REMAINING_DEMAND']:[]),...(fuel===null?['FUEL_MARKET_PRICE']:[])]};
+  });
+  return {schemaVersion:1,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
+    uiRestored,market,models,warnings,candidates};
+}
+export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
+  await mkdir(directory,{recursive:true});
+  await writeFile(join(directory,'candidate-data.json'),JSON.stringify(report,null,2)+'\n');
+  await writeFile(join(directory,'candidate-data.md'),['# Evidencias das candidatas — simulacao','',
+    ...report.candidates.map(c=>`- ${c.aircraftId} ${c.from}–${c.to}: demanda ${c.demand.status}; combustivel ao preco observado ${c.costs.fuelAtObservedMarketPrice??'indisponivel'}; pendencias ${c.missing.join(', ')}.`),'',
+    'Referencia de A-check do catalogo nao confirma o custo efetivo da aeronave. Preco de mercado nao confirma o custo de aquisicao do estoque. Taxa de criacao nao e custo recorrente. Nenhum lucro liquido ou troca de rota autorizado.',
+    ...report.warnings.map(w=>'- '+w),''].join('\n'));
 }
