@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { readOpenCandidateQuote, QuoteIdentity } from '../../optimization/quote-reader';
+import { readOpenCandidateQuote, QuoteIdentity, parseQuoteAutoprice } from '../../optimization/quote-reader';
 import { readOperationalObservation } from '../../optimization/observations';
 
 const identity: QuoteIdentity = { aircraftId: '101', registration: 'TEST-1', airportId: '200', from: 'AAA', to: 'BBB' };
@@ -61,4 +61,14 @@ test('operational labels read observed units; cycles do not become a flight ID o
 test('missing and duplicate operational labels fail closed', async ({ page }) => {
   await page.setContent('<div id="details"><span class="s-text">Range</span><span class="s-text">Range</span></div>');
   expect(await readOperationalObservation(page.locator('#details'))).toBeNull();
+});
+
+test('quote Autoprice callback is read without execution or assuming effective VIP fare',async({page})=>{
+ await fixture(page);await page.locator('#introAuto').evaluate(e=>e.setAttribute('onclick',"playSound('neutral_click');autoPrice(783,1786,3039,22);"));
+ const r=await readOpenCandidateQuote(page,identity);
+ expect(r).toMatchObject({status:'observed',quote:{autopriceReference:{base:{Y:783,J:1786,F:3039},modelId:22,effectiveFares:null},comparisonReady:false}});
+ expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+test('unrecognized or invalid quote pricing callback stays unknown',()=>{
+ for(const s of ['autoPrice(-1,2,3,22);','autoPrice(1,2,3,22);danger();','unknown(1,2,3,22);','autoPrice(999999999999999999,2,3,22);'])expect(parseQuoteAutoprice(s)).toBeNull();
 });

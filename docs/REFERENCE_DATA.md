@@ -37,4 +37,4 @@ O primeiro usa apenas a biblioteca padrão Python e lê XML em streaming. O segu
 
 ## Pendências de produção
 
-Permanecem pendentes a coleta completa de candidatas pela interface e a validação da persistência de revisões entre execuções reais do GitHub Actions. Este avanço não habilita produção nem resolve essas pendências. Os testes usam dados simulados, sem operações no jogo.
+A persistência do transporte foi validada com eventos sintéticos em dois runners reais do GitHub Actions. Permanecem pendentes o histórico operacional da companhia, a coleta completa de candidatas e sua integração à execução do bot. Consulte [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) para evidências e limites atuais. Este avanço não habilita produção. Os testes usam dados simulados, sem operações no jogo.

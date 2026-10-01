@@ -236,3 +236,8 @@ Somente comparacoes completas (`would_reroute`, `keep_route`, `hold`) gravadas c
 Aeronaves em voo ou fora da propria base ficam pendentes ate uma execucao que as observe em solo na base. Nao se garante uma comparacao completa a cada 24 horas se o bot nao executar, se a aeronave nao retornar, ou se faltarem dados. O gatilho diario nao cria agendamento: o cron-job.org continua disparando o workflow existente. Nao foram alterados cron, branch main ou permissoes.
 
 O mecanismo de calendario, comparacao e deduplicacao esta implementado e testado localmente. A coleta automatica de candidatos completos e de eventos de retorno reais continua pendente. O transporte do journal deve ser inicializado/validado antes de habilitar `ENABLE_RETURN_JOURNAL`; enquanto estiver desabilitado, os relatorios sinalizam a pendencia e nao alegam persistencia entre execucoes. Todas as decisoes continuam em simulacao, sem alterar rotas, precos ou decolar.
+
+
+## Atualização consolidada — 01/10/2026
+
+A persistência real com eventos sintéticos foi validada em dois runners do GitHub Actions; a branch am4-runtime-state já existe. O scope operacional ainda não foi inicializado e ENABLE_RETURN_JOURNAL permanece desativado. As afirmações anteriores de que não existia branch ou teste de transporte real descrevem etapas anteriores. Consulte [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) para o estado atual, evidências e pendências da pesquisa de candidatas.

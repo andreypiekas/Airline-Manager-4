@@ -13,10 +13,20 @@ export interface CandidateQuote extends QuoteIdentity {
   routeFee: number;
   aircraftOnRoute: number;
   dailyDemand: Cabins;
+  autopriceReference: QuoteAutopriceReference | null;
   remainingDemand: null;
   netProfit: null;
   comparisonReady: false;
   mutationAuthorized: false;
+}
+/** Raw callback reference; effective VIP adjustments in autoPrice remain unverified. */
+export interface QuoteAutopriceReference { base: Cabins; modelId: number; effectiveFares: null }
+export function parseQuoteAutoprice(callback: string): QuoteAutopriceReference | null {
+  const match=callback.trim().match(/^(?:playSound\('neutral_click'\);\s*)?autoPrice\((\d+),(\d+),(\d+),(\d+)\);?$/);
+  if(!match)return null;
+  const values=match.slice(1).map(Number);
+  if(!values.every(n=>Number.isSafeInteger(n)&&n>=0))return null;
+  return {base:{Y:values[0],J:values[1],F:values[2]},modelId:values[3],effectiveFares:null};
 }
 export type QuoteReadResult = { status: 'observed'; quote: CandidateQuote } | { status: 'unavailable'; reason: string };
 
@@ -66,9 +76,11 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
     const time = raw.duration.match(/^(\d{2,3}):([0-5]\d):([0-5]\d)$/);
     if (!time || !/^\$\s*[\d,]+$/.test(raw.fee) || !/^\d+(?:\.\d+)?$/.test(raw.co2)) throw new Error();
     const durationSeconds = Number(time[1])*3600 + Number(time[2])*60 + Number(time[3]);
+    const auto=panel.locator('#introAuto');
+    const autopriceReference=await auto.count()===1 && await auto.isVisible()?parseQuoteAutoprice(await auto.getAttribute('onclick')||''):null;
     const quote: CandidateQuote = { ...identity, observedAt: new Date().toISOString(), distanceKm: integerText(raw.distance), durationSeconds,
       fuelLbs: integerText(raw.fuel), co2KgPerPaxKm: Number(raw.co2), costIndex: integerText(raw.costIndex), routeFee: integerText(raw.fee.replace(/^\$\s*/, '')),
-      aircraftOnRoute: integerText(raw.aircraft), dailyDemand: { Y: integerText(raw.daily[0]), J: integerText(raw.daily[1]), F: integerText(raw.daily[2]) },
+      aircraftOnRoute: integerText(raw.aircraft), autopriceReference, dailyDemand: { Y: integerText(raw.daily[0]), J: integerText(raw.daily[1]), F: integerText(raw.daily[2]) },
       remainingDemand: null, netProfit: null, comparisonReady: false, mutationAuthorized: false };
     if (quote.distanceKm <= 0 || durationSeconds <= 0 || quote.fuelLbs <= 0 || !Number.isFinite(quote.co2KgPerPaxKm) || quote.costIndex > 200) throw new Error();
     return { status: 'observed', quote };
