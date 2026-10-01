@@ -1,6 +1,6 @@
 # Estado técnico da implementação — 01/10/2026
 
-O executor individual de retornos pela rota existente foi validado em simulacao e em um piloto real autorizado, com confirmacao posterior de identidade, estado em voo, contador e passageiros embarcados. O padrao dos workflows continua simulacao; operacao real exige input explicito. Rotas, tarifas, compras e revisao economica incompleta permanecem bloqueadas. Este documento omite identificadores e dados operacionais da conta.
+O executor individual de retornos pela rota existente foi validado em simulacao e em um piloto real autorizado, com confirmacao posterior de identidade, estado em voo, contador e passageiros embarcados. Sem ativacao, os workflows usam simulacao; operacao real exige input explicito ou EXECUTE_INDIVIDUAL=true no repositorio. Rotas, tarifas, compras e revisao economica incompleta permanecem bloqueadas. Este documento omite identificadores e dados operacionais da conta.
 
 | Componente | Situação |
 | --- | --- |
@@ -33,7 +33,7 @@ O executor individual de retornos pela rota existente foi validado em simulacao 
 
 ## Validacoes anteriores das fontes
 
-- 424 testes locais aprovados; typecheck, build:state e git diff --check aprovados. Os testes adicionais verificam contadores, limites de disponibilidade, linhas do historico financeiro, sinais, quantidades, controles nao reconhecidos, campos ocultos e ausencia de cliques operacionais.
+- 443 testes locais aprovados; typecheck, build:state e git diff --check aprovados. Os testes adicionais verificam contadores, limites de disponibilidade, linhas do historico financeiro, sinais, quantidades, controles nao reconhecidos, campos ocultos e ausencia de cliques operacionais.
 - CI de código aprovada: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36913978609
 - Coleta e fontes implementadas aprovadas: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36913973532
 - Commit de código validado: 056005a67fe18f48851057eb3f8eba24ab315d6f.
@@ -83,3 +83,7 @@ ENABLE_ROUTE_RESEARCH=false é o padrão. Quando habilitado, maxAircraft/maxSugg
 5. Validação dos eventos de retorno persistidos e cobertura suficiente da revisão diária.
 
 As decisões incompletas permanecem bloqueadas para permitir nova tentativa na próxima execução. Essas lacunas bloqueiam trocas de rota e a liberacao de aeronaves na propria base. O executor validado pode realizar retornos de rotas existentes, sem afirmar que o otimizador completo esta pronto.
+
+## Ativacao por variaveis do repositorio
+
+A execucao 36922342131 confirmou sete decisoes suficientes em simulacao e nenhuma chamada ao executor: o workflow lia apenas inputs. Os dois workflows agora resolvem EXECUTE_INDIVIDUAL e MAX_INDIVIDUAL_DEPARTURES em um script compartilhado, com precedencia documentada, override de simulacao e log sanitizado do modo efetivo. Dezenove testes de configuracao elevam a suite para 443; typecheck, build:state e diff check aprovados. A correcao nao repete decolagens reais durante seus testes.

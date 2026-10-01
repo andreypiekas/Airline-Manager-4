@@ -8,7 +8,7 @@ O fluxo principal com DemandManager utiliza o mesmo login normal validado na col
 
 Com `ENABLE_DEMAND_MANAGER=true` e `DEMAND_DRY_RUN=true` (padrao), a rotina faz login, abre Fleet/Routes, coleta dados e termina. Não executa combustível, CO₂, manutenção, campanhas, decolagens, alteração de preços, Ground, Reroute, compra ou venda. `ENABLE_DEPART` não impede a análise somente de leitura. Falhas **nunca** caem em `departAll`.
 
-O fluxo legado continua no codigo para compatibilidade, mas os workflows publicados fixam o DemandManager e o fail-safe ativos. Os inputs `execute_individual` (principal) ou `execute` (isolado) permitem selecionar explicitamente o executor real. Variaveis antigas nao restauram decolagens em massa nos workflows. Nao foram alterados secrets nem a configuracao do cron-job.org. A validacao isolada de fontes continua somente de leitura.
+O fluxo legado continua no codigo para compatibilidade, mas os workflows publicados fixam o DemandManager e o fail-safe ativos. Os inputs `execute_individual` (principal) ou `execute` (isolado), ou a variavel `EXECUTE_INDIVIDUAL=true`, permitem selecionar explicitamente o executor real. `departure_mode=simulation` sobrepoe a ativacao; `MAX_INDIVIDUAL_DEPARTURES` define o limite quando o input de limite e zero. Variaveis antigas nao restauram decolagens em massa nos workflows. Nao foram alterados secrets nem a configuracao do cron-job.org. A validacao isolada de fontes continua somente de leitura.
 
 ## Inspeção em 29/09/2026
 
