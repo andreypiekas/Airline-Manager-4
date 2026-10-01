@@ -35,3 +35,26 @@ test('expired aircraft observation blocks all research clicks',async({page})=>{
  await fixture(page);const r=await collectOpenRouteSuggestions(page,{...aircraft,observedAt:'2000-01-01T00:00:00Z'},'AAA',3,500);
  expect(r.warnings).toEqual(['AIRCRAFT_OBSERVATION_EXPIRED']);expect(await page.evaluate(()=>(window as any).reads)).toBe(0);
 });
+
+test('waits for replacement suggestion markup instead of accepting the previous Next button',async({page})=>{
+ await fixture(page);
+ await page.evaluate(()=>{
+   const ajax=(window as any).Ajax;(window as any).suggestRequests=0;
+   (window as any).Ajax=(url:string)=>{
+     if(!url.startsWith('add_airports.php')){ajax(url);return;}
+     (window as any).suggestRequests++;
+     const n=(window as any).suggestRequests;
+     setTimeout(()=>{ajax(url);if(n===2){const next=document.querySelector('#introSuggestm')!;next.setAttribute('onclick',next.getAttribute('onclick')!.replace('airportId=200','airportId=201'));}},50);
+   };
+ });
+ const r=await collectOpenRouteSuggestions(page,aircraft,'AAA',2,500);
+ expect(r.status).toBe('observed');expect(r.quotes.map(q=>q.airportId)).toEqual(['200','201']);expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
+test('rejects executable code disguised between multiple Back callback comments',async({page})=>{
+ await fixture(page);await page.evaluate(()=>{
+  const ajax=(window as any).Ajax;(window as any).Ajax=(url:string)=>{ajax(url);if(url.startsWith('new_route_info.php'))document.querySelector('#back')!.setAttribute('onclick',"$('#newRouteInfo').hide('fast');playSound('neutral_click');/*first*/danger();/*second*/");};
+ });
+ const r=await collectOpenRouteSuggestions(page,aircraft,'AAA',1,500);
+ expect(r.status).toBe('partial');expect(r.warnings).toContain('SUGGESTION_LOADING_OR_IDENTITY_FAILED');expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});

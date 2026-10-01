@@ -21,7 +21,13 @@ export async function collectOpenRouteSuggestions(page: Page, aircraft: Aircraft
       const allowed=`playSound('neutral_click');Ajax('add_airports.php?mode=suggest&id=${aircraft.aircraftId}','runme',this,false,true);`;
       const tail=callback.slice(allowed.length).replace(/\s/g,'');
       if(!callback.startsWith(allowed)||!(tail===''||i===0&&tail==='isItrouteClick=true;hideAirpAndHubs();remPrevClickedMarkerAirc();'))throw new Error();
-      await suggest.click({timeout});
+      const previousNext=await page.locator('#introSuggestm').count()===1 ? await page.locator('#introSuggestm').elementHandle() : null;
+      try {
+        await suggest.click({timeout});
+        // Ajax replaces the suggestion markup. Do not accept the previous destination
+        // while the next read request is still loading.
+        if(previousNext)await expect.poll(()=>previousNext.evaluate(e=>e.isConnected),{timeout}).toBe(false);
+      } finally {await previousNext?.dispose();}
       const next=page.locator('#introSuggestm');
       await expect(next).toHaveAttribute('onclick',new RegExp(`^playSound\\('neutral_click'\\);Ajax\\('new_route_info\\.php\\?id=${aircraft.aircraftId}&airportId=\\d+&ferry=0','newRouteInfo',this,false,true\\);\\s*$`),{timeout});
       const quoteCallback=await next.getAttribute('onclick')||'';
@@ -39,7 +45,7 @@ export async function collectOpenRouteSuggestions(page: Page, aircraft: Aircraft
       const back=panel.getByRole('button',{name:/Back$/});
       if(await back.count()!==1)throw new Error();
       // Confirm the inspected close-only callback before clicking. Never click Create route.
-      if(!/^\$\('#newRouteInfo'\)\.hide\('fast'\);playSound\('neutral_click'\);(?:\/\*[^]*\*\/)?$/.test(await back.getAttribute('onclick')||''))throw new Error();
+      if(!/^\$\('#newRouteInfo'\)\.hide\('fast'\);playSound\('neutral_click'\);(?:\/\*(?:(?!\*\/)[\s\S])*\*\/)?$/.test(await back.getAttribute('onclick')||''))throw new Error();
       await back.click({timeout});await panel.waitFor({state:'hidden',timeout});
     }
     result.status=result.quotes.length?'observed':'unavailable';

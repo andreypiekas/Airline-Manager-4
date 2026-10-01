@@ -73,11 +73,31 @@ export class DemandReader {
     return result;
   }
 
+  /** Re-read a ready aircraft on the currently visible route page before research. */
+  async readReadyAircraftDetails(expected: AircraftSnapshot): Promise<AircraftSnapshot> {
+    if (!/^[1-9]\d*$/.test(expected.aircraftId) || !/^[1-9]\d*$/.test(expected.routeId)) throw new Error('RESEARCH_IDENTITY_INVALID');
+    const row = this.page.locator(`#routeMainList${expected.routeId}`);
+    if (await row.count() !== 1 || !await row.isVisible() || !await row.evaluate(e => e.classList.contains('classPAX') && e.classList.contains('listDepartable'))) throw new Error('RESEARCH_NOT_READY');
+    const depart = row.locator(`#listDepart${expected.routeId}`);
+    if (!await depart.isVisible() || !await depart.isEnabled()) throw new Error('RESEARCH_NOT_READY');
+    const registration = row.locator(`#acRegList${expected.aircraftId}`);
+    if (await registration.count() !== 1 || (await registration.innerText()).trim() !== expected.registration) throw new Error('RESEARCH_IDENTITY_INVALID');
+    const item: AircraftSnapshot = { ...expected, capacity: null, remaining: null, dailyTotal: null, operational: null, fares: undefined, state: 'unavailable' };
+    const card: RouteCard = { ...expected, ready: true, inflight: false, pax: true, onboardText: '' };
+    await this.readDetails(card, item);
+    if (item.issue || item.from !== expected.from || item.to !== expected.to || !item.capacity || !expected.capacity ||
+      ['Y','J','F'].some(k => item.capacity![k as keyof typeof item.capacity] !== expected.capacity![k as keyof typeof expected.capacity])) throw new Error('RESEARCH_CONTEXT_CHANGED');
+    return item;
+  }
+
   private async readDetails(card: RouteCard, item: AircraftSnapshot): Promise<void> {
     if (!/^\d+$/.test(card.routeId) || !/^\d+$/.test(card.aircraftId)) throw new Error('Invalid identity');
     const cardLocator = this.page.locator(`#routeMainList${card.routeId}`);
     const link = cardLocator.locator('a').filter({ has: this.page.locator(`#acRegList${card.aircraftId}`) });
     if (await link.count() !== 1) throw new Error('Ambiguous aircraft link');
+    const callback = (await link.getAttribute('onclick') || '').replace(/\s/g, '');
+    const expected = `playSound('neutral_click');Ajax('fleet_details.php?id=${card.aircraftId}','detailsAction');if(intro==0){$('#routeAction').hide();}`;
+    if (callback !== expected) throw new Error('Unverified details callback');
     await link.click({ timeout: this.timeout });
     const details = this.page.locator('#detailsAction');
     await details.waitFor({ state: 'visible', timeout: this.timeout });

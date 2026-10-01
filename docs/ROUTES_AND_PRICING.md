@@ -241,3 +241,9 @@ O mecanismo de calendario, comparacao e deduplicacao esta implementado e testado
 ## Atualização consolidada — 01/10/2026
 
 A persistência real com eventos sintéticos foi validada em dois runners do GitHub Actions; a branch am4-runtime-state já existe. O scope operacional ainda não foi inicializado e ENABLE_RETURN_JOURNAL permanece desativado. As afirmações anteriores de que não existia branch ou teste de transporte real descrevem etapas anteriores. Consulte [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md) para o estado atual, evidências e pendências da pesquisa de candidatas.
+
+### Consulta opcional integrada à simulação — 01/10/2026
+
+`ENABLE_ROUTE_RESEARCH=false` mantém a pesquisa nativa desligada inicialmente. Com `true`, a simulação consulta até `ROUTE_RESEARCH_MAX_AIRCRAFT=3` aeronaves elegíveis na própria origem, até `ROUTE_RESEARCH_MAX_SUGGESTIONS=3` orçamentos cada. Os dois limites aceitam 1–10. Gera `route-research.json` e `route-research.md` no artefato demand-report. Dados ausentes, aeronave fora da base e callbacks desconhecidos bloqueiam a consulta; falha de restauração interrompe a fila.
+
+O percurso reabre a lista pela aba Fleet quando o popup já está aberto, confirma a identidade por ID/registro e relê posição/layout antes do planejador. Retorna à primeira página de uma lista nova. A consulta não fornece RouteReview completo e não altera o histórico de revisões bem-sucedidas. Sugestões limitadas não garantem melhor rota nem revisão de toda a frota no dia. A validação integral dessa integração no Actions continua pendente. A alteração não habilita trocas, tarifas ou decolagens.

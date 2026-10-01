@@ -12,7 +12,7 @@ Este documento consolida e atualiza as pendências dos relatórios anteriores. T
 | Revisão diária e por retorno | Motor e deduplicação implementados; fornecedor completo de dados de comparação ainda pendente |
 | Persistência pela API real do GitHub | Validada com eventos sintéticos em dois runners independentes |
 | Leitura das sugestões nativas | Novo módulo limitado e testado; exige planejador já aberto para aeronave em solo na base |
-| Integração automática da pesquisa à execução completa do bot | Pendente; módulo de sugestões ainda não é chamado por runDemandSimulation |
+| Integração da pesquisa à simulação | Implementada como consulta opcional e limitada; gera route-research.json/MD; coleta integral no Actions ainda pendente |
 | Comparação econômica completa das candidatas | Bloqueada por dados incompletos |
 | Decolagens, trocas e ajustes automáticos novos | Desativados; dependem de autorização posterior e integração validada |
 
@@ -28,7 +28,11 @@ A nova validação roda somente em pushes dos arquivos relevantes na branch de d
 
 `optimization/suggestion-reader.ts` consulta até três sugestões por padrão, com limite configurável de 1 a 10. Requer aeronave ready na própria origem resolvida, observação de até cinco minutos e um planejador já aberto para essa aeronave. Verifica os callbacks dos botões Suggest/Next e suas identidades antes dos cliques. Fecha o orçamento apenas pelo botão Back com callback de fechamento confirmado. Não clica Create route, Autoprice, Depart ou Ferry flight.
 
-O coletor encerra destinos repetidos e informa falhas de carregamento ou identidade. O conjunto permanece `candidatesComplete=false` e `comparisonReady=false`: sugestões nativas limitadas não constituem pesquisa exaustiva. O módulo não abre o planejador nem percorre a frota sozinho. A futura integração precisa validar abertura, seleção e restauração da lista paginada antes de ser ativada.
+O coletor encerra destinos repetidos e informa falhas de carregamento ou identidade. O conjunto permanece `candidatesComplete=false` e `comparisonReady=false`: sugestões nativas limitadas não constituem pesquisa exaustiva. O leitor isolado não abre o planejador. A integração `optimization/research-reader.ts`, chamada por `runDemandSimulation`, reabre a lista, localiza a aeronave pela paginação, relê seus detalhes, confirma posição/layout/alcance/pista e só então abre o planejador. A restauração volta a uma lista nova na primeira página; não se presume que o cursor anterior foi preservado. Falha na restauração interrompe a fila. Callbacks desconhecidos são rejeitados antes dos cliques.
+
+A configuração inicial é `ENABLE_ROUTE_RESEARCH=false`, `ROUTE_RESEARCH_MAX_AIRCRAFT=3` e `ROUTE_RESEARCH_MAX_SUGGESTIONS=3`, com limites de 1 a 10. Mesmo habilitada, a consulta apenas lê e gera artefatos; não completa uma comparação econômica e não habilita decisões reais. Os limites podem deixar outras aeronaves pendentes; a consulta limitada não comprova que toda a frota recebeu revisão diária. Nenhuma variável operacional do repositório foi alterada.
+
+A inspeção de 01/10 confirmou que `#mapRoutes` alterna abertura/fechamento do painel; quando o painel já está aberto, a integração usa o callback de consulta da aba `#popBtn1`. O callback do link de aeronave também passa a ser validado. A leitura de sugestões aguarda substituição do botão Next anterior para evitar aceitar destino antigo durante uma resposta Ajax em andamento.
 
 Seletores confirmados na inspeção: `#introSuggest`, `#introSuggestOR`, `#introSuggestm`, `#newRouteInfo`, `.col-3.m-text > b`, `#departFlightTimeInfo`, `#departFuelInfo`, `#departCo2Info`, `#costIndexBar`, `#introAuto`. O leitor de orçamento já valida classe, aeroporto, registro, taxa e número de aeronaves na rota.
 
@@ -38,10 +42,14 @@ O orçamento apresenta Daily pax demand, e não demanda restante. Não fornece c
 
 ## Pendências concretas
 
-1. Integrar e validar a abertura/leitura/restauração do planejador por aeronave elegível na coleta completa.
+1. Validar a integração publicada na coleta integral em simulação no Actions. O percurso de leitura para o ATR em GRU foi confirmado manualmente no navegador; isso não substitui a execução integral do código.
 2. Obter demanda restante por sentido e reservas das outras aeronaves para as candidatas.
 3. Confirmar preços efetivos do orçamento e estimativas completas de custo/ocupação para comparação.
 4. Confirmar eventos de retorno persistidos; o gatilho diário funciona independentemente desses eventos, quando existem dados completos e aeronave em solo na base.
 5. Executar a coleta completa em simulação no Actions, revisando seus artefatos. Nenhum teste sintético comprova essa integração com a companhia.
 
 A solução não está pronta para executar trocas ou decolagens inteligentes reais. As decisões com dados ausentes continuam bloqueadas e a revisão permanece pendente, permitindo tentar novamente na próxima execução.
+
+## Inspeção adicional de 01/10
+
+Acesso à companhia confirmado pelo formulário seguro. BC-605 estava em XAP com próximo trecho XAP–GRU; sua origem cadastrada permanece GRU. O ATR retornou de BSB para GRU durante a inspeção e foi consultado em solo na própria base. Confirmados capacidade 44/9/0, demanda restante 731/510/295 e demanda diária 886/543/295. O orçamento sugerido GRU–IGU foi aberto e fechado sem criar rota ou aplicar Autoprice. Ver detalhes em `INSPECTION_2026-10-01.md`.

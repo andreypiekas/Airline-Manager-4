@@ -1,3 +1,4 @@
+import { researchConfig } from '../optimization/research-reader';
 import { optimizationConfig } from '../optimization/report';
 import { readDemandConfig } from '../demand/config';
 import { runDemandSimulation } from '../demand/run';
@@ -18,6 +19,7 @@ test('All Operations', async ({ page }) => {
   const demandConfig = readDemandConfig();
   if (demandConfig.enabled) {
     optimizationConfig(); // Reject invalid optimization settings before login.
+    researchConfig();
     test.setTimeout(600000);
     await new GeneralUtils(page).login(page);
     await page.locator('#mapRoutes').waitFor({ state: 'visible', timeout: 30000 });

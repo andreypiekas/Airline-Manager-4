@@ -22,10 +22,11 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
       const ids=index===0 ? [101,102] : [103];
       document.getElementById('routesContainer').innerHTML='<button id="departAll" onclick="window.mutations++">Depart all</button>'+ids.map(id=>
         '<div class="row classPAX '+(id===102?'':'listDepartable')+'" id="routeMainList'+id+'">'+
-        '<span class="s-text">AAA - BBB</span><a href="#" onclick="show('+id+');return false"><span id="acRegList'+(id+1000)+'">TEST-'+id+'</span> - Test aircraft</a>'+
+        '<span class="s-text">AAA - BBB</span><a href="#" onclick="playSound(\'neutral_click\');Ajax(\'fleet_details.php?id='+(id+1000)+'\',\'detailsAction\');if(intro==0) {$(\'#routeAction\').hide();}"><span id="acRegList'+(id+1000)+'">TEST-'+id+'</span> - Test aircraft</a>'+
         (id===102?'Onboard: 40 / 0 / 0':'Demand: 90 / 0 / 0 <button id="listDepart'+id+'" onclick="window.mutations++">Depart</button>')+'</div>').join('')+
         '<ul class="pagination">'+(index===0&&options.pages===2?'<a href="#" onclick="render('+(options.loop?0:1)+');return false">Next</a>':'')+'</ul>';
     }
+    const intro=0; function playSound(){} function $(selector){return {hide(){document.querySelector(selector).style.display='none'}}} function Ajax(url){show(Number(url.split('id=')[1])-1000)}
     function show(id) {
       if(options.missingDetails) return;
       document.getElementById('routeAction').style.display='none';
@@ -126,4 +127,10 @@ test('optional inflight inspection reads capacity and operational data without a
     capacity: {Y:100,J:0,F:0}, operational: {rangeKm:3440,cycles:206,flightId:null,homeBase:null} });
   expect(result.aircraft[1].issue).toBeUndefined();
   expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
+});
+
+test('unknown aircraft link callback is rejected before a click',async({page})=>{
+ await fixture(page);await page.locator('#routeMainList101 a').evaluate(e=>e.setAttribute('onclick','window.mutations++'));
+ const r=await new DemandReader(page,400).collect();expect(r.aircraft[0].state).toBe('unavailable');
+ expect(r.warnings).toContain('DETAILS_UNAVAILABLE:101');expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });

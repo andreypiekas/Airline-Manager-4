@@ -100,6 +100,9 @@ jobs:
         ROUTE_REVIEW_TIMEZONE: ${{ vars.ROUTE_REVIEW_TIMEZONE }}
         AIRLINE_BASES_JSON: ${{ vars.AIRLINE_BASES_JSON }}
         AIRCRAFT_ORIGINS_JSON: ${{ vars.AIRCRAFT_ORIGINS_JSON || '[]' }}
+        ENABLE_ROUTE_RESEARCH: ${{ vars.ENABLE_ROUTE_RESEARCH || 'false' }}
+        ROUTE_RESEARCH_MAX_AIRCRAFT: ${{ vars.ROUTE_RESEARCH_MAX_AIRCRAFT || '3' }}
+        ROUTE_RESEARCH_MAX_SUGGESTIONS: ${{ vars.ROUTE_RESEARCH_MAX_SUGGESTIONS || '3' }}
         ENABLE_ROUTE_OPTIMIZER: ${{ vars.ENABLE_ROUTE_OPTIMIZER || 'true' }}
         ROUTE_MIN_OCCUPANCY_PERCENT: ${{ vars.ROUTE_MIN_OCCUPANCY_PERCENT || '80' }}
         ROUTE_MIN_IMPROVEMENT_PERCENT: ${{ vars.ROUTE_MIN_IMPROVEMENT_PERCENT || '0' }}
@@ -147,6 +150,9 @@ jobs:
       run: |
         if [ -f test-results/demand/demand-report.md ]; then
           cat test-results/demand/demand-report.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/route-research.md ]; then
+          cat test-results/demand/route-research.md >> "$GITHUB_STEP_SUMMARY"
         fi
         if [ -f test-results/demand/optimization-report.md ]; then
           cat test-results/demand/optimization-report.md >> "$GITHUB_STEP_SUMMARY"
