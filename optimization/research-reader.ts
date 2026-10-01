@@ -126,7 +126,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   const models:ModelCostReference[]=[];const warnings:string[]=[];
   let uiRestored=research.uiRestored;
   let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true,stage:'not_requested',warnings:[],unitLabels:[]};
-  let maintenance:Awaited<ReturnType<typeof readAircraftMaintenanceReferences>>={status:'not_requested',observedAt:new Date().toISOString(),complete:false,uiClosed:true,aircraft:[],warnings:[]};
+  let maintenance:Awaited<ReturnType<typeof readAircraftMaintenanceReferences>>={status:'not_requested',stage:'not_requested',observedAt:new Date().toISOString(),complete:false,uiClosed:true,aircraft:[],warnings:[]};
   // Market and maintenance sources must be validated even when no aircraft is eligible for research.
   if(research.config.enabled&&uiRestored){
     const ids=[...new Set(quotes.flatMap(q=>q.autopriceReference?[q.autopriceReference.modelId]:[]))];

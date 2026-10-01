@@ -103,6 +103,8 @@ jobs:
         ENABLE_ROUTE_RESEARCH: ${{ vars.ENABLE_ROUTE_RESEARCH || 'false' }}
         ROUTE_RESEARCH_MAX_AIRCRAFT: ${{ vars.ROUTE_RESEARCH_MAX_AIRCRAFT || '3' }}
         ROUTE_RESEARCH_MAX_SUGGESTIONS: ${{ vars.ROUTE_RESEARCH_MAX_SUGGESTIONS || '3' }}
+        ROUTE_RESERVATION_NEXT_LEGS: ${{ vars.ROUTE_RESERVATION_NEXT_LEGS || '2' }}
+        ROUTE_RESERVATION_POOL_SCOPE: ${{ vars.ROUTE_RESERVATION_POOL_SCOPE || 'airport-pair' }}
         ENABLE_ROUTE_OPTIMIZER: ${{ vars.ENABLE_ROUTE_OPTIMIZER || 'true' }}
         ROUTE_MIN_OCCUPANCY_PERCENT: ${{ vars.ROUTE_MIN_OCCUPANCY_PERCENT || '80' }}
         ROUTE_MIN_IMPROVEMENT_PERCENT: ${{ vars.ROUTE_MIN_IMPROVEMENT_PERCENT || '0' }}
@@ -240,4 +242,3 @@ jobs:
           --data-urlencode "text=Airline Manager 4: $STATUS | $RUN_URL" \
           "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
           > /dev/null
-

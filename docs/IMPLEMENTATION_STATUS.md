@@ -20,7 +20,7 @@ Todo gerenciamento novo permanece em simulação. Não houve operações no jogo
 
 ## Validação
 
-- 338 testes locais aprovados; typecheck, build:state e git diff --check aprovados. Validacao adicional das novas fontes no Actions ainda em andamento.
+- 339 testes locais aprovados; typecheck, build:state e git diff --check aprovados. Validacao adicional das novas fontes no Actions ainda em andamento.
 - CI de código aprovada: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36862961607
 - Coleta e fontes implementadas aprovadas: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36862952783
 - Commit de código validado: 0ee119a39c68375c1f01f0f7d5e7831707612fac.

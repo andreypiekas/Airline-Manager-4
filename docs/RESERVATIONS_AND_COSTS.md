@@ -26,11 +26,11 @@ ROUTE_RESERVATION_POOL_SCOPE=airport-pair
 DEMAND_MAX_AGE_SECONDS=300
 ```
 
-`NEXT_LEGS` aceita 1–20. `airport-pair` junta conservadoramente os sentidos no cenario; isso nao confirma que o jogo os compartilha. `directional` separa os sentidos. A politica de duas etapas nao garante cobertura de um dia inteiro. Nao sao conhecidos todos os horarios futuros, as trocas futuras de rota ou a renovacao exata da demanda. Por isso `futureScheduleComplete=false`, `demandNetOfOtherAircraft=false` e `comparisonReady=false` permanecem obrigatorios.
+`NEXT_LEGS` aceita 1–20. As duas variaveis ROUTE_RESERVATION sao encaminhadas das GitHub Variables pelos workflows operacional e de coleta; nenhum valor foi alterado na conta. `airport-pair` junta conservadoramente os sentidos no cenario; isso nao confirma que o jogo os compartilha. `directional` separa os sentidos. A politica de duas etapas nao garante cobertura de um dia inteiro. Nao sao conhecidos todos os horarios futuros, as trocas futuras de rota ou a renovacao exata da demanda. Por isso `futureScheduleComplete=false`, `demandNetOfOtherAircraft=false` e `comparisonReady=false` permanecem obrigatorios.
 
 ## Manutencao observada
 
-`optimization/maintenance-reader.ts` consulta o menu Maintenance e a aba Plan. Le os cartoes `.maint-list-sort`, `data-reg`, `data-base`, `data-wear`, `data-hours` e `controls<ID>`, conferindo registro, identidade e labels visiveis. Rejeita filtro diferente de Showing all, cartoes ocultos, duplicados e valores divergentes. Fecha o popup e o chamador restaura Fleet.
+`optimization/maintenance-reader.ts` consulta o menu Maintenance e a aba Plan. Aguarda o callback da aba anterior ser substituido pelo callback confirmado de Plan, sem clicar no controle antigo. Le os cartoes `.maint-list-sort`, `data-reg`, `data-base`, `data-wear`, `data-hours` e `controls<ID>`, conferindo registro, identidade e labels visiveis. Rejeita filtro diferente de Showing all, cartoes ocultos, duplicados e valores divergentes. Fecha o popup e o chamador restaura Fleet. Diagnosticos registram somente a etapa de falha; nunca HTML, formularios ou dados de sessao.
 
 Os campos Flight hours, Hours to check e Wear sao referencias de estado. At base nao define a origem propria da aeronave. A-Check, Repair, Modify e controles Bulk nunca sao clicados. Precos efetivos de check/reparo continuam indisponiveis; as horas restantes nao permitem deduzir com seguranca o intervalo ou os ajustes de custo da aeronave. Com pesquisa habilitada, manutencao e mercados sao consultados mesmo sem candidatas elegiveis; o teste isolado exige essas fontes e nao considera sua ausencia uma validacao bem-sucedida.
 

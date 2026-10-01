@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: validar manutencao e mercados mesmo quando nao houver candidatas elegiveis.
+# Revisao: aguardar substituicao do controle de manutencao antes de clicar na aba Plan.
 on:
   workflow_dispatch:
   push:
@@ -40,6 +40,8 @@ jobs:
           ROUTE_REVIEW_TIMEZONE: America/Sao_Paulo
           MIN_DEMAND_PERCENTAGE: '80'
           DEMAND_MAX_AGE_SECONDS: '300'
+          ROUTE_RESERVATION_NEXT_LEGS: ${{ vars.ROUTE_RESERVATION_NEXT_LEGS || '2' }}
+          ROUTE_RESERVATION_POOL_SCOPE: ${{ vars.ROUTE_RESERVATION_POOL_SCOPE || 'airport-pair' }}
         run: npx playwright test -c playwright.collection.config.ts
       - name: Resumo da coleta
         if: always()

@@ -1,4 +1,4 @@
-import { Page } from '@playwright/test';
+import { expect, Page } from '@playwright/test';
 import { CollectionResult } from '../demand/types';
 import { integerText } from '../demand/parsing';
 import { closeReadOnlyPopup } from './cost-reference-reader';
@@ -10,23 +10,30 @@ export interface AircraftMaintenanceReference {
 }
 /** Reads the Plan TAB only. A-Check/Repair/Modify/Bulk controls are never clicked. */
 export async function readAircraftMaintenanceReferences(page:Page,collection:CollectionResult,timeout=10000) {
-  const report={status:'unavailable',observedAt:new Date().toISOString(),complete:false,uiClosed:false,
+  const report={status:'unavailable',stage:'fleet_validation',observedAt:new Date().toISOString(),complete:false,uiClosed:false,
     aircraft:[] as AircraftMaintenanceReference[],warnings:[] as string[]};
   try {
     if (!Number.isSafeInteger(timeout)||timeout<1||timeout>30000 || !collection.complete ||
       collection.expectedRoutes!==collection.aircraft.length || !collection.aircraft.length ||
       new Set(collection.aircraft.map(a=>a.aircraftId)).size!==collection.aircraft.length) throw new Error();
-    await closeReadOnlyPopup(page,timeout);
+    report.stage='popup_close';await closeReadOnlyPopup(page,timeout);
+    report.stage='menu';
     const menu=page.locator('#smallMainMenu').getByText('Maintenance',{exact:true}).locator('../..');
     if(await menu.count()!==1||!await menu.isVisible()||(await menu.getAttribute('onclick')||'').replace(/\s/g,'')!==
       "hideAllWhenClick();popup('maintenance_main.php','Maintenance',false,false,true);") throw new Error();
     await menu.click({timeout});
+    report.stage='plan_control';
     const plan=page.locator('#popBtn2');await plan.waitFor({state:'visible',timeout});
-    if(await plan.count()!==1||(await plan.getAttribute('onclick')||'').replace(/\s/g,'')!==
-      "$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('maint_plan.php','maintAction',this,false,false);") throw new Error();
+    const callback="$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('maint_plan.php','maintAction',this,false,false);";
+    // A reopened popup initially exposes the OLD Fleet/Co2 tab while the new AJAX payload loads.
+    // Observe replacement; never click the stale or unknown callback.
+    await expect.poll(async()=>await plan.count()===1?(await plan.getAttribute('onclick')||'').replace(/\s/g,''):'',{timeout}).toBe(callback);
     await plan.click({timeout});
+    report.stage='cards';
     const rows=page.locator('#maintAction .maint-list-sort');await rows.first().waitFor({state:'visible',timeout});
+    report.stage='filter';
     if((await page.locator('#maintAction #baseOnly').innerText()).trim()!=='Showing all') throw new Error();
+    report.stage='read_values';
     const raw=await rows.evaluateAll(elements=>elements.map(row=>{
       const visible=(e:Element)=>!!e.getClientRects().length;
       if(!visible(row))throw new Error();
@@ -44,6 +51,7 @@ export async function readAircraftMaintenanceReferences(page:Page,collection:Col
         hours:value('Flight hours'),remaining:value('Hours to check'),wear:value('Wear'),baseLabel:badges[0].textContent?.trim()};
     }));
     const stamp=new Date().toISOString();
+    report.stage='parse_values';
     const parsed=raw.map(r=>{
       const id=r.controlsId.match(/^controls([1-9]\d*)$/);const wear=r.wear.match(/^(\d+(?:\.\d+)?)%$/);
       const aircraft=collection.aircraft.find(a=>a.aircraftId===id?.[1]);
@@ -54,9 +62,10 @@ export async function readAircraftMaintenanceReferences(page:Page,collection:Col
       return {aircraftId:id[1],registration:aircraft.registration,observedAt:stamp,flightHours,hoursToCheck,wearPercentage,
         atAnyBase:r.base==='1',source:'inspected-maintenance-plan' as const,effectiveCheckPrice:null,effectiveRepairPrice:null};
     });
+    report.stage='card_count';
     if(parsed.length!==collection.aircraft.length||new Set(parsed.map(a=>a.aircraftId)).size!==parsed.length)throw new Error();
-    report.aircraft=parsed;report.observedAt=stamp;report.complete=true;report.status='observed';
-  } catch {report.warnings.push('AIRCRAFT_MAINTENANCE_REFERENCE_UNAVAILABLE');}
+    report.aircraft=parsed;report.observedAt=stamp;report.complete=true;report.status='observed';report.stage='observed';
+  } catch {report.warnings.push('AIRCRAFT_MAINTENANCE_REFERENCE_UNAVAILABLE:'+report.stage);}
   finally {try{await closeReadOnlyPopup(page,timeout);report.uiClosed=true;}catch{report.warnings.push('MAINTENANCE_CLOSE_UNVERIFIED');}}
   return report;
 }
