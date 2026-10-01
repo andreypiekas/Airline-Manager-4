@@ -26,7 +26,8 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
           const safe=/^(?:hideAllWhenClick\(\);)?popup\('[a-z_0-9]+\.php','[A-Za-z ,/&-]+'(?:,(?:false|true|\d+)){1,8}\);$/.test(callback)||
             /^(?:[A-Za-z][A-Za-z0-9_]*\(\);)+$/.test(callback);
           return [{id:/^[A-Za-z][A-Za-z0-9_-]*$/.test(e.id)?e.id:null,tag:e.tagName,label:labels[0],
-            title:e.getAttribute('title'),ariaLabel:e.getAttribute('aria-label'),tooltip:e.getAttribute('data-original-title'),callback:safe?callback:null}];
+            title:e.getAttribute('title'),ariaLabel:e.getAttribute('aria-label'),tooltip:e.getAttribute('data-original-title'),callback:safe?callback:null,queryPaths:Array.from(callback.matchAll(/'([a-z_0-9]+\.php)(?:\?[^']*)?'/gi),m=>m[1]),
+            functionCalls:Array.from(callback.matchAll(/\b([A-Za-z_]\w*)\(/g),m=>m[1])}];
         }));
       navigationViews.push({view,navigation});
       await mkdir('test-results/demand',{recursive:true});
@@ -41,6 +42,32 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       const config=readDemandConfig();
       await loginForReadOnlyCollection(page,process.env,90000,stage=>{phase=`login_${stage}`;});
       await writeSourceNavigation('after_login');
+      phase='mcdu_source_discovery';
+      await closeReadOnlyPopup(page,10000);
+      phase='mcdu_control';
+      const mcdu=page.locator('#mcduBtn');
+      if(await mcdu.count()!==1||!await mcdu.isVisible()||await mcdu.getAttribute('onclick')!=='startMcdu();')throw new Error();
+      // Inspected native navigation callback from the preceding read-only artifact. No MCDU operation key.
+      const beforeIds=await page.locator('[id]').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.id));
+      const hit=await mcdu.evaluate(e=>{
+        const r=e.getBoundingClientRect(),p=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+        return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},viewport:{width:innerWidth,height:innerHeight},
+          hit:p?{id:p.id,tag:p.tagName,className:p.className}:null,ownHit:!!p&&(p===e||e.contains(p))};
+      });
+      await writeFile('test-results/demand/mcdu-control.json',JSON.stringify({schemaVersion:1,dryRun:true,mutationAuthorized:false,hit},null,2)+'\n');
+      phase='mcdu_click';
+      await mcdu.click({timeout:10000});
+      phase='mcdu_screen';
+      await expect.poll(()=>page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&(!before.includes(e.id)||/mcdu/i.test(e.id))).some(e=>(e as HTMLElement).innerText?.length>20),beforeIds),{timeout:10000}).toBe(true);
+      const screen=await page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&(!before.includes(e.id)||/mcdu/i.test(e.id)))
+        .filter(e=>!e.matches('input,textarea,select,form,script')).slice(0,120).map(e=>({id:e.id,tag:e.tagName,
+          text:(e as HTMLElement).innerText.trim().slice(0,1800),callback:/^[A-Za-z_][A-Za-z0-9_]*\((?:(?:this|true|false|\d{1,3}|'[A-Za-z0-9 _./-]{1,12}')(?:,(?:this|true|false|\d{1,3}|'[A-Za-z0-9 _./-]{1,12}'))*)?\);$/.test(e.getAttribute('onclick')||'')?e.getAttribute('onclick'):null})),beforeIds);
+      await writeFile('test-results/demand/mcdu-source-discovery.json',JSON.stringify({schemaVersion:1,observedAt:new Date().toISOString(),
+        dryRun:true,mutationAuthorized:false,screen},null,2)+'\n');
+      phase='restore_after_source_probe';
+      await page.reload({waitUntil:'domcontentloaded'});
+      await page.locator('#mapRoutes').waitFor({state:'visible',timeout:90000});
+      await page.locator('#am4-intro').waitFor({state:'hidden',timeout:90000});
       phase='fleet_open';
       const menu=page.locator('#mapRoutes');
       if ((await menu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');") throw new Error();
@@ -74,28 +101,6 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       if ((await menu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');") throw new Error();
       await menu.click();
       await page.locator('#routesContainer').waitFor({state:'visible',timeout:10000});
-      phase='mcdu_source_discovery';
-      await closeReadOnlyPopup(page,10000);
-      phase='mcdu_control';
-      const mcdu=page.locator('#mcduBtn');
-      if(await mcdu.count()!==1||!await mcdu.isVisible()||await mcdu.getAttribute('onclick')!=='startMcdu();')throw new Error();
-      // Inspected native navigation callback from the preceding read-only artifact. No MCDU operation key.
-      const beforeIds=await page.locator('[id]').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.id));
-      const hit=await mcdu.evaluate(e=>{
-        const r=e.getBoundingClientRect(),p=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
-        return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},viewport:{width:innerWidth,height:innerHeight},
-          hit:p?{id:p.id,tag:p.tagName,className:p.className}:null,ownHit:!!p&&(p===e||e.contains(p))};
-      });
-      await writeFile('test-results/demand/mcdu-control.json',JSON.stringify({schemaVersion:1,dryRun:true,mutationAuthorized:false,hit},null,2)+'\n');
-      phase='mcdu_click';
-      await mcdu.click({timeout:10000});
-      phase='mcdu_screen';
-      await expect.poll(()=>page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id)).length,beforeIds),{timeout:10000}).toBeGreaterThan(0);
-      const screen=await page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id))
-        .filter(e=>!e.matches('input,textarea,select,form,script')).slice(0,120).map(e=>({id:e.id,tag:e.tagName,
-          text:(e as HTMLElement).innerText.trim().slice(0,1800),callback:/^(?:start|stop|close)Mcdu\(\);$/.test(e.getAttribute('onclick')||'')?e.getAttribute('onclick'):null})),beforeIds);
-      await writeFile('test-results/demand/mcdu-source-discovery.json',JSON.stringify({schemaVersion:1,observedAt:new Date().toISOString(),
-        dryRun:true,mutationAuthorized:false,screen},null,2)+'\n');
       phase='data_validation';
       if(fleet.aircraft.some((a:any)=>a.timing&&(a.timing.aircraftId!==a.aircraftId||a.timing.routeId!==a.routeId||
         a.timing.futureDepartureAt!==null||a.timing.returnConfirmed||a.timing.mutationAuthorized)))throw new Error();

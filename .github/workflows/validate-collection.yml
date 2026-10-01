@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: diagnosticar visibilidade do controle MCDU sem cliques forcados ou operacoes.
+# Revisao: consultar MCDU antes do planejador de rotas; restaurar a pagina com recarga normal.
 on:
   workflow_dispatch:
   push:
