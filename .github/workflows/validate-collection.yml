@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: fontes de demanda das candidatas, A-check e precos de mercado em leitura.
+# Revisao: diagnostico restrito das unidades de precos, sem dados de sessao.
 on:
   workflow_dispatch:
   push:

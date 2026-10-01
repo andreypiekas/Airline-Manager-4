@@ -50,26 +50,37 @@ export async function readModelCostReference(page:Page,modelId:number,timeout=10
 }
 /** Menu and tabs are queries only. No purchase input is read/filled or Purchase clicked. */
 export async function readMarketPriceReferences(page:Page,timeout=10000){
-  const result={fuel:null as MarketPriceReference|null,co2:null as MarketPriceReference|null,uiClosed:false};
+  const result={fuel:null as MarketPriceReference|null,co2:null as MarketPriceReference|null,uiClosed:false,
+    stage:'menu',warnings:[] as string[],unitLabels:[] as string[]};
   const menu=page.locator('#smallMainMenu').getByText('Fuel',{exact:true}).locator('../..');
   try {
     if(await menu.count()!==1||!await menu.isVisible()||normalize(await menu.getAttribute('onclick')||'')!=="hideAllWhenClick();popup('fuel.php','Fuel',false,false,true);")throw new Error();
     await menu.click({timeout});
     const read=async(commodity:'fuel'|'co2')=>{
       const panel=page.locator('#fuelMain');const name=commodity==='fuel'?'Current price':'Quota cost';
+      result.stage=commodity+'_label';
       const label=panel.getByText(name,{exact:true});await label.waitFor({state:'visible',timeout});
       if(await label.count()!==1)throw new Error();
+      result.stage=commodity+'_unit';
       const unitLabel=commodity==='fuel'?'Fuel price per 1,000 Lbs':'Co2 quota cost per 1,000';
       await panel.getByText(unitLabel,{exact:true}).waitFor({state:'visible',timeout});
+      result.stage=commodity+'_price';
       const text=await label.locator('..').innerText();
       const match=text.trim().match(commodity==='fuel'?/^CURRENT PRICE\s+\$\s*([\d,]+)$/i:/^QUOTA COST\s+\$\s*([\d,]+)$/i);
       if(!match)throw new Error();const price=integerText(match[1]);if(price<=0)throw new Error();
       return {commodity,pricePer1000:price,unit:commodity==='fuel'?'lbs':'quotas',observedAt:new Date().toISOString(),source:'inspected-market',inventoryAcquisitionPrice:null} as MarketPriceReference;
     };
     result.fuel=await read('fuel');
+    result.stage='co2_control';
     await checkedClick(page,'#popBtn2',"$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('co2.php','fuelMain',this,false,false);",timeout);
     result.co2=await read('co2');
-  }catch{/* Partial observations remain labelled; they never become complete costs. */}
+    result.stage='observed';
+  }catch{
+    result.warnings.push('MARKET_REFERENCE_UNAVAILABLE:'+result.stage);
+    // Only chart labels, never page HTML, form values, headers or session data.
+    result.unitLabels=(await page.locator('#fuelMain svg text').allTextContents().catch(()=>[]))
+      .filter(s=>/^(?:Fuel price per |Co2 quota cost per |Cost per )/.test(s.trim())).map(s=>s.trim().slice(0,80));
+  }
   finally {
     try {
       if(await page.locator('#fuelMain').isVisible()){

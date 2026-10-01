@@ -121,7 +121,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   const quotes=research.aircraft.flatMap(a=>a.result?.quotes||[]);
   const models:ModelCostReference[]=[];const warnings:string[]=[];
   let uiRestored=research.uiRestored;
-  let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true};
+  let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true,stage:'not_requested',warnings:[],unitLabels:[]};
   if(research.config.enabled&&uiRestored&&quotes.length){
     const ids=[...new Set(quotes.flatMap(q=>q.autopriceReference?[q.autopriceReference.modelId]:[]))];
     if(ids.length>10)warnings.push('MODEL_REFERENCE_LIMIT');
