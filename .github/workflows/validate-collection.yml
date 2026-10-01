@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: conferir avisos de renovacao e metadados passivos de servicos, sem operacoes.
+# Revisao: confirmar estrutura redigida do controle individual, sem decolar.
 on:
   workflow_dispatch:
   push:

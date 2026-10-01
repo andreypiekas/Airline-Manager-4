@@ -5,6 +5,7 @@ import { AircraftSnapshot, CollectionResult } from './types';
 import { CabinText, integerText, parseCapacity, parseDemand, parseOnboard } from './parsing';
 import { AIRCRAFT_DETAILS_CONTROL, aircraftIdFromDetailsControl } from './identity';
 import { flightCountdownObservation } from '../optimization/flight-timing';
+import { departureControlShape } from './departure-control-evidence';
 
 interface RouteCard {
   routeId: string; aircraftId: string; registration: string; routeLabel: string;
@@ -114,6 +115,7 @@ export class DemandReader {
       await depart.waitFor({ state: 'visible', timeout: this.timeout });
       await expect(depart).toHaveAttribute('onclick', new RegExp(`route_depart\\.php\\?id=${card.routeId}&`), { timeout: this.timeout });
       if (!(await depart.isEnabled()) || !(await details.locator('#routeViewGround_unground').isVisible())) throw new Error('Not ready / grounded');
+      item.departureControlShape = departureControlShape(await depart.getAttribute('onclick') || '');
     } else {
       // Inspected on the ATR in flight: countdown plus independent aircraft/route identities.
       await details.locator('#timer').waitFor({ state: 'visible', timeout: this.timeout });

@@ -25,6 +25,8 @@ export interface AircraftSnapshot {
   timing?: FlightTimingObservation | null;
   /** Rendered reset/renewal notices in the inspected demand panel, not an inferred clock. */
   demandResetHints?: string[];
+  /** Redacted handler structure only; never an execution authorization. */
+  departureControlShape?: string | null;
 }
 export interface DemandConfig {
   enabled: boolean;
