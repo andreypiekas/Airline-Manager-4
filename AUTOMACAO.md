@@ -4,7 +4,7 @@
 
 Esta versão inicia com `ENABLE_DEMAND_MANAGER=true`, `DEMAND_DRY_RUN=true` e `DEMAND_FAIL_SAFE=true`: somente login, leitura de rotas e relatório. **Nenhuma compra, manutenção, campanha ou decolagem é executada nesse modo**, mesmo que os antigos `ENABLE_*` estejam ativos. Não há fallback para `departAll`. Veja [configurações, inspeção, seletores e pendências](docs/DEMAND_MANAGER.md).
 
-O workflow principal fixa gerenciador e fail-safe ativos. Para executar retornos individuais reais, use o input `execute_individual=true`, inicialmente com `max_individual_departures=1`; o workflow isolado usa `execute=true`. Sem esse input, continua simulacao. Rotas, tarifas, compras e revisoes economicas incompletas permanecem bloqueadas. Veja [producao controlada e payload do cron](docs/PRODUCTION_DEPARTURES.md). O `validate.yml` testa fixtures sem conta do jogo.
+O workflow principal fixa gerenciador e fail-safe ativos. Para executar retornos individuais reais, use o input `execute_individual=true`, inicialmente com `max_individual_departures=1`; o workflow isolado usa `execute=true`. Tambem aceita as variaveis `EXECUTE_INDIVIDUAL=true` e `MAX_INDIVIDUAL_DEPARTURES=1`, inclusive nos disparos existentes do cron. `departure_mode=simulation` forca simulacao; sem ativacao explicita por input ou variavel, continua simulacao. Rotas, tarifas, compras e revisoes economicas incompletas permanecem bloqueadas. Veja [producao controlada e payload do cron](docs/PRODUCTION_DEPARTURES.md). O `validate.yml` testa fixtures sem conta do jogo.
 
 ## Situacao
 

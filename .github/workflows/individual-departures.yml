@@ -2,14 +2,19 @@ name: Decolagens individuais controladas
 on:
   workflow_dispatch:
     inputs:
+      departure_mode:
+        description: 'Modo: repository usa EXECUTE_INDIVIDUAL; simulation impede decolagens reais'
+        type: choice
+        default: repository
+        options: [repository, simulation, production]
       execute:
-        description: 'Executar decolagens reais de retorno; false = simulacao'
+        description: 'Solicitar producao; false usa departure_mode e politica do repositorio'
         type: boolean
         default: false
       max_departures:
-        description: 'Limite de decolagens nesta execucao (1 a 20)'
+        description: 'Limite 1 a 20; 0 usa MAX_INDIVIDUAL_DEPARTURES (padrao 1)'
         type: number
-        default: 1
+        default: 0
 permissions:
   contents: read
 concurrency:
@@ -37,15 +42,25 @@ jobs:
         run: npm test
       - name: Limpar somente relatorios de testes sinteticos
         run: rm -rf test-results/demand
+      - name: Resolver modo e limite de decolagens
+        id: departure_settings
+        env:
+          AM4_INPUT_MODE: ${{ inputs.departure_mode }}
+          AM4_INPUT_EXECUTE: ${{ inputs.execute }}
+          AM4_INPUT_MAX_DEPARTURES: ${{ inputs.max_departures }}
+          AM4_REPOSITORY_EXECUTE: ${{ vars.EXECUTE_INDIVIDUAL }}
+          AM4_REPOSITORY_MAX_DEPARTURES: ${{ vars.MAX_INDIVIDUAL_DEPARTURES }}
+        run: node scripts/resolve-departure-settings.cjs
+
       - name: Executar somente o executor individual
         env:
           EMAIL: ${{ secrets.EMAIL }}
           PASSWORD: ${{ secrets.PASSWORD }}
           ENABLE_DEMAND_MANAGER: 'true'
           DEMAND_FAIL_SAFE: 'true'
-          DEMAND_DRY_RUN: ${{ inputs.execute && 'false' || 'true' }}
+          DEMAND_DRY_RUN: ${{ steps.departure_settings.outputs.dry_run }}
           DEMAND_EXECUTION_ACK: individual-return-legs-v1
-          DEMAND_MAX_DEPARTURES_PER_RUN: ${{ inputs.max_departures || '1' }}
+          DEMAND_MAX_DEPARTURES_PER_RUN: ${{ steps.departure_settings.outputs.max_departures }}
           MIN_DEMAND_PERCENTAGE: '80'
           DEMAND_THRESHOLD_MODE: aggregate
           DEMAND_POOL_SCOPE: airport-pair

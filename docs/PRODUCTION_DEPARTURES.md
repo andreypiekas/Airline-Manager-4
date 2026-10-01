@@ -27,9 +27,13 @@ O executor suporta **somente o retorno para a propria base pela rota existente**
 
 Depois da publicacao na main, o workflow **Decolagens individuais controladas** permite `execute=false` (simulacao) ou `execute=true`, com `max_departures=1` inicialmente.
 
-O workflow principal **Automacao Airline Manager 4** tambem aceita `execute_individual=true` e `max_individual_departures=1`. Sem o input explicito, faz somente simulacao. A entrada publicada fixa gerenciador/fail-safe ativos; nao ativa o legado por variaveis antigas.
+O workflow principal **Automacao Airline Manager 4** tambem aceita `execute_individual=true` e `max_individual_departures=1`. Sem o input explicito, usa a politica configurada em `EXECUTE_INDIVIDUAL`, descrita abaixo. A entrada publicada fixa gerenciador/fail-safe ativos; nao ativa o legado por variaveis antigas.
 
-O cron-job.org continua usando o workflow_dispatch existente. Para usar a execucao real controlada, o corpo pode conter:
+Os dois workflows agora respeitam as variaveis do repositorio `EXECUTE_INDIVIDUAL=true` e `MAX_INDIVIDUAL_DEPARTURES=1`. Nesse caso, disparos existentes do cron-job.org, mesmo sem novos inputs, ativam o executor real limitado. Sem a variavel de ativacao, permanece simulacao. A antiga variavel `DEMAND_DRY_RUN` do repositorio nao governa estes workflows: o valor efetivo e calculado pelo resolvedor e registrado em `[DepartureConfig]`.
+
+`departure_mode=simulation` sempre impede decolagens reais, inclusive com a variavel de ativacao ligada. `departure_mode=production` solicita producao explicitamente. O padrao `repository` usa a politica do repositorio; os inputs de ativacao anteriores continuam compativeis. Limite de input positivo sobrescreve a variavel; `0` (novo padrao) usa `MAX_INDIVIDUAL_DEPARTURES`, ou 1 se ausente. Valores invalidos interrompem antes do login.
+
+O cron-job.org continua usando o workflow_dispatch existente. Para uma execucao real explicita, o corpo pode conter:
 
 ```json
 {"ref":"main","inputs":{"execute_individual":true,"max_individual_departures":1}}
@@ -48,3 +52,7 @@ Alteracao automatica de rotas, tarifas, custos efetivos completos, renovacao/age
 ## Evidencias de 01/10/2026
 
 Simulacao autenticada: Actions 36919208772. Piloto real autorizado: Actions 36920005857, com uma decolagem confirmada por coleta posterior e nenhum resultado incerto. CI do piloto: Actions 36920013310. O gatilho temporario por push foi removido; a versao publicada aceita apenas acionamento manual/API.
+
+## Correcao da ativacao por variaveis
+
+A execucao 36922342131 permaneceu em simulacao porque a primeira versao lia apenas inputs e ignorava as variaveis de ativacao criadas pelo operador. O resolvedor compartilhado liga essas variaveis aos dois workflows e informa modo, limite e origem de cada configuracao antes do login. Inicie uma nova execucao na main atualizada; rerun utiliza o codigo antigo e execucoes reais de segunda tentativa sao bloqueadas.
