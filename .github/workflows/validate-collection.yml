@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: confirmar estrutura redigida do controle individual, sem decolar.
+# Revisao: confirmar seletores estaticos, referencia e indice do controle individual, sem decolar.
 on:
   workflow_dispatch:
   push:
