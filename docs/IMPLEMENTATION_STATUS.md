@@ -12,7 +12,7 @@ Todo gerenciamento novo permanece em simulação. Não houve operações no jogo
 | Referências de A-check e intervalo por modelo | Leitura do catálogo validada no Actions; custo efetivo por voo ainda ausente |
 | Preços atuais Fuel/Co2 e unidades | Leitura dos mercados validada no Actions; não representam custo histórico do estoque |
 | Reservas das outras aeronaves | Cenarios limitados por classe e proximos trechos implementados; horarios futuros e renovacao continuam nao confirmados |
-| Manutencao individual e oito despesas | Leitura de estado e orcamento auditavel implementados; custos efetivos ausentes bloqueiam totais |
+| Manutencao individual e oito despesas | Leitura de estado validada no Actions; orcamento auditavel implementado; custos efetivos ausentes bloqueiam totais |
 | Custos e demanda completos de todas as candidatas | Pendentes; comparação econômica bloqueada |
 | Revisão diária e por retorno | Motor testado; comparações incompletas permanecem pendentes |
 | Persistência do histórico | Transporte validado em dois runners com dados sintéticos; histórico operacional não inicializado |
@@ -20,11 +20,13 @@ Todo gerenciamento novo permanece em simulação. Não houve operações no jogo
 
 ## Validação
 
-- 343 testes locais aprovados; typecheck, build:state e git diff --check aprovados. Validacao adicional das novas fontes no Actions ainda em andamento.
-- CI de código aprovada: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36862961607
-- Coleta e fontes implementadas aprovadas: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36862952783
-- Commit de código validado: 0ee119a39c68375c1f01f0f7d5e7831707612fac.
+- 343 testes locais aprovados; typecheck, build:state e git diff --check aprovados. Validacao adicional das novas fontes no Actions aprovada; artefatos conferidos, incluindo as lacunas e os bloqueios economicos.
+- CI de código aprovada: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36894692411
+- Coleta e fontes implementadas aprovadas: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36894684466
+- Commit de código validado: d2d1129b38faca8837cea68b0451128c243ffb8c.
 - Persistência sintética em runners independentes: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36790260971
+
+A coleta final confirmou detalhes de todas as aeronaves vinculadas as rotas, estado individual de manutencao, mercados, referencias de modelos presentes na lista inspecionada, pesquisa limitada de candidatas e restauracao da interface. Os JSON confirmam demanda restante das novas candidatas indisponivel, custos efetivos incompletos, totalOperatingCost=null e comparisonReady=false. Nenhuma lacuna foi convertida em saldo, custo zero ou permissao operacional.
 
 A aprovação da coleta verifica o percurso de leitura, cada identidade, as fontes implementadas e a restauração da interface. Não comprova comparação econômica completa nem autorização para produção. O escopo da coleta são as aeronaves vinculadas às rotas; aeronaves pendentes de entrega ou sem rota estão fora desse escopo.
 
