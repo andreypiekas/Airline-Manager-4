@@ -19,14 +19,16 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       // Only rendered navigation labels; never forms, page scripts, storage, profile or session data.
       const navigation=await page.locator('[onclick]').evaluateAll(elements=>elements.filter(e=>e.getClientRects().length)
         .flatMap(e=>{
+          const callback=(e.getAttribute('onclick')||'').trim();
+          const queryPaths=Array.from(callback.matchAll(/'([a-z_0-9]+\.php)(?:\?[^']*)?'/gi),m=>m[1]);
           const labels=[(e as HTMLElement).innerText,e.getAttribute('title')||'',e.getAttribute('aria-label')||'',e.getAttribute('data-original-title')||'',...Array.from(e.querySelectorAll('span')).filter(n=>n.getClientRects().length).map(n=>n.textContent||'')]
             .map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>/^(?:Fleet|Routes|Finance|Finances|Banking|Staff|MCDU|Search|Research|Maintenance|Statistics|Transactions)$/i.test(s));
+          if(!labels.length&&queryPaths.some(p=>/^(?:transactions?|history)\.php$/.test(p)))labels.push('Financial history');
           if(!labels.length)return [];
-          const callback=(e.getAttribute('onclick')||'').trim();
-          const safe=/^(?:hideAllWhenClick\(\);)?popup\('[a-z_0-9]+\.php','[A-Za-z ,/&-]+'(?:,(?:false|true|\d+)){1,8}\);$/.test(callback)||
+          const safe=/^(?:hideAllWhenClick\(\);)?popup\('[a-z_0-9]+\.php','[A-Za-z ,/&-]+'(?:,(?:false|true|\d+)){0,8}\);$/.test(callback)||
             /^(?:[A-Za-z][A-Za-z0-9_]*\(\);)+$/.test(callback);
           return [{id:/^[A-Za-z][A-Za-z0-9_-]*$/.test(e.id)?e.id:null,tag:e.tagName,label:labels[0],
-            title:e.getAttribute('title'),ariaLabel:e.getAttribute('aria-label'),tooltip:e.getAttribute('data-original-title'),callback:safe?callback:null,queryPaths:Array.from(callback.matchAll(/'([a-z_0-9]+\.php)(?:\?[^']*)?'/gi),m=>m[1]),
+            title:e.getAttribute('title'),ariaLabel:e.getAttribute('aria-label'),tooltip:e.getAttribute('data-original-title'),callback:safe?callback:null,queryPaths,
             functionCalls:Array.from(callback.matchAll(/\b([A-Za-z_]\w*)\(/g),m=>m[1])}];
         }));
       navigationViews.push({view,navigation});
@@ -52,7 +54,7 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
         callbackShape:financeShape,queryPaths:Array.from(financeCallback.matchAll(/'([a-z_0-9]+\.php)(?:\?[^']*)?'/gi),m=>m[1])},null,2)+'\n');
       phase='finance_callback';
       if(!financeCallback.replace(/\s/g,'').startsWith("hideAllWhenClick();popup('finances.php',")||
-        !/^hideAllWhenClick\(\);popup\('',''(?:,(?:false|true|null|\d+|'')){1,9}\);$/.test(financeShape))throw new Error();
+        financeShape!=="hideAllWhenClick();popup('','');")throw new Error();
       const financeBeforeIds=await page.locator('[id]').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.id));
       phase='finance_click';
       await finance.click({timeout:10000});
