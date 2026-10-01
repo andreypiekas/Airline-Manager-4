@@ -44,3 +44,7 @@ Nao publicar o token do disparo. Nenhuma configuracao do cron foi alterada por e
 O controlador pode executar com todas as aeronaves retidas: isso significa que os requisitos nao estavam satisfeitos, e nao que houve uma decolagem. Um status verde nao substitui conferir `summary.departed` e `summary.unknown`.
 
 Alteracao automatica de rotas, tarifas, custos efetivos completos, renovacao/agenda futura e a revisao economica diaria completa continuam bloqueados. Esta capacidade de producao nao declara o otimizador completo pronto.
+
+## Evidencias de 01/10/2026
+
+Simulacao autenticada: Actions 36919208772. Piloto real autorizado: Actions 36920005857, com uma decolagem confirmada por coleta posterior e nenhum resultado incerto. CI do piloto: Actions 36920013310. O gatilho temporario por push foi removido; a versao publicada aceita apenas acionamento manual/API.

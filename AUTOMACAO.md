@@ -4,7 +4,7 @@
 
 Esta versão inicia com `ENABLE_DEMAND_MANAGER=true`, `DEMAND_DRY_RUN=true` e `DEMAND_FAIL_SAFE=true`: somente login, leitura de rotas e relatório. **Nenhuma compra, manutenção, campanha ou decolagem é executada nesse modo**, mesmo que os antigos `ENABLE_*` estejam ativos. Não há fallback para `departAll`. Veja [configurações, inspeção, seletores e pendências](docs/DEMAND_MANAGER.md).
 
-Desativar `ENABLE_DEMAND_MANAGER` restaura o fluxo legado de operações reais descrito abaixo; não ativa decolagem inteligente. A integração real do DemandManager ainda exige autorização e validação posterior. O novo `validate.yml` faz testes locais com fixtures, sem conta do jogo.
+O workflow principal fixa gerenciador e fail-safe ativos. Para executar retornos individuais reais, use o input `execute_individual=true`, inicialmente com `max_individual_departures=1`; o workflow isolado usa `execute=true`. Sem esse input, continua simulacao. Rotas, tarifas, compras e revisoes economicas incompletas permanecem bloqueadas. Veja [producao controlada e payload do cron](docs/PRODUCTION_DEPARTURES.md). O `validate.yml` testa fixtures sem conta do jogo.
 
 ## Situacao
 

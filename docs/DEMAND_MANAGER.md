@@ -1,14 +1,14 @@
-# DemandManager — primeira entrega em simulação
+# DemandManager — analise e executor individual
 
 ## Estado e limites de ativação
 
-O módulo está implementado para **leitura e simulação**. Nenhuma decisão concede autorização real (`departureAuthorized=false`). `DEMAND_DRY_RUN=false` ou `DEMAND_FAIL_SAFE=false` provoca erro antes do login no fluxo principal. Não há código de clique individual habilitado. A ativação real exige implementação e validação do executor e do resultado de cada decolagem, além de autorização para operar.
+O motor de analise e puro: `departureAuthorized=false` em seus relatorios. Um executor separado suporta decolagens reais de retorno pela rota existente, mediante contexto explicito de Actions, fail-safe e releitura individual. A simulacao permanece o padrao. `DEMAND_FAIL_SAFE=false` e reruns reais sao rejeitados antes do login. Veja [escopo de producao, acionamento e travas](PRODUCTION_DEPARTURES.md).
 
 O fluxo principal com DemandManager utiliza o mesmo login normal validado na coleta isolada. Valida tipos dos campos, aguarda o carregamento e descarta mensagens de erro que poderiam conter valores preenchidos. Nao grava formularios, trace, video, screenshots ou dados de sessao. O menu Fleet tambem precisa corresponder ao callback nativo inspecionado antes do clique.
 
-Com `ENABLE_DEMAND_MANAGER=true` (padrão desta entrega), a rotina faz login, abre Fleet/Routes, coleta dados e termina. Não executa combustível, CO₂, manutenção, campanhas, decolagens, alteração de preços, Ground, Reroute, compra ou venda. `ENABLE_DEPART` não impede a análise somente de leitura. Falhas **nunca** caem em `departAll`.
+Com `ENABLE_DEMAND_MANAGER=true` e `DEMAND_DRY_RUN=true` (padrao), a rotina faz login, abre Fleet/Routes, coleta dados e termina. Não executa combustível, CO₂, manutenção, campanhas, decolagens, alteração de preços, Ground, Reroute, compra ou venda. `ENABLE_DEPART` não impede a análise somente de leitura. Falhas **nunca** caem em `departAll`.
 
-O fluxo legado continua no código, acessível exclusivamente com `ENABLE_DEMAND_MANAGER=false`. Ele executa operações reais conforme os antigos `ENABLE_*`; não deve ser usado para testar esta entrega. Essa configuração não ativa decolagem inteligente. O PR nao altera variaveis, secrets ou cron-job.org. A validacao isolada usa um workflow dedicado de leitura e nao chama a rotina operacional.
+O fluxo legado continua no codigo para compatibilidade, mas os workflows publicados fixam o DemandManager e o fail-safe ativos. Os inputs `execute_individual` (principal) ou `execute` (isolado) permitem selecionar explicitamente o executor real. Variaveis antigas nao restauram decolagens em massa nos workflows. Nao foram alterados secrets nem a configuracao do cron-job.org. A validacao isolada de fontes continua somente de leitura.
 
 ## Inspeção em 29/09/2026
 
@@ -72,9 +72,9 @@ Não há estado persistente de bloqueio: cada execução relê a demanda. Quando
 
 | Variável | Padrão | Observação |
 | --- | --- | --- |
-| `ENABLE_DEMAND_MANAGER` | `true` | Ativa a rotina exclusivamente de simulação |
+| `ENABLE_DEMAND_MANAGER` | `true` | Ativa a analise; executor real separado |
 | `MIN_DEMAND_PERCENTAGE` | `80` | Maior que 0 e até 100; 80 é política inicial, não regra do jogo |
-| `DEMAND_DRY_RUN` | `true` | `false` rejeitado nesta versão |
+| `DEMAND_DRY_RUN` | `true` | `false` exige o contexto de execucao real documentado |
 | `DEMAND_FAIL_SAFE` | `true` | `false` rejeitado nesta versão |
 | `DEMAND_THRESHOLD_MODE` | `aggregate` | Alternativa `per-class` |
 | `DEMAND_POOL_SCOPE` | `airport-pair` | Conservador; `directional` apenas para simulação/estudo |
@@ -87,8 +87,8 @@ Booleanos aceitam apenas `true`/`false`; erros de digitação são rejeitados. C
 
 - Workflow operacional mantém `concurrency.group: airline-manager-4-main` e `cancel-in-progress: false`, compartilhado por branches no mesmo repositório.
 - Execuções locais no mesmo checkout usam diretório exclusivo `.am4-run.lock`. Após encerramento abrupto, confirme que não há execução ativa e remova manualmente o lock abandonado. Não há remoção automática perigosa.
-- Locks locais não cobrem outros computadores/checkouts; GitHub concurrency não cobre outros repositórios nem operações manuais. Antes de futura operação real, escolha um único executor e releia os dados antes de cada decolagem, confirmando resultado sem repetir cliques de resultado incerto.
-- ID de aeronave ou rota duplicado bloqueia a decisão. Não há execução individual nesta entrega, portanto nenhuma repetição de decolagem gerada pelo novo módulo.
+- Locks locais não cobrem outros computadores/checkouts; GitHub concurrency não cobre outros repositórios nem operações manuais. Use um unico executor; o modulo rele os dados antes de cada decolagem e interrompe resultados incertos sem repetir cliques.
+- ID de aeronave ou rota duplicado bloqueia a decisão. O executor consome a tentativa antes do clique, persiste o intento e rejeita reruns reais do Actions.
 - Trace, vídeo e screenshots automáticos são desligados para evitar gravação da autenticação; a opção antiga de vídeo não reativa gravação nesta entrega. Capturas explícitas de diagnóstico existentes ficam no fluxo legado.
 - Não foram adicionados mecanismos de evasão, mudanças de fingerprint ou acesso a sessão.
 
@@ -104,23 +104,11 @@ Booleanos aceitam apenas `true`/`false`; erros de digitação são rejeitados. C
 - `validate.yml` executa somente compilação e fixtures em PR/push. Não recebe secrets do jogo.
 - `playwright.yml` continua exclusivamente `workflow_dispatch`, sem schedule/push/PR para operações. O corpo usado pelo cron-job.org permanece compatível.
 
-## Critérios antes de ativação real
+## Validacao e escopo operacional
 
-1. Rever o relatório de um ciclo somente de leitura executado no GitHub Actions e confirmar total de rotas, IDs, capacidade e demanda.
-2. Confirmar sentido/compartilhamento da demanda e comportamento na renovação usando observação autorizada.
-3. Implementar executor individual com autorização explícita, releitura fresca e confirmação inequívoca do resultado, sem fallback para `departAll`.
-4. Resolver mudanças de interface/idioma e limitações observadas; não declarar operação real validada só pelos testes de fixtures.
+O executor verifica o handler completo observado no jogo, rele toda a frota e os detalhes do alvo e confirma o resultado em nova coleta. Testes incluem um ciclo completo de Playwright com todas as requisicoes interceptadas, falha HTTP, limite de tentativas e nenhuma chamada de decolagem na simulacao. Evidencias atuais e contagem de testes: [IMPLEMENTATION_STATUS.md](IMPLEMENTATION_STATUS.md).
 
-Esta entrega é uma base validada localmente em simulação, **não uma integração operacional concluída**.
-
-## Validação desta entrega
-
-- `npm run typecheck`: aprovado (TypeScript 5.9.3, `--noEmit`). Foi necessário incluir as bibliotecas DOM no tsconfig e tipar o mapa de menus legado.
-- `npm test`: 58 testes aprovados, incluindo 10 testes de leitor/integração em Chromium local, sem rede do jogo.
-- Cenários: demanda plena/parcial/zero; múltiplas classes; ausência de assentos em classes; compartilhamento e reservas; demanda renovada; dados inválidos/expirados; duplicidades; paginação; identidade incorreta; falhas de carregamento; bloqueio de concorrência; resumo Telegram sem envio; nenhum clique de mutação na simulação.
-- YAML: validado; workflow operacional mantém apenas `workflow_dispatch`, mesmo grupo de concorrência e sem novo agendamento.
-- `git diff --check`: aprovado.
-- Não executado: bot autenticado no runner nem decolagem real. A evidência do jogo vem da inspeção manual assistida no navegador Work; as verificações automatizadas do leitor usam fixtures locais.
+Aeronaves na propria base ficam retidas enquanto a revisao economica estiver incompleta. O executor nao modifica rotas ou tarifas, nao promete ocupacao real a partir da cobertura de demanda e nao declara o otimizador completo pronto.
 
 ## Arquivos
 
@@ -128,7 +116,7 @@ Criados: `demand/types.ts`, `demand/config.ts`, `demand/manager.ts`, `demand/par
 
 Modificados: `utils/fleet.utils.ts`, `tests/airlineManager.spec.ts`, `.github/workflows/playwright.yml`, `playwright.config.ts`, `tsconfig.json`, `package.json`, `package-lock.json`, `.gitignore`, `AUTOMACAO.md` e `README.md`.
 
-`utils/general.utils.ts` foi inspecionado; o login existente foi reutilizado sem alteração. Os módulos financeiros não foram modificados nem executados.
+`utils/general.utils.ts` foi inspecionado; o fluxo de demanda usa o login normal sanitizado de `utils/read-only-login.ts`. Os módulos financeiros não foram modificados nem executados.
 
 ## Extensão: rotas e tarifas
 

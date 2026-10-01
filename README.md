@@ -1,6 +1,6 @@
 # Airline Manager 4 Bot
 
-> New default: read-only demand simulation. `ENABLE_DEMAND_MANAGER=true` bypasses all financial, maintenance, campaign and departure operations. Live demand-based departures are not enabled. See [DemandManager](docs/DEMAND_MANAGER.md). `npm test` runs offline fixtures; it does not run the game bot.
+> Default: read-only demand simulation. Explicit workflow inputs can enable validated individual departures returning to the aircraft's own base on its existing route. Financial modules, automatic rerouting and tariff changes remain disabled. See [production scope and controls](docs/PRODUCTION_DEPARTURES.md) and [DemandManager](docs/DEMAND_MANAGER.md). `npm test` runs offline fixtures.
 
 An automation bot for **Airline Manager 4**, built with **Playwright + TypeScript**. It automates routine airline operations such as logging in, buying fuel and CO2, running marketing campaigns, scheduling maintenance, and departing aircraft.
 

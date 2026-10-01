@@ -10,9 +10,6 @@ on:
         description: 'Limite de decolagens nesta execucao (1 a 20)'
         type: number
         default: 1
-  push:
-    branches: [feat/demand-manager-dry-run]
-    paths: [.github/workflows/individual-departures.yml]
 permissions:
   contents: read
 concurrency:
@@ -20,10 +17,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   depart:
-    # One dedicated validation push; other pushes and all real reruns cannot operate.
-    if: >-
-      github.repository == 'andreypiekas/Airline-Manager-4' && github.run_attempt == 1 &&
-      (github.event_name == 'workflow_dispatch' || github.event.head_commit.message == 'run authorized individual departure 20261001-2015')
+    # Explicit manual/API invocation only. Never repeat a real run attempt.
+    if: github.repository == 'andreypiekas/Airline-Manager-4' && github.run_attempt == 1 && github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
     timeout-minutes: 25
     steps:
@@ -48,7 +43,7 @@ jobs:
           PASSWORD: ${{ secrets.PASSWORD }}
           ENABLE_DEMAND_MANAGER: 'true'
           DEMAND_FAIL_SAFE: 'true'
-          DEMAND_DRY_RUN: ${{ github.event_name == 'push' && 'false' || (inputs.execute && 'false' || 'true') }}
+          DEMAND_DRY_RUN: ${{ inputs.execute && 'false' || 'true' }}
           DEMAND_EXECUTION_ACK: individual-return-legs-v1
           DEMAND_MAX_DEPARTURES_PER_RUN: ${{ inputs.max_departures || '1' }}
           MIN_DEMAND_PERCENTAGE: '80'
