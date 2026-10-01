@@ -1,6 +1,6 @@
 # Estado técnico da implementação — 01/10/2026
 
-O executor individual de retornos pela rota existente foi validado em simulacao e em um piloto real autorizado, com confirmacao posterior de identidade, estado em voo, contador e passageiros embarcados. Sem ativacao, os workflows usam simulacao; operacao real exige input explicito ou EXECUTE_INDIVIDUAL=true no repositorio. Rotas, tarifas, compras e revisao economica incompleta permanecem bloqueadas. Este documento omite identificadores e dados operacionais da conta.
+O executor individual de retornos pela rota existente foi validado em simulacao e em um piloto real autorizado, com confirmacao posterior de identidade, estado em voo, contador e passageiros embarcados. Sem ativacao, os workflows usam simulacao; operacao real exige input explicito ou EXECUTE_INDIVIDUAL=true no repositorio. Rotas, tarifas e revisao economica incompleta permanecem bloqueadas. O workflow principal integra compras limitadas de combustivel/CO2 conforme [SUPPLIES.md](SUPPLIES.md), sob o mesmo modo de simulacao/producao. Este documento omite identificadores e dados operacionais da conta.
 
 | Componente | Situação |
 | --- | --- |

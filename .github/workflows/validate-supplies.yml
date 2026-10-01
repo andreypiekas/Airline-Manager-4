@@ -1,9 +1,6 @@
 name: Validar controles de abastecimento sem comprar
 on:
   workflow_dispatch:
-  push:
-    branches: [fix/demand-supplies]
-    paths: [.github/workflows/validate-supplies.yml]
 permissions:
   contents: read
 concurrency:

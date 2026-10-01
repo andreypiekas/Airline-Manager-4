@@ -1,6 +1,6 @@
 # Decolagens individuais em producao
 
-O executor suporta **somente o retorno para a propria base pela rota existente**. Nao compra combustivel/CO2, nao executa servicos, nao modifica rotas nem tarifas. A comparacao economica de candidatas continua sem fornecedores completos de saldo, horarios futuros e custos efetivos; uma aeronave na propria base fica em solo com `BASE_ROUTE_REVIEW_INCOMPLETE`.
+O executor suporta **somente o retorno para a propria base pela rota existente**. O workflow principal executa abastecimento separado antes da frota, conforme [SUPPLIES.md](SUPPLIES.md); o executor isolado nao compra. Nao executa servicos nem modifica rotas/tarifas. A comparacao economica de candidatas continua sem fornecedores completos de saldo, horarios futuros e custos efetivos; uma aeronave na propria base fica em solo com `BASE_ROUTE_REVIEW_INCOMPLETE`.
 
 ## Controles
 
