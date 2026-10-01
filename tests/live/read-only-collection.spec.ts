@@ -1,4 +1,4 @@
-import { test } from '@playwright/test';
+import { test,expect } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { runDemandSimulation } from '../../demand/run';
 import { readDemandConfig } from '../../demand/config';
@@ -23,9 +23,10 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
             .map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>/^(?:Fleet|Routes|Finance|Finances|Banking|Staff|MCDU|Search|Research|Maintenance|Statistics|Transactions)$/i.test(s));
           if(!labels.length)return [];
           const callback=(e.getAttribute('onclick')||'').trim();
-          const safe=/^(?:hideAllWhenClick\(\);)?popup\('[a-z_]+\.php','[A-Za-z ]+',false,false,true\);$/.test(callback)||
+          const safe=/^(?:hideAllWhenClick\(\);)?popup\('[a-z_]+\.php','[A-Za-z ]+'(?:,(?:false|true|\d+)){1,8}\);$/.test(callback)||
             /^(?:[A-Za-z][A-Za-z0-9_]*\(\);)+$/.test(callback);
-          return [{id:/^[A-Za-z][A-Za-z0-9_-]*$/.test(e.id)?e.id:null,label:labels[0],callback:safe?callback:null}];
+          return [{id:/^[A-Za-z][A-Za-z0-9_-]*$/.test(e.id)?e.id:null,tag:e.tagName,label:labels[0],
+            title:e.getAttribute('title'),ariaLabel:e.getAttribute('aria-label'),tooltip:e.getAttribute('data-original-title'),callback:safe?callback:null}];
         }));
       navigationViews.push({view,navigation});
       await mkdir('test-results/demand',{recursive:true});
@@ -73,6 +74,19 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       if ((await menu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');") throw new Error();
       await menu.click();
       await page.locator('#routesContainer').waitFor({state:'visible',timeout:10000});
+      phase='mcdu_source_discovery';
+      await closeReadOnlyPopup(page,10000);
+      const mcdu=page.locator('#mcduBtn');
+      if(await mcdu.count()!==1||!await mcdu.isVisible()||await mcdu.getAttribute('onclick')!=='startMcdu();')throw new Error();
+      // Inspected native navigation callback from the preceding read-only artifact. No MCDU operation key.
+      const beforeIds=await page.locator('[id]').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.id));
+      await mcdu.click();
+      await expect.poll(()=>page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id)).length,beforeIds),{timeout:10000}).toBeGreaterThan(0);
+      const screen=await page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id))
+        .filter(e=>!e.matches('input,textarea,select,form,script')).slice(0,120).map(e=>({id:e.id,tag:e.tagName,
+          text:(e as HTMLElement).innerText.trim().slice(0,1800),callback:/^(?:start|stop|close)Mcdu\(\);$/.test(e.getAttribute('onclick')||'')?e.getAttribute('onclick'):null})),beforeIds);
+      await writeFile('test-results/demand/mcdu-source-discovery.json',JSON.stringify({schemaVersion:1,observedAt:new Date().toISOString(),
+        dryRun:true,mutationAuthorized:false,screen},null,2)+'\n');
       phase='data_validation';
       if(fleet.aircraft.some((a:any)=>a.timing&&(a.timing.aircraftId!==a.aircraftId||a.timing.routeId!==a.routeId||
         a.timing.futureDepartureAt!==null||a.timing.returnConfirmed||a.timing.mutationAuthorized)))throw new Error();
