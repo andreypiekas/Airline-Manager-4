@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: fechar o popup de consulta antes de trocar para o mercado.
+# Revisao: validar reservas simuladas, oito componentes de custo e manutencao individual somente em leitura.
 on:
   workflow_dispatch:
   push:

@@ -11,6 +11,8 @@ Todo gerenciamento novo permanece em simulação. Não houve operações no jogo
 | Demanda das candidatas coincidentes com rotas existentes | Adaptador por sentido implementado; evidência inversa permanece separada |
 | Referências de A-check e intervalo por modelo | Leitura do catálogo validada no Actions; custo efetivo por voo ainda ausente |
 | Preços atuais Fuel/Co2 e unidades | Leitura dos mercados validada no Actions; não representam custo histórico do estoque |
+| Reservas das outras aeronaves | Cenarios limitados por classe e proximos trechos implementados; horarios futuros e renovacao continuam nao confirmados |
+| Manutencao individual e oito despesas | Leitura de estado e orcamento auditavel implementados; custos efetivos ausentes bloqueiam totais |
 | Custos e demanda completos de todas as candidatas | Pendentes; comparação econômica bloqueada |
 | Revisão diária e por retorno | Motor testado; comparações incompletas permanecem pendentes |
 | Persistência do histórico | Transporte validado em dois runners com dados sintéticos; histórico operacional não inicializado |
@@ -18,7 +20,7 @@ Todo gerenciamento novo permanece em simulação. Não houve operações no jogo
 
 ## Validação
 
-- 274 testes locais aprovados; typecheck, build:state e git diff --check aprovados.
+- 337 testes locais aprovados; typecheck, build:state e git diff --check aprovados. Validacao adicional das novas fontes no Actions ainda em andamento.
 - CI de código aprovada: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36862961607
 - Coleta e fontes implementadas aprovadas: https://github.com/andreypiekas/Airline-Manager-4/actions/runs/36862952783
 - Commit de código validado: 0ee119a39c68375c1f01f0f7d5e7831707612fac.
@@ -40,7 +42,7 @@ candidate-evidence.ts relaciona origem/destino aos detalhes das rotas existentes
 
 cost-reference-reader.ts consulta detalhes do catálogo e preços nos painéis Fuel/Co2. Verifica callbacks, modelo, labels, valores e unidades. Não aciona Order, Configuration, Purchase, A-Check ou Repair. Referência de A-check do catálogo não confirma custo efetivo de manutenção por voo. Preço de mercado não confirma custo de aquisição do estoque.
 
-candidate-data.json/MD apresenta evidências, referência de manutenção e combustível ao preço observado por 1.000 lbs. Taxa de criação fica separada das despesas recorrentes. Não se supõem custos zero nem uma fórmula linear de manutenção. CO₂, manutenção efetiva e airportAndOther ficam null quando ausentes. costsComplete=false, netProfit=null e comparisonReady=false permanecem obrigatórios. Nenhum orçamento parcial alimenta RouteReview.
+candidate-data.json/MD apresenta evidências, reservas limitadas, estado de manutenção e cenarios de combustível, CO2 e rateio de A-check. As formulas da planilha sao referencias explicitamente separadas dos custos efetivos. Taxa de criação fica separada das despesas recorrentes. Não se supõem custos efetivos zero. CO₂, manutenção efetiva e airportAndOther ficam null quando ausentes. costsComplete=false, netProfit=null e comparisonReady=false permanecem obrigatórios. Nenhum orçamento parcial alimenta RouteReview. Regras, fontes e configuracoes: [RESERVATIONS_AND_COSTS.md](RESERVATIONS_AND_COSTS.md).
 
 ENABLE_ROUTE_RESEARCH=false é o padrão. Quando habilitado, maxAircraft/maxSuggestions aceitam 1–10; a consulta limitada não garante a melhor rota ou revisão diária de toda a frota. O cron-job.org continua disparando workflow_dispatch; nenhum schedule ou configuração financeira foi alterado.
 

@@ -15,7 +15,7 @@ async function checkedClick(page:Page,selector:string,callback:string,timeout:nu
   if(await c.count()!==1||!await c.isVisible()||normalize(await c.getAttribute('onclick')||'')!==normalize(callback))throw new Error('REFERENCE_CONTROL_UNVERIFIED');
   await c.click({timeout});
 }
-async function closeReadOnlyPopup(page:Page,timeout:number){
+export async function closeReadOnlyPopup(page:Page,timeout:number){
   const title=page.locator('#popTitle');
   if(!await title.isVisible())return;
   const close=title.locator('..').locator('[onclick]');

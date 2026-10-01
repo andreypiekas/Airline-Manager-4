@@ -38,9 +38,17 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       evidence.research={observed,failed,uiRestored:research.uiRestored,comparisonReady:false,
         candidateSources:{uiRestored:candidates.uiRestored,modelsObserved:candidates.models.length,modelsExpected:expectedModels.size,
           fuelPriceObserved:!!candidates.market.fuel,co2PriceObserved:!!candidates.market.co2,candidates:candidates.candidates.length}};
+      Object.assign((evidence.research as any).candidateSources,{
+        maintenanceComplete:candidates.maintenance.complete,maintenanceAircraft:candidates.maintenance.aircraft.length,
+        reservationScenarios:candidates.candidates.filter((c:any)=>c.reservations.status!=='unavailable').length,
+        effectiveCostsComplete:candidates.candidates.filter((c:any)=>c.effectiveCosts.complete).length,
+      });
       phase='data_validation';
       if(!report.collectionComplete||verified!==fleet.aircraft.length||!research.uiRestored||failed>0)throw new Error();
       if(observed>0&&(!candidates.uiRestored||candidates.models.length!==expectedModels.size||!candidates.market.fuel||!candidates.market.co2))throw new Error();
+      if(observed>0&&(!candidates.maintenance.complete||candidates.maintenance.aircraft.length!==fleet.aircraft.length))throw new Error();
+      if(candidates.candidates.some((c:any)=>c.comparisonReady||c.mutationAuthorized||c.reservations.futureScheduleComplete||
+        c.effectiveCosts.complete||c.costScenarios.totalOperatingCost!==null))throw new Error();
       evidence.status='passed';
     } catch {
       throw new Error(`[ReadOnly] Validacao bloqueada na fase ${phase}; consulte os relatorios estruturados.`);
