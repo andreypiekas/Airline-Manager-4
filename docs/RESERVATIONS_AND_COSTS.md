@@ -8,6 +8,8 @@ O orcamento nativo inspecionado informa `Daily pax demand`, nao o saldo ainda di
 
 Nao foram implementados seletores ou chamadas presumidas para obter saldo de uma rota nova. O suporte oficial descreve demanda diaria e seu esgotamento, mas nao fornece nesta pagina uma API de saldo para candidatas: https://airlinemanager.zendesk.com/hc/en-us/articles/21732303589138-How-does-demand-work
 
+O MCDU e um recurso opcional do jogo, conforme informado pelo operador. A presenca do botao no menu nao comprova que a companhia possui esse recurso. A coleta normal nao depende dele, nao abre seu fluxo de compra e registra `optional_not_inspected` enquanto a disponibilidade nao estiver confirmada. Nenhuma compra e proposta ou automatizada. Fleet, Routes e as consultas financeiras existentes continuam sendo as fontes principais.
+
 ## Reservas de planejamento
 
 `optimization/reservations.ts` cria um cenario independente por candidata:

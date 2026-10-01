@@ -44,13 +44,19 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       await writeSourceNavigation('after_login');
       phase='finance_source_discovery';
       const finance=page.locator('[id="mapMaint"][data-original-title="Finance, Marketing & Stock"]');
+      phase='finance_control';
       if(await finance.count()!==1||!await finance.isVisible())throw new Error();
       const financeCallback=(await finance.getAttribute('onclick')||'').trim();
       const financeShape=financeCallback.replace(/'[^']*'/g,"''").replace(/\s/g,'');
-      if(!financeCallback.startsWith("hideAllWhenClick();popup('finances.php',")||
+      await writeFile('test-results/demand/finance-control.json',JSON.stringify({schemaVersion:1,dryRun:true,mutationAuthorized:false,
+        callbackShape:financeShape,queryPaths:Array.from(financeCallback.matchAll(/'([a-z_0-9]+\.php)(?:\?[^']*)?'/gi),m=>m[1])},null,2)+'\n');
+      phase='finance_callback';
+      if(!financeCallback.replace(/\s/g,'').startsWith("hideAllWhenClick();popup('finances.php',")||
         !/^hideAllWhenClick\(\);popup\('',''(?:,(?:false|true|null|\d+|'')){1,9}\);$/.test(financeShape))throw new Error();
       const financeBeforeIds=await page.locator('[id]').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.id));
+      phase='finance_click';
       await finance.click({timeout:10000});
+      phase='finance_screen';
       await page.locator('#popTitle').waitFor({state:'visible',timeout:10000});
       await expect(page.locator('#popTitle')).toContainText(/Finance|Marketing|Stock/i,{timeout:10000});
       await expect.poll(()=>page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id)).some(e=>(e as HTMLElement).innerText?.length>30),financeBeforeIds),{timeout:10000}).toBe(true);
@@ -61,34 +67,12 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       await writeFile('test-results/demand/finance-source-discovery.json',JSON.stringify({schemaVersion:1,observedAt:new Date().toISOString(),dryRun:true,
         mutationAuthorized:false,screen:financeScreen,tabs:financeTabs},null,2)+'\n');
       await closeReadOnlyPopup(page,10000);
-      phase='mcdu_source_discovery';
-      await closeReadOnlyPopup(page,10000);
-      phase='mcdu_control';
-      const mcdu=page.locator('#mcduBtn');
-      if(await mcdu.count()!==1||!await mcdu.isVisible()||await mcdu.getAttribute('onclick')!=='startMcdu();')throw new Error();
-      // Inspected native navigation callback from the preceding read-only artifact. No MCDU operation key.
-      const beforeIds=await page.locator('[id]').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.id));
-      const hit=await mcdu.evaluate(e=>{
-        const r=e.getBoundingClientRect(),p=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
-        return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},viewport:{width:innerWidth,height:innerHeight},
-          hit:p?{id:p.id,tag:p.tagName,className:p.className}:null,ownHit:!!p&&(p===e||e.contains(p))};
-      });
-      await writeFile('test-results/demand/mcdu-control.json',JSON.stringify({schemaVersion:1,dryRun:true,mutationAuthorized:false,hit},null,2)+'\n');
-      phase='mcdu_wait_uncovered';
-      await expect.poll(()=>mcdu.evaluate(e=>{const r=e.getBoundingClientRect(),p=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !!p&&(p===e||e.contains(p));}),{timeout:45000}).toBe(true);
-      phase='mcdu_click';
-      await mcdu.click({timeout:10000});
-      phase='mcdu_screen';
-      await expect.poll(()=>page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&(!before.includes(e.id)||/mcdu/i.test(e.id))).some(e=>(e as HTMLElement).innerText?.length>20),beforeIds),{timeout:10000}).toBe(true);
-      const screen=await page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&(!before.includes(e.id)||/mcdu/i.test(e.id)))
-        .filter(e=>!e.matches('input,textarea,select,form,script')).slice(0,120).map(e=>({id:e.id,tag:e.tagName,
-          text:(e as HTMLElement).innerText.trim().slice(0,1800),callback:/^[A-Za-z_][A-Za-z0-9_]*\((?:(?:this|true|false|\d{1,3}|'[A-Za-z0-9 _./-]{1,12}')(?:,(?:this|true|false|\d{1,3}|'[A-Za-z0-9 _./-]{1,12}'))*)?\);$/.test(e.getAttribute('onclick')||'')?e.getAttribute('onclick'):null})),beforeIds);
-      await writeFile('test-results/demand/mcdu-source-discovery.json',JSON.stringify({schemaVersion:1,observedAt:new Date().toISOString(),
-        dryRun:true,mutationAuthorized:false,screen},null,2)+'\n');
-      phase='restore_after_source_probe';
-      await page.reload({waitUntil:'domcontentloaded'});
-      await page.locator('#mapRoutes').waitFor({state:'visible',timeout:90000});
-      await page.locator('#am4-intro').waitFor({state:'hidden',timeout:90000});
+      // MCDU is an optional paid feature. Presence of its menu does not prove ownership.
+      // Do not open a purchase flow or make it a requirement for the normal collection.
+      await writeFile('test-results/demand/mcdu-source-discovery.json',JSON.stringify({schemaVersion:1,
+        observedAt:new Date().toISOString(),dryRun:true,mutationAuthorized:false,required:false,
+        status:'optional_not_inspected',ownershipConfirmed:false,
+        reason:'MCDU_OPTIONAL_AVAILABILITY_NOT_CONFIRMED'},null,2)+'\n');
       phase='fleet_open';
       const menu=page.locator('#mapRoutes');
       if ((await menu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');") throw new Error();

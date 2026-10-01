@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: consultar Finance por menu confirmado e aguardar MCDU livre de carregamento, sem forcar cliques.
+# Revisao: Finance somente leitura; MCDU opcional, sem compra nem requisito de coleta.
 on:
   workflow_dispatch:
   push:
