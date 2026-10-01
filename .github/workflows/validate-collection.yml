@@ -1,5 +1,5 @@
 name: Validar coleta integral em simulacao
-# Revisao: abrir somente o menu MCDU observado e inventariar controles, sem teclas operacionais.
+# Revisao: diagnosticar visibilidade do controle MCDU sem cliques forcados ou operacoes.
 on:
   workflow_dispatch:
   push:

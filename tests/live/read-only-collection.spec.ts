@@ -23,7 +23,7 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
             .map(s=>s.replace(/\s+/g,' ').trim()).filter(s=>/^(?:Fleet|Routes|Finance|Finances|Banking|Staff|MCDU|Search|Research|Maintenance|Statistics|Transactions)$/i.test(s));
           if(!labels.length)return [];
           const callback=(e.getAttribute('onclick')||'').trim();
-          const safe=/^(?:hideAllWhenClick\(\);)?popup\('[a-z_]+\.php','[A-Za-z ]+'(?:,(?:false|true|\d+)){1,8}\);$/.test(callback)||
+          const safe=/^(?:hideAllWhenClick\(\);)?popup\('[a-z_0-9]+\.php','[A-Za-z ,/&-]+'(?:,(?:false|true|\d+)){1,8}\);$/.test(callback)||
             /^(?:[A-Za-z][A-Za-z0-9_]*\(\);)+$/.test(callback);
           return [{id:/^[A-Za-z][A-Za-z0-9_-]*$/.test(e.id)?e.id:null,tag:e.tagName,label:labels[0],
             title:e.getAttribute('title'),ariaLabel:e.getAttribute('aria-label'),tooltip:e.getAttribute('data-original-title'),callback:safe?callback:null}];
@@ -76,11 +76,20 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
       await page.locator('#routesContainer').waitFor({state:'visible',timeout:10000});
       phase='mcdu_source_discovery';
       await closeReadOnlyPopup(page,10000);
+      phase='mcdu_control';
       const mcdu=page.locator('#mcduBtn');
       if(await mcdu.count()!==1||!await mcdu.isVisible()||await mcdu.getAttribute('onclick')!=='startMcdu();')throw new Error();
       // Inspected native navigation callback from the preceding read-only artifact. No MCDU operation key.
       const beforeIds=await page.locator('[id]').evaluateAll(es=>es.filter(e=>e.getClientRects().length).map(e=>e.id));
-      await mcdu.click();
+      const hit=await mcdu.evaluate(e=>{
+        const r=e.getBoundingClientRect(),p=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);
+        return {rect:{x:r.x,y:r.y,width:r.width,height:r.height},viewport:{width:innerWidth,height:innerHeight},
+          hit:p?{id:p.id,tag:p.tagName,className:p.className}:null,ownHit:!!p&&(p===e||e.contains(p))};
+      });
+      await writeFile('test-results/demand/mcdu-control.json',JSON.stringify({schemaVersion:1,dryRun:true,mutationAuthorized:false,hit},null,2)+'\n');
+      phase='mcdu_click';
+      await mcdu.click({timeout:10000});
+      phase='mcdu_screen';
       await expect.poll(()=>page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id)).length,beforeIds),{timeout:10000}).toBeGreaterThan(0);
       const screen=await page.locator('[id]').evaluateAll((es,before)=>es.filter(e=>e.getClientRects().length&&!before.includes(e.id))
         .filter(e=>!e.matches('input,textarea,select,form,script')).slice(0,120).map(e=>({id:e.id,tag:e.tagName,
