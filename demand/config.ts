@@ -11,8 +11,8 @@ export function readDemandConfig(env: NodeJS.ProcessEnv = process.env): DemandCo
   const enabled = booleanValue(env, 'ENABLE_DEMAND_MANAGER', true);
   const dryRun = booleanValue(env, 'DEMAND_DRY_RUN', true);
   const failSafe = booleanValue(env, 'DEMAND_FAIL_SAFE', true);
-  if (!dryRun || !failSafe) {
-    throw new Error('[Demand] Esta versao exige DEMAND_DRY_RUN=true e DEMAND_FAIL_SAFE=true. Integracao operacional ainda nao validada para execucao real.');
+  if (!failSafe || (!dryRun && (!enabled || env.DEMAND_EXECUTION_ACK !== 'individual-return-legs-v1'))) {
+    throw new Error('[Demand] Execucao real exige gerenciador e fail-safe ativos e DEMAND_EXECUTION_ACK=individual-return-legs-v1.');
   }
   const minPercentage = Number(env.MIN_DEMAND_PERCENTAGE?.trim() || '80');
   if (!Number.isFinite(minPercentage) || minPercentage <= 0 || minPercentage > 100) {
@@ -24,5 +24,5 @@ export function readDemandConfig(env: NodeJS.ProcessEnv = process.env): DemandCo
   if (mode !== 'aggregate' && mode !== 'per-class') throw new Error('[Demand] DEMAND_THRESHOLD_MODE invalido.');
   if (poolScope !== 'airport-pair' && poolScope !== 'directional') throw new Error('[Demand] DEMAND_POOL_SCOPE invalido.');
   if (!Number.isSafeInteger(maxAgeSeconds) || maxAgeSeconds < 1 || maxAgeSeconds > 3600) throw new Error('[Demand] DEMAND_MAX_AGE_SECONDS invalido.');
-  return { enabled, dryRun: true, failSafe: true, minPercentage, mode, poolScope, maxAgeSeconds };
+  return { enabled, dryRun, failSafe: true, minPercentage, mode, poolScope, maxAgeSeconds };
 }

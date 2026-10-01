@@ -15,7 +15,7 @@ export async function runDemandSimulation(page: Page, config: DemandConfig = rea
   const optimization = optimizationConfig();
   const research = researchConfig();
   const collection = await new DemandReader(page, 10000, true).collect();
-  const report = new DemandManager(config).analyze(collection);
+  const report = new DemandManager({...config,dryRun:true}).analyze(collection);
   await writeDemandReport(report);
   await writeOccupancyAudit(collection, config);
   await writeFleetObservations(collection, optimization.aircraftOrigins, 'test-results/demand', config.maxAgeSeconds, optimization.airlineBases);

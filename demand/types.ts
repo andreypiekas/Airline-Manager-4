@@ -30,7 +30,7 @@ export interface AircraftSnapshot {
 }
 export interface DemandConfig {
   enabled: boolean;
-  dryRun: true;
+  dryRun: boolean;
   failSafe: true;
   minPercentage: number;
   mode: 'aggregate' | 'per-class';
