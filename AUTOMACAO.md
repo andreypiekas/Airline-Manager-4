@@ -74,3 +74,7 @@ Nao existe garantia de ausencia de banimento, disponibilidade 24h, sucesso de lo
 ## Revisão de rotas e tarifas PAX
 
 A simulação também gera `optimization-report.json/.md` com tarifas Auto × Y1,10/J1,08/F1,06, arredondadas para baixo em dezenas. O comparador independente de rotas usa lucro líquido estimado por hora no ciclo de ida e volta, condicionado a retorno confirmado à base. A coleta da base e dos candidatos ainda está pendente; o relatório sinaliza isso e nenhuma troca é executada. Veja [regras, exemplos e limites](docs/ROUTES_AND_PRICING.md).
+
+### Abastecimento integrado ao DemandManager
+
+O workflow principal voltou a consultar e comprar combustível/CO₂ antes das decolagens, conforme `ENABLE_FUEL` (padrão true), `MAX_FUEL_PRICE` e `MAX_CO2_PRICE`. Compras ocorrem somente abaixo dos tetos e com orçamento/estoque válidos. O modo simulação impede compras. Não há compra emergencial acima do teto. Veja [configuração, confirmação e relatório](docs/SUPPLIES.md).

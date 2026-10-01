@@ -144,6 +144,7 @@ jobs:
         DEMAND_MAX_AGE_SECONDS: ${{ vars.DEMAND_MAX_AGE_SECONDS || '300' }}
         EMAIL: ${{ secrets.EMAIL }}
         PASSWORD: ${{ secrets.PASSWORD }}
+        MIN_CASH_RESERVE: ${{ vars.MIN_CASH_RESERVE || '0' }}
         MAX_FUEL_PRICE: ${{ vars.MAX_FUEL_PRICE }}
         MAX_CO2_PRICE: ${{ vars.MAX_CO2_PRICE }}
         MAX_FUEL_PURCHASE_PER_RUN: ${{ vars.MAX_FUEL_PURCHASE_PER_RUN }}
@@ -153,7 +154,7 @@ jobs:
         INCREASE_AIRLINE_REPUTATION: ${{ vars.INCREASE_AIRLINE_REPUTATION }}
         CAMPAIGN_TYPE: ${{ vars.CAMPAIGN_TYPE }}
         CAMPAIGN_DURATION: ${{ vars.CAMPAIGN_DURATION }}
-        ENABLE_FUEL: ${{ vars.ENABLE_FUEL }}
+        ENABLE_FUEL: ${{ vars.ENABLE_FUEL || 'true' }}
         ENABLE_MAINTENANCE: ${{ vars.ENABLE_MAINTENANCE }}
         ENABLE_CAMPAIGN: ${{ vars.ENABLE_CAMPAIGN }}
         ENABLE_DEPART: ${{ vars.ENABLE_DEPART }}
@@ -185,6 +186,9 @@ jobs:
         fi
         if [ -f test-results/demand/optimization-report.md ]; then
           cat test-results/demand/optimization-report.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/supply-report.md ]; then
+          cat test-results/demand/supply-report.md >> "$GITHUB_STEP_SUMMARY"
         fi
         if [ -f test-results/demand/execution-report.md ]; then
           cat test-results/demand/execution-report.md >> "$GITHUB_STEP_SUMMARY"

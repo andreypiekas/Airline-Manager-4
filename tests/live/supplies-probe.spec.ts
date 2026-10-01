@@ -20,3 +20,12 @@ test('inspect supply controls without purchases',async({page})=>{
  }
  await closeReadOnlyPopup(page,10000);
 });
+
+// Exercise the exact production reader and quote path, with purchases structurally disabled.
+import {runSupplies} from '../../supplies/run';
+test('validate supply plans on the live UI without buying',async({page})=>{
+ await loginForReadOnlyCollection(page,process.env,90000);
+ await runSupplies(page,true,{...process.env,ENABLE_FUEL:'true',MAX_FUEL_PRICE:'550',MAX_CO2_PRICE:'120'},'test-results/supplies/configured');
+ // Artificial thresholds are only for this dry-run quote test, never production settings.
+ await runSupplies(page,true,{...process.env,ENABLE_FUEL:'true',MAX_FUEL_PRICE:'10000',MAX_CO2_PRICE:'10000',MAX_FUEL_PURCHASE_PER_RUN:'1000',MAX_CO2_PURCHASE_PER_RUN:'1000'},'test-results/supplies/quote-validation');
+});

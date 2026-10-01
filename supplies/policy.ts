@@ -1,0 +1,37 @@
+export type Commodity = 'fuel' | 'co2';
+export interface SupplyConfig {
+  enabled:boolean; maxPrice:Record<Commodity,number>; maxQuantity:Record<Commodity,number>; minCashReserve:number;
+}
+export interface SupplySnapshot { pricePer1000:number; holding:number; remainingCapacity:number; balance:number }
+export interface PurchasePlan { quantity:number; estimatedCost:number; budget:number; reason:string }
+export function supplyConfig(env:NodeJS.ProcessEnv=process.env):SupplyConfig {
+  const flag=(env.ENABLE_FUEL||'true').trim().toLowerCase();
+  if(!['true','false','1','0','on','off','yes','no'].includes(flag))throw Error('SUPPLY_ENABLE_INVALID');
+  const enabled=['true','1','on','yes'].includes(flag);
+  const number=(name:string,fallback:number,min:number)=>{
+    const raw=(env[name]||String(fallback)).trim();
+    if(!/^\d+$/.test(raw))throw Error('SUPPLY_CONFIG_INVALID:'+name);
+    const value=Number(raw);if(!Number.isSafeInteger(value)||value<min)throw Error('SUPPLY_CONFIG_INVALID:'+name);return value;
+  };
+  return {enabled,maxPrice:{fuel:number('MAX_FUEL_PRICE',enabled?550:0,enabled?1:0),co2:number('MAX_CO2_PRICE',enabled?120:0,enabled?1:0)},
+    maxQuantity:{fuel:number('MAX_FUEL_PURCHASE_PER_RUN',0,0),co2:number('MAX_CO2_PURCHASE_PER_RUN',0,0)},
+    minCashReserve:number('MIN_CASH_RESERVE',0,0)};
+}
+/** Prices are per 1,000 lbs / quotas. Zero quantity limit means available tank capacity. */
+export function planPurchase(s:SupplySnapshot,kind:Commodity,c:SupplyConfig):PurchasePlan {
+  const hold=(reason:string):PurchasePlan=>({quantity:0,estimatedCost:0,budget:0,reason});
+  if(!c.enabled)return hold('DISABLED');
+  if(Object.values(s).some(n=>!Number.isSafeInteger(n)||n<0)||s.pricePer1000===0||
+    !Number.isSafeInteger(s.holding+s.remainingCapacity))return hold('INVALID_DATA');
+  if(s.pricePer1000>=c.maxPrice[kind])return hold('PRICE_NOT_BELOW_LIMIT');
+  if(s.remainingCapacity===0)return hold('STORAGE_FULL');
+  const available=Math.max(0,s.balance-c.minCashReserve);
+  const target=Math.min(s.remainingCapacity,c.maxQuantity[kind]||s.remainingCapacity);
+  const cost=Math.ceil(target*s.pricePer1000/1000);
+  if(!Number.isSafeInteger(cost))return hold('INVALID_DATA');
+  // Preserve original fuel policy: fill when affordable; otherwise spend at most half of available cash.
+  const budget=cost<=available?available:Math.floor(available/2);
+  const quantity=Math.min(target,Math.floor(budget*1000/s.pricePer1000));
+  if(!Number.isSafeInteger(quantity)||quantity<=0)return hold('INSUFFICIENT_BUDGET');
+  return {quantity,estimatedCost:Math.ceil(quantity*s.pricePer1000/1000),budget,reason:'PRICE_AND_BUDGET_ACCEPTED'};
+}
