@@ -45,6 +45,17 @@ test('coleta integral das rotas — somente leitura',async({page})=>{
         modelsNotInInspectedCatalog:candidates.modelReads.filter((m:any)=>m.status==='not_in_inspected_catalog').length,
         modelSourcesComplete:candidates.models.length===expectedModels.size,
       });
+      // Discover rendered navigation only; never read forms, scripts, storage or session data.
+      const navigation=await page.locator('#smallMainMenu [onclick]').evaluateAll(elements=>elements
+        .filter(e=>e.getClientRects().length)
+        .map(e=>({id:e.id,label:(e as HTMLElement).innerText.trim(),callback:e.getAttribute('onclick')||''}))
+        .filter(e=>/^(?:Fleet|Routes|Finance|Finances|Banking|Staff|MCDU|Search|Research|Maintenance|Statistics|Transactions)$/.test(e.label))
+        .map(e=>({id:/^[A-Za-z][A-Za-z0-9_-]*$/.test(e.id)?e.id:null,label:e.label,
+          // Only navigation-shaped callbacks without arguments that could hold identifiers/secrets.
+          callback:/^(?:hideAllWhenClick\(\);)?popup\('[a-z_]+\.php','[A-Za-z ]+',false,false,true\);$/.test(e.callback)||
+            /^[A-Za-z][A-Za-z0-9_]*\(\);$/.test(e.callback)?e.callback:null})));
+      await writeFile('test-results/demand/source-navigation.json',JSON.stringify({schemaVersion:1,
+        observedAt:new Date().toISOString(),dryRun:true,mutationAuthorized:false,navigation},null,2)+'\n');
       phase='data_validation';
       if(!report.collectionComplete||verified!==fleet.aircraft.length||!research.uiRestored||failed>0)throw new Error();
       const accountedModels=candidates.modelReads.filter((m:any)=>['observed','not_in_inspected_catalog'].includes(m.status));
