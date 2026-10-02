@@ -15,7 +15,7 @@ export interface CandidateQuote extends QuoteIdentity {
   aircraftOnRoute: number;
   dailyDemand: Cabins;
   autopriceReference: QuoteAutopriceReference | null;
-  createControl: RouteCreateControlEvidence;
+  createControl?: RouteCreateControlEvidence;
   remainingDemand: null;
   netProfit: null;
   comparisonReady: false;
