@@ -39,6 +39,7 @@ export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv
   const raw=error instanceof Error?error.message:'UNCLASSIFIED';
   const code=/^[A-Z0-9_:-]{1,120}$/.test(raw)?raw:'UNCLASSIFIED';
   const entry=report.entries.at(-1);if(entry){
+   if(entry.status!=='attempting')entry.diagnostic=await port.diagnostic(entry.kind).catch(()=>null);
    entry.reason=entry.status==='attempting'?'OUTCOME_UNKNOWN_NO_RETRY:'+code:'READ_OR_VALIDATION_FAILED:'+code;
    entry.status=entry.status==='attempting'?'unknown':'unavailable';
   }
