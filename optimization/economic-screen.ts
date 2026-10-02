@@ -80,12 +80,15 @@ export function screenCandidateEconomics(
   let firstDepartureAfterSetupFeeCeiling: number | null = null;
 
   const auto = quote.autopriceReference;
-  if (auto && !VIP_MODEL_IDS.has(auto.modelId) && validCabins(auto.base)) {
+  const effectiveBase=auto
+    ? (validCabins(auto.effectiveFares)?auto.effectiveFares:!VIP_MODEL_IDS.has(auto.modelId)&&validCabins(auto.base)?auto.base:null)
+    : null;
+  if (effectiveBase) {
     try {
       adjustedFareReference = {
-        Y: capacity.Y > 0 ? adjustedPaxFare(auto.base.Y, 'Y') : 0,
-        J: capacity.J > 0 ? adjustedPaxFare(auto.base.J, 'J') : 0,
-        F: capacity.F > 0 ? adjustedPaxFare(auto.base.F, 'F') : 0,
+        Y: capacity.Y > 0 ? adjustedPaxFare(effectiveBase.Y, 'Y') : 0,
+        J: capacity.J > 0 ? adjustedPaxFare(effectiveBase.J, 'J') : 0,
+        F: capacity.F > 0 ? adjustedPaxFare(effectiveBase.F, 'F') : 0,
       };
       grossRevenueCeilingPerDeparture = CLASSES.reduce(
         (sum, k) => sum + passengerCeiling[k] * adjustedFareReference![k], 0
