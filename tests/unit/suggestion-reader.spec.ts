@@ -1,5 +1,5 @@
 import { test,expect,Page } from '@playwright/test';
-import { collectOpenRouteSuggestions } from '../../optimization/suggestion-reader';
+import { collectOpenRouteSuggestions, probeOpenRouteControl } from '../../optimization/suggestion-reader';
 import { AircraftSnapshot } from '../../demand/types';
 const aircraft:AircraftSnapshot={aircraftId:'101',registration:'SYNTHETIC',routeId:'1',routeLabel:'AAA-BBB',from:'AAA',to:'BBB',state:'ready',capacity:{Y:100,J:0,F:0},remaining:{Y:1000,J:0,F:0},dailyTotal:{Y:1000,J:0,F:0},observedAt:new Date().toISOString()};
 async function fixture(page:Page,unknown=false) {
@@ -29,6 +29,28 @@ test('unknown suggestion callback is rejected before any click',async({page})=>{
 for(const variant of ['away','inflight','missing-origin','issue'])test(`replacement research blocked ${variant}`,async({page})=>{
  await fixture(page);const a={...aircraft};if(variant==='away')a.from='BBB';if(variant==='inflight')a.state='inflight';if(variant==='issue')a.issue='failure';
  const r=await collectOpenRouteSuggestions(page,a,variant==='missing-origin'?null:'AAA',3,500);expect(r.warnings).toEqual(['AIRCRAFT_NOT_READY_AT_BASE']);expect(await page.evaluate(()=>(window as any).reads)).toBe(0);
+});
+
+test('diagnostic probe may inspect one suggestion away from home base without creating an optimization candidate',async({page})=>{
+ await fixture(page);
+ const away={...aircraft,from:'AAA',to:'BBB'};
+ const r=await probeOpenRouteControl(page,away,'AAA',500);
+ expect(r.status).toBe('observed');
+ expect(r.observation).toMatchObject({
+   airportId:'200',from:'AAA',to:'BBB',
+   createControl:{observed:true,mutationAuthorized:false}
+ });
+ expect(r.mutationAuthorized).toBe(false);
+ expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
+test('diagnostic probe fails closed on current-airport mismatch before clicks',async({page})=>{
+ await fixture(page);
+ const r=await probeOpenRouteControl(page,aircraft,'CCC',500);
+ expect(r.status).toBe('unavailable');
+ expect(r.warnings).toEqual(['DIAGNOSTIC_AIRCRAFT_CONTEXT_INVALID']);
+ expect(await page.evaluate(()=>(window as any).reads)).toBe(0);
+ expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 
 test('expired aircraft observation blocks all research clicks',async({page})=>{
