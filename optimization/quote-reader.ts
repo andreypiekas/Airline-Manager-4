@@ -80,13 +80,17 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
     const durationSeconds = Number(time[1])*3600 + Number(time[2])*60 + Number(time[3]);
     const auto=panel.locator('#introAuto');
     const autopriceReference=await auto.count()===1 && await auto.isVisible()?parseQuoteAutoprice(await auto.getAttribute('onclick')||''):null;
-    const create=panel.locator('#btnCreateNewRoute');
+    // The live AM4 UI does not consistently expose the same element id for this
+    // action. Discover the unique visible native button by its accessible label,
+    // inspect only its structure, and never click it here.
+    const create=panel.getByRole('button',{name:/^Create route$/i});
+    const createCount=await create.count();
     const createControl=inspectRouteCreateControl({
-      id:await create.count()===1?await create.getAttribute('id'):null,
-      label:await create.count()===1?(await create.innerText().catch(()=>'')):null,
-      onclick:await create.count()===1?await create.getAttribute('onclick'):null,
-      visible:await create.count()===1?await create.isVisible():false,
-      enabled:await create.count()===1?await create.isEnabled().catch(()=>false):false
+      id:createCount===1?await create.getAttribute('id'):null,
+      label:createCount===1?(await create.innerText().catch(()=>'')):null,
+      onclick:createCount===1?await create.getAttribute('onclick'):null,
+      visible:createCount===1?await create.isVisible():false,
+      enabled:createCount===1?await create.isEnabled().catch(()=>false):false
     });
     const quote: CandidateQuote = { ...identity, observedAt: new Date().toISOString(), distanceKm: integerText(raw.distance), durationSeconds,
       fuelLbs: integerText(raw.fuel), co2KgPerPaxKm: Number(raw.co2), costIndex: integerText(raw.costIndex), routeFee: integerText(raw.fee.replace(/^\$\s*/, '')),
