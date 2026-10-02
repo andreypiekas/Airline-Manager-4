@@ -39,8 +39,26 @@ test('builds a partial round-trip envelope without inventing a reverse quote',()
   });
   expect(r.blockers).toContain('RETURN_LIVE_QUOTE_REQUIRED');
   expect(r.blockers).toContain('RETURN_EFFECTIVE_COSTS_REQUIRED');
+  expect(r.blockers).toContain('FUTURE_COMPETITION_COVERAGE_INCOMPLETE');
   expect(r.comparisonReady).toBe(false);
   expect(r.mutationAuthorized).toBe(false);
+});
+
+test('bounded conservative competition coverage removes the timetable blocker without fabricating reverse economics',()=>{
+  const r=buildCandidateRoundTripScreen(
+    quote(),
+    catalog([{from:'WAW',to:'DTW',distanceKm:7258,referenceDemand:{Y:494,J:662,F:130},sourceRow:1}]),
+    {
+      forwardAfterReservations:{Y:400,J:200,F:100},
+      reverseAfterReservations:{Y:300,J:100,F:50},
+      futureScheduleComplete:false,
+      futureCompetitionComplete:true
+    },
+    now
+  );
+  expect(r.blockers).not.toContain('FUTURE_COMPETITION_COVERAGE_INCOMPLETE');
+  expect(r.blockers).toContain('RETURN_LIVE_QUOTE_REQUIRED');
+  expect(r.comparisonReady).toBe(false);
 });
 
 test('catalogue alone is structural evidence and cannot create return demand',()=>{
