@@ -1,8 +1,10 @@
 import { Cabins, CLASSES, CollectionResult } from '../demand/types';
 import { CandidateQuote } from './quote-reader';
+import { DemandResetCalibration, historicalRemainingForCandidate } from './demand-reset-ledger';
 
 /** Observations are not reservations, forecasts, or a complete economic review. */
-export function candidateDemandEvidence(quote: CandidateQuote, collection: CollectionResult, now = new Date(), maxAgeSeconds = 300) {
+export function candidateDemandEvidence(quote: CandidateQuote, collection: CollectionResult, now = new Date(), maxAgeSeconds = 300,
+  resetCalibration: DemandResetCalibration | null = null) {
   const result = {status:'unavailable',remaining:null as Cabins|null,reverseRemaining:null as Cabins|null,
     sources:[] as {aircraftId:string;routeId:string;from:string;to:string;observedAt:string;remaining:Cabins}[],
     demandNetOfOtherAircraft:false,comparisonReady:false,reason:''};
@@ -12,7 +14,14 @@ export function candidateDemandEvidence(quote: CandidateQuote, collection: Colle
     return {...result,reason:'COLLECTION_OR_QUOTE_UNVERIFIED'};
   }
   const matches=collection.aircraft.filter(a=>a.from===quote.from&&a.to===quote.to||a.from===quote.to&&a.to===quote.from);
-  if(!matches.length)return {...result,reason:'NO_EXISTING_ROUTE_OBSERVATION'};
+  if(!matches.length){
+    const historical=resetCalibration?historicalRemainingForCandidate(quote.from,quote.to,quote.dailyDemand,collection,resetCalibration):null;
+    if(historical?.status==='verified'&&historical.remaining){
+      return {...result,status:'historical_pair_reconstructed',remaining:{...historical.remaining},reverseRemaining:{...historical.remaining},
+        reason:'HISTORICAL_PAIR_LEDGER_VERIFIED',historical};
+    }
+    return {...result,reason:historical?.reason||'NO_EXISTING_ROUTE_OBSERVATION',historical};
+  }
   if(new Set(matches.map(a=>a.aircraftId)).size!==matches.length||new Set(matches.map(a=>a.routeId)).size!==matches.length||
     matches.some(a=>!/^\d+$/.test(a.aircraftId)||!/^\d+$/.test(a.routeId)||a.issue||!a.capacity||!a.operational||
       !['ready','inflight'].includes(a.state)||!fresh(a.observedAt)||!a.remaining||!a.dailyTotal||
