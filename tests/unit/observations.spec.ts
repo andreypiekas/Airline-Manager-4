@@ -52,6 +52,24 @@ test('discovers Create route when the live control is a non-button element with 
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 
+test('passive listener diagnostics capture registered route handlers without executing them',async({page})=>{
+  await fixture(page);
+  await page.locator('#btnCreateNewRoute').evaluate((e)=>{
+    e.removeAttribute('onclick');
+    e.addEventListener('click',()=>fetch('route_create.php?id=123&token=SECRET'));
+  });
+  const r=await readOpenCandidateQuote(page,identity);
+  expect(r.status).toBe('observed');
+  if(r.status!=='observed')return;
+  const serialized=JSON.stringify(r.quote.routeListenerDiagnostics);
+  expect(serialized).toContain('route_create.php');
+  expect(serialized).toContain('id=<value>');
+  expect(serialized).toContain('token=<value>');
+  expect(serialized).not.toContain('SECRET');
+  expect(serialized).not.toContain('123');
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 test('route action diagnostics retain endpoint shape but redact query values',async({page})=>{
   await fixture(page);
   await page.locator('#btnCreateNewRoute').evaluate(e=>e.setAttribute(
