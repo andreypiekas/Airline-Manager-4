@@ -14,6 +14,8 @@ import { readAircraftMaintenanceReferences } from './maintenance-reader';
 import { candidateCostScenarios, effectiveCostBudget } from './cost-budget';
 import { emptyFinanceHistory, readFinanceHistoryReference } from './finance-reader';
 import { screenCandidateEconomics } from './economic-screen';
+import { buildCandidateRoundTripScreen } from './round-trip-screen';
+import { loadReference, RouteCatalog } from './reference-data';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -87,13 +89,29 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   const quotes=research.aircraft.flatMap(a=>a.result?.quotes||[]);
   const models:ModelCostReference[]=[];const warnings:string[]=[];
   const modelReads:ModelCostReadResult[]=[];
+  const capacityFor=(quote:CandidateQuote)=>{
+    const aircraft=collection.aircraft.find(a=>a.aircraftId===quote.aircraftId);
+    return collection.complete&&aircraft&&aircraft.registration===quote.registration&&aircraft.operational&&!aircraft.issue&&fresh(aircraft.observedAt)?aircraft.capacity:null;
+  };
+  const screeningByQuote=new Map(quotes.map(quote=>[quote,screenCandidateEconomics(
+    quote,capacityFor(quote),minCoveragePercent,now,reservationsConfig.maxAgeSeconds
+  )] as const));
+  const economicQuotes=quotes.filter(quote=>screeningByQuote.get(quote)?.demandStatus!=='cannot_meet_threshold');
+  const screenedOutBeforeModelReference=quotes.length-economicQuotes.length;
+  if(screenedOutBeforeModelReference)warnings.push(`SCREENED_OUT_BEFORE_MODEL_REFERENCE:${screenedOutBeforeModelReference}`);
+  let routeCatalog:RouteCatalog|null=null;
+  try {
+    const loaded=await loadReference<RouteCatalog>('routes.json');
+    if(loaded.schemaVersion!==1||!Array.isArray(loaded.routes))throw new Error();
+    routeCatalog=loaded;
+  } catch {warnings.push('ROUTE_REFERENCE_UNAVAILABLE');}
   let uiRestored=research.uiRestored;
   let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true,stage:'not_requested',warnings:[],unitLabels:[]};
   let maintenance:Awaited<ReturnType<typeof readAircraftMaintenanceReferences>>={status:'not_requested',stage:'not_requested',observedAt:new Date().toISOString(),complete:false,uiClosed:true,aircraft:[],warnings:[]};
   let financeHistory=emptyFinanceHistory();
   // Market and maintenance sources must be validated even when no aircraft is eligible for research.
   if(research.config.enabled&&uiRestored){
-    const ids=[...new Set(quotes.flatMap(q=>q.autopriceReference?[q.autopriceReference.modelId]:[]))];
+    const ids=[...new Set(economicQuotes.flatMap(q=>q.autopriceReference?[q.autopriceReference.modelId]:[]))];
     if(ids.length>10)warnings.push('MODEL_REFERENCE_LIMIT');
     for(const id of ids.slice(0,10)){
       try {
@@ -127,21 +145,22 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     const model=models.find(m=>m.modelId===quote.autopriceReference?.modelId)||null;
     const reservations=candidateReservationScenario(quote,collection,now,reservationsConfig);
     const aircraft=collection.aircraft.find(a=>a.aircraftId===quote.aircraftId);
-    const capacity=collection.complete&&aircraft&&aircraft.registration===quote.registration&&aircraft.operational&&!aircraft.issue&&fresh(aircraft.observedAt)?aircraft.capacity:null;
-    const screening=screenCandidateEconomics(quote,capacity,minCoveragePercent,now,reservationsConfig.maxAgeSeconds);
+    const capacity=capacityFor(quote);
+    const screening=screeningByQuote.get(quote)!;
     const costScenarios=candidateCostScenarios(quote,capacity,reservations.forwardAfterReservations,
       {fuel:market.fuel,co2:market.co2,model,maintenance:maintenance.aircraft.find(a=>a.aircraftId===quote.aircraftId)||null},now,reservationsConfig.maxAgeSeconds);
     const effectiveCosts=effectiveCostBudget(quote,{},now,reservationsConfig.maxAgeSeconds);
+    const roundTrip=buildCandidateRoundTripScreen(quote,routeCatalog,reservations,now,reservationsConfig.maxAgeSeconds);
     const fuel=market.fuel&&fresh(market.fuel.observedAt)&&fresh(quote.observedAt)?quote.fuelLbs*market.fuel.pricePer1000/1000:null;
     return {aircraftId:quote.aircraftId,from:quote.from,to:quote.to,quoteObservedAt:quote.observedAt,
-      demand,screening,reservations,costScenarios,effectiveCosts,modelCostReference:model,costs:{fuelAtObservedMarketPrice:fuel,co2:null,maintenance:null,airportAndOther:null},
+      demand,screening,roundTrip,reservations,costScenarios,effectiveCosts,modelCostReference:model,costs:{fuelAtObservedMarketPrice:fuel,co2:null,maintenance:null,airportAndOther:null},
       setupFee:quote.routeFee,costsComplete:false,netProfit:null,comparisonReady:false,mutationAuthorized:false,
       missing:['FUTURE_OTHER_AIRCRAFT_RESERVATIONS','REVERSE_LEG_ECONOMICS','EFFECTIVE_FARES_AND_LOAD_FACTOR',
         'CO2_QUOTA_CONVERSION','AIRCRAFT_EFFECTIVE_MAINTENANCE','AIRPORT_AND_OTHER_COSTS','FUTURE_SCHEDULE_AND_RESET',
         ...(!demand.remaining?['DIRECTIONAL_REMAINING_DEMAND']:[]),...(fuel===null?['FUEL_MARKET_PRICE']:[])]};
   });
-  return {schemaVersion:2,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
-    uiRestored,market,models,modelReads,maintenance,financeHistory,
+  return {schemaVersion:3,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
+    uiRestored,screenedOutBeforeModelReference,market,models,modelReads,maintenance,financeHistory,
     warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
@@ -149,7 +168,8 @@ export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof 
   await writeFile(join(directory,'candidate-data.json'),JSON.stringify(report,null,2)+'\n');
   await writeFile(join(directory,'finance-history.json'),JSON.stringify(report.financeHistory,null,2)+'\n');
   await writeFile(join(directory,'candidate-data.md'),['# Evidencias das candidatas — simulacao','',
-    ...report.candidates.map(c=>`- ${c.aircraftId} ${c.from}–${c.to}: triagem ${c.screening.demandStatus}, teto de cobertura ${c.screening.coverageCeilingPercent===null?'indisponivel':c.screening.coverageCeilingPercent.toFixed(2)+'%'}, teto de receita/decolagem ${c.screening.grossRevenueCeilingPerDeparture??'indisponivel'}, apos taxa inicial ${c.screening.firstDepartureAfterSetupFeeCeiling??'indisponivel'}; demanda restante ${c.demand.status}; reservas ${c.reservations.status} (${c.reservations.reservations.length} trechos); saldo simulado ${JSON.stringify(c.reservations.forwardAfterReservations)}; combustivel ao preco observado ${c.costs.fuelAtObservedMarketPrice??'indisponivel'}; CO2 de referencia ${c.costScenarios.co2.atDemandCeiling??'indisponivel'}; A-check de referencia ${c.costScenarios.aCheck.catalogProration??'indisponivel'}; custos efetivos faltantes ${c.effectiveCosts.missing.join(', ')}; pendencias ${c.missing.join(', ')}.`),'',
+    ...report.candidates.map(c=>`- ${c.aircraftId} ${c.from}–${c.to}: triagem ${c.screening.demandStatus}, teto de cobertura ${c.screening.coverageCeilingPercent===null?'indisponivel':c.screening.coverageCeilingPercent.toFixed(2)+'%'}, teto de receita/decolagem ${c.screening.grossRevenueCeilingPerDeparture??'indisponivel'}, apos taxa inicial ${c.screening.firstDepartureAfterSetupFeeCeiling??'indisponivel'}; ciclo ${c.roundTrip.status}, volta ${c.roundTrip.returnLeg.from}–${c.roundTrip.returnLeg.to}, demanda restante volta ${JSON.stringify(c.roundTrip.returnLeg.remainingAfterReservations)}, bloqueios ciclo ${c.roundTrip.blockers.join(', ')}; demanda restante ida ${c.demand.status}; reservas ${c.reservations.status} (${c.reservations.reservations.length} trechos); saldo simulado ida ${JSON.stringify(c.reservations.forwardAfterReservations)}; combustivel ao preco observado ${c.costs.fuelAtObservedMarketPrice??'indisponivel'}; CO2 de referencia ${c.costScenarios.co2.atDemandCeiling??'indisponivel'}; A-check de referencia ${c.costScenarios.aCheck.catalogProration??'indisponivel'}; custos efetivos faltantes ${c.effectiveCosts.missing.join(', ')}; pendencias ${c.missing.join(', ')}.`),'',
+    `Candidatas descartadas antes da consulta de referencia por nao atingirem o limite nem no teto diario: ${report.screenedOutBeforeModelReference}.`,'',
     `Manutencao: ${report.maintenance.status}; referencias individuais ${report.maintenance.aircraft.length}. Reservas sao cenarios limitados de capacidade antes da candidata; nao sao previsao de horarios nem reservas feitas no jogo.`,
     `Historico financeiro: ${report.financeHistory.status}; lancamentos visiveis ${report.financeHistory.transactions.length}. Compras observadas sao referencias de pagamentos; nao comprovam custo medio do estoque, despesa por trecho ou historico completo.`,
     'Referencia de A-check do catalogo nao confirma o custo efetivo da aeronave. Preco de mercado nao confirma o custo de aquisicao do estoque. Taxa de criacao nao e custo recorrente. Nenhum lucro liquido ou troca de rota autorizado.',
