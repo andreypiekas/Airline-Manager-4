@@ -51,6 +51,36 @@ test('waits for replacement suggestion markup instead of accepting the previous 
  expect(r.status).toBe('observed');expect(r.quotes.map(q=>q.airportId)).toEqual(['200','201']);expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 
+test('screens out a weak suggestion and continues until a viable ceiling candidate is found',async({page})=>{
+ await fixture(page);
+ await page.evaluate(()=>{
+   const ajax=(window as any).Ajax;
+   (window as any).suggestRequests=0;(window as any).quoteRequests=0;
+   (window as any).Ajax=(url:string)=>{
+     ajax(url);
+     if(url.startsWith('add_airports.php')){
+       (window as any).suggestRequests++;
+       if((window as any).suggestRequests===2){
+         const next=document.querySelector('#introSuggestm')!;
+         next.setAttribute('onclick',next.getAttribute('onclick')!.replace('airportId=200','airportId=201'));
+       }
+     }
+     if(url.startsWith('new_route_info.php')){
+       (window as any).quoteRequests++;
+       const demandRow=Array.from(document.querySelectorAll('#newRouteInfo table tr'))[2]!;
+       demandRow.children[0].textContent=(window as any).quoteRequests===1?'20':'1000';
+     }
+   };
+ });
+ const r=await collectOpenRouteSuggestions(page,aircraft,'AAA',1,500,80,2);
+ expect(r.quotes).toHaveLength(1);
+ expect(r.quotes[0].airportId).toBe('201');
+ expect(r.screenedOut).toHaveLength(1);
+ expect(r.screenedOut[0]).toMatchObject({airportId:'200',to:'BBB',coverageCeilingPercent:20});
+ expect(r.scanned).toBe(2);
+ expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 test('rejects executable code disguised between multiple Back callback comments',async({page})=>{
  await fixture(page);await page.evaluate(()=>{
   const ajax=(window as any).Ajax;(window as any).Ajax=(url:string)=>{ajax(url);if(url.startsWith('new_route_info.php'))document.querySelector('#back')!.setAttribute('onclick',"$('#newRouteInfo').hide('fast');playSound('neutral_click');/*first*/danger();/*second*/");};
