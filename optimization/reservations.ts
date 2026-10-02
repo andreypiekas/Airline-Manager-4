@@ -31,7 +31,7 @@ export function candidateReservationScenario(quote: CandidateQuote, collection: 
     !['airport-pair','directional'].includes(config.poolScope)||!Number.isSafeInteger(config.maxAgeSeconds)||config.maxAgeSeconds<1)
     throw new Error('RESERVATION_CONFIG_INVALID');
   const result = { status:'unavailable', config, scope:'bounded-next-legs' as const,
-    currentFlightPassengersAlreadyDebited:true, futureScheduleComplete:false, demandNetOfOtherAircraft:false,
+    currentFlightPassengersAlreadyDebited:true, futureScheduleComplete:false, futureCompetitionComplete:false, demandNetOfOtherAircraft:false,
     comparisonReady:false, mutationAuthorized:false, reservations:[] as {
       aircraftId:string; leg:number; from:string; to:string; poolKey:string; capacity:Cabins; claimed:Cabins|null;
       notBeforeEstimatedAt:string|null;availabilitySource:'observed-ready'|'flight-countdown-estimate'|'unavailable';
@@ -91,7 +91,7 @@ export function candidateReservationScenario(quote: CandidateQuote, collection: 
     // demand before the candidate even when timing would place them later. No
     // demand reset is credited. This closes only the bounded competition horizon;
     // it is not a general timetable forecast and never authorizes mutation.
-    result.futureScheduleComplete=true;
+    result.futureCompetitionComplete=true;
     result.demandNetOfOtherAircraft=true;
     result.status='scenario_only';
     result.reason='BOUNDED_TWO_LEG_COMPETITION_CONSERVATIVELY_RESERVED';
