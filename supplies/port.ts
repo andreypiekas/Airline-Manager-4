@@ -8,6 +8,11 @@ export function parseAmount(text:string):number {
  if(!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(s))throw Error('SUPPLY_NUMBER_INVALID');
  const n=Number(s.replace(/,/g,''));if(!Number.isFinite(n)||n<0||n>Number.MAX_SAFE_INTEGER)throw Error('SUPPLY_NUMBER_INVALID');return n;
 }
+export function parseSignedInteger(text:string):number {
+ const s=text.trim();
+ if(!/^-?(?:\d+|\d{1,3}(?:,\d{3})+)$/.test(s))throw Error('SUPPLY_NUMBER_INVALID');
+ const n=Number(s.replace(/,/g,''));if(!Number.isSafeInteger(n))throw Error('SUPPLY_NUMBER_INVALID');return n;
+}
 export function parseSupplyText(text:string,kind:Commodity,balance:number):SupplySnapshot {
  const one=(re:RegExp)=>{
   const matches=[...text.matchAll(re)];
@@ -20,11 +25,15 @@ export function parseSupplyText(text:string,kind:Commodity,balance:number):Suppl
   ? /CURRENT PRICE[\s\S]{0,160}?\$\s*([\d,]+)(?=[\s\S]{0,120}?PRICE CHANGE)/gi
   : /QUOTA COST[\s\S]{0,160}?\$\s*([\d,]+)(?=[\s\S]{0,120}?PRICE CHANGE)/gi);
  const capacity=one(/CAPACITY[\s\S]{0,160}?([\d,]+)\s*\/\s*([\d,]+)\s+(Lbs|Quotas)/gi);
- const holding=one(/HOLDING[\s\S]{0,160}?([\d,]+)\s+(Lbs|Quotas)/gi);
+ const holding=one(/HOLDING[\s\S]{0,160}?(-?[\d,]+)\s+(Lbs|Quotas)/gi);
  const unit=kind==='fuel'?'lbs':'quotas';
  if(capacity[3].toLowerCase()!==unit||holding[2].toLowerCase()!==unit)throw Error('SUPPLY_DATA_UNVERIFIED');
- const remainingCapacity=parseAmount(capacity[1]),total=parseAmount(capacity[2]),stock=parseAmount(holding[1]);
- if(total!==remainingCapacity+stock)throw Error('SUPPLY_CAPACITY_INCONSISTENT');
+ const remainingCapacity=parseAmount(capacity[1]),total=parseAmount(capacity[2]);
+ const stock=kind==='co2'?parseSignedInteger(holding[1]):parseAmount(holding[1]);
+ // Live CO2 can be negative while storage still reports 100% free capacity.
+ // Negative quota debt does not occupy storage; positive holding does.
+ const occupied=kind==='co2'?Math.max(0,stock):stock;
+ if(total!==remainingCapacity+occupied)throw Error('SUPPLY_CAPACITY_INCONSISTENT');
  return {pricePer1000:parseAmount(price[1]),holding:stock,remainingCapacity,balance};
 }
 export class SupplyPort {
