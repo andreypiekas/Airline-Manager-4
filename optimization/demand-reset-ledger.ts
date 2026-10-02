@@ -10,8 +10,10 @@ export interface DemandResetWindow {
   sourceAircraftIds:string[];
 }
 export interface DemandResetCalibration {
-  status:'verified'|'unavailable';
+  status:'verified'|'upper_bound_only'|'unavailable';
   windows:DemandResetWindow[];
+  resetAgeUpperBoundMinutes:number|null;
+  upperBoundSources:Array<{aircraftId:string;routeId:string;from:string;to:string;newestSameDirectionFlightAgeMinutes:number}>;
   warnings:string[];
   comparisonReady:false;
   mutationAuthorized:false;
@@ -44,12 +46,25 @@ export function calibrateDemandResetWindows(
   collection:CollectionResult,
   labels:DemandLabelCalibrationReport
 ):DemandResetCalibration{
-  const base:DemandResetCalibration={status:'unavailable',windows:[],warnings:[],comparisonReady:false,mutationAuthorized:false};
-  if(!collection.complete||labels.status!=='observed'||labels.classification!=='daily_total')return base;
+  const base:DemandResetCalibration={status:'unavailable',windows:[],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false,mutationAuthorized:false};
+  if(!collection.complete||labels.status!=='observed')return base;
   for(const sample of labels.samples){
     if(!valid(sample.dailyTotal)||!valid(sample.remaining)||CLASSES.some(k=>sample.remaining[k]>sample.dailyTotal[k]))continue;
     const consumed:Cabins={Y:sample.dailyTotal.Y-sample.remaining.Y,J:sample.dailyTotal.J-sample.remaining.J,F:sample.dailyTotal.F-sample.remaining.F};
     const pairKey=key(sample.from,sample.to);
+    const current=collection.aircraft.find(a=>a.aircraftId===sample.aircraftId&&a.routeId===sample.routeId);
+    if(sample.matchesDailyTotal&&sample.matchesRemaining&&eq(consumed,zero())&&current?.flightHistory?.status==='observed'){
+      const sameDirection=current.flightHistory.entries.flatMap(h=>{
+        if(h.from!==sample.from||h.to!==sample.to||!valid(h.onboard)||CLASSES.every(k=>h.onboard[k]===0))return [];
+        const age=relativeAgeMinutes(h.relativeTime);return age===null?[]:[age];
+      });
+      if(sameDirection.length){
+        const newest=Math.min(...sameDirection);
+        if(Number.isFinite(newest)&&newest>0)base.upperBoundSources.push({
+          aircraftId:sample.aircraftId,routeId:sample.routeId,from:sample.from,to:sample.to,newestSameDirectionFlightAgeMinutes:newest
+        });
+      }
+    }
     const entries=collection.aircraft.flatMap(a=>(a.flightHistory?.status==='observed'?a.flightHistory.entries:[])
       .filter(h=>key(h.from,h.to)===pairKey)
       .flatMap(h=>{
@@ -79,7 +94,8 @@ export function calibrateDemandResetWindows(
     }
   }
   base.windows=[...unique.values()];
-  base.status=base.windows.length?'verified':'unavailable';
+  if(base.upperBoundSources.length)base.resetAgeUpperBoundMinutes=Math.min(...base.upperBoundSources.map(s=>s.newestSameDirectionFlightAgeMinutes));
+  base.status=base.windows.length?'verified':base.resetAgeUpperBoundMinutes!==null?'upper_bound_only':'unavailable';
   return base;
 }
 
@@ -110,6 +126,24 @@ export function historicalRemainingForCandidate(
     historyCoverageVerified:false,resetWindow:null,reason:'RESET_LEDGER_UNAVAILABLE',comparisonReady:false,mutationAuthorized:false};
   if(!collection.complete||!valid(dailyTotal)||from===to)return base;
   const windows=calibration.windows;
+  if(!windows.length&&calibration.resetAgeUpperBoundMinutes!==null){
+    const upper=calibration.resetAgeUpperBoundMinutes;
+    if(!Number.isSafeInteger(upper)||upper<=0)return base;
+    for(const a of collection.aircraft){
+      const h=a.flightHistory;
+      if(!h||h.status!=='observed')return {...base,reason:'FLEET_HISTORY_MISSING'};
+      const parsed=h.entries.map(e=>({entry:e,age:relativeAgeMinutes(e.relativeTime)}));
+      if(parsed.some(x=>x.age===null))return {...base,reason:'HISTORY_AGE_UNPARSEABLE'};
+      const ages=parsed.map(x=>x.age!);
+      const lifetimeCovered=!!a.operational&&Number.isSafeInteger(a.operational.cycles)&&a.operational.cycles<=h.entries.length;
+      const oldest=ages.length?Math.max(...ages):null;
+      if(!lifetimeCovered&&(oldest===null||oldest<upper))return {...base,reason:'FLEET_HISTORY_DOES_NOT_COVER_RESET_UPPER_BOUND'};
+      if(parsed.some(x=>x.age!<upper&&key(x.entry.from,x.entry.to)===pairKey&&valid(x.entry.onboard)&&CLASSES.some(k=>x.entry.onboard[k]>0)))
+        return {...base,reason:'PAIR_FLIGHT_INSIDE_RESET_UPPER_BOUND'};
+    }
+    return {...base,status:'verified',consumedSinceReset:zero(),remaining:{...dailyTotal},historyCoverageVerified:true,
+      reason:'NO_PAIR_FLIGHT_WITHIN_VERIFIED_RESET_UPPER_BOUND'};
+  }
   if(!windows.length)return base;
   // Reset time is airline-wide; accept it only when all calibrated pairs agree.
   const signatures=[...new Set(windows.map(w=>w.includedMaxAgeMinutes+':'+w.excludedMinAgeMinutes))];
