@@ -94,6 +94,29 @@ test('total UI load failure returns an incomplete report', async ({ page }) => {
 });
 
 
+test('current route diagnostics inventory visible economic fields without changing the page',async({page})=>{
+  await fixture(page);
+  await page.locator('#routeMainList101 a').click();
+  await page.locator('#detailsAction').evaluate(el=>{
+    el.insertAdjacentHTML('beforeend',
+      '<div><span id="departFlightTimeInfo">01:22:33</span></div>'+
+      '<div><span id="departFuelInfo">44,321 Lbs</span></div>'+
+      '<div><span id="departCo2Info">0.17 kg/pax/km</span></div>'+
+      '<div><span id="costIndexBar">200</span></div>'+
+      '<div><b>Route fee</b><span>$ 77,700</span></div>'
+    );
+  });
+  await page.locator('#route-name .glyphicons-chevron-left').click();
+  const result=await new DemandReader(page,400).collect();
+  const serialized=JSON.stringify(result.aircraft[0].currentRouteFieldDiagnostics);
+  expect(serialized).toContain('departFlightTimeInfo');
+  expect(serialized).toContain('departFuelInfo');
+  expect(serialized).toContain('departCo2Info');
+  expect(serialized).toContain('costIndexBar');
+  expect(serialized).toContain('Route fee');
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 test('reads automatic fare reference without clicking Auto/Save or changing prices', async ({ page }) => {
   await fixture(page); const result = await new DemandReader(page, 400).collect();
   expect(result.aircraft[0].fares).toMatchObject({ automatic: { Y: 1234, J: 3456, F: 17890 }, current: { Y: 9999, J: 9999, F: 9999 }, source: 'inspected-auto-control' });
