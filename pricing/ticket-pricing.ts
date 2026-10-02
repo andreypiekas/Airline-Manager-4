@@ -1,10 +1,18 @@
 import { Cabins, Cabin, CLASSES, AircraftSnapshot } from '../demand/types';
 
 export const PAX_PERCENT: Cabins = { Y: 110, J: 108, F: 106 };
+export interface FareControlEvidence {
+  id: string;
+  label: string;
+  tag: string;
+  type: string | null;
+  onclickShape: string | null;
+}
 export interface FareObservation {
   automatic: Cabins | null;
   current: Cabins | null;
   source: 'inspected-auto-control' | 'unavailable';
+  controls?: FareControlEvidence[];
   issue?: string;
 }
 export interface FarePlan {
