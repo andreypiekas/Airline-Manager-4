@@ -22,7 +22,7 @@ test('verified game mode uses upstream ceil and multiplier for A-check reference
  const ref=references();
  ref.gameModeEvidence={
   status:'verified',mode:'realism',variantPriority:0,engineId:1,speedMultiplier:1,aCheckCostMultiplier:2,
-  fuelTraining:null,observedSpeedKph:500,expectedSpeedKph:500,fareBaseMatches:true,speedMatches:true,fuelMatches:false,
+  fuelTraining:null,observedSpeedKph:500,expectedSpeedKph:500,fareBaseMatches:true,speedMatches:true,fuelMatches:false,co2FactorMatches:true,
   source:'live-quote-crosschecked-community-formula',reason:'FARE_AND_SPEED_CROSSCHECKED',
   comparisonReady:false,mutationAuthorized:false
  };
@@ -35,7 +35,7 @@ test('unverified mode keeps A-check reference conservative and non-actionable',(
  const ref=references();
  ref.gameModeEvidence={
   status:'unavailable',mode:null,variantPriority:null,engineId:null,speedMultiplier:null,aCheckCostMultiplier:null,
-  fuelTraining:null,observedSpeedKph:null,expectedSpeedKph:null,fareBaseMatches:false,speedMatches:false,fuelMatches:false,
+  fuelTraining:null,observedSpeedKph:null,expectedSpeedKph:null,fareBaseMatches:false,speedMatches:false,fuelMatches:false,co2FactorMatches:false,
   source:'live-quote-crosschecked-community-formula',reason:'EVIDENCE_INCOMPLETE',
   comparisonReady:false,mutationAuthorized:false
  };
