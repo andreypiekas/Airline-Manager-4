@@ -18,6 +18,7 @@ import { buildCandidateRoundTripScreen } from './round-trip-screen';
 import { loadReference, RouteCatalog } from './reference-data';
 import { CandidateQuote } from './quote-reader';
 import { candidatePriorityReference, rankCandidatePriorities } from './candidate-priority';
+import { summarizeComparisonReadiness } from './route-readiness';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -206,8 +207,9 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
         ...(!demand.remaining?['DIRECTIONAL_REMAINING_DEMAND']:[]),...(fuel===null?['FUEL_MARKET_PRICE']:[])]};
   });
   const priorityRanking=rankCandidatePriorities(candidates);
-  return {schemaVersion:4,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
-    uiRestored,screenedOutBeforeModelReference,market,models,modelReads,maintenance,financeHistory,priorityRanking,
+  const routeReadiness=summarizeComparisonReadiness(candidates);
+  return {schemaVersion:5,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
+    uiRestored,screenedOutBeforeModelReference,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
     warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
@@ -220,6 +222,12 @@ export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof 
       ...report.priorityRanking.map(r=>`- #${r.rank} ${r.from}–${r.to}: teto de contribuicao conhecida/h ${r.recurringKnownContributionCeilingPerHour.toFixed(2)}; teto do primeiro ciclo apos taxa ${r.firstCycleKnownContributionCeiling.toFixed(2)}.`),
       '',
       'Ranking apenas para priorizar pesquisa: usa teto de receita, combustivel a preco de reposicao e prorata de A-check do catalogo. Nao e lucro liquido nem autoriza reroute.',''
+    ]:[]),
+    ...(report.routeReadiness.candidates.length?[
+      '## Prontidao para comparacao e reroute','',
+      ...report.routeReadiness.candidates.map(r=>`- ${r.aircraftId} ${r.from}–${r.to}: comparacao ${r.comparisonReady?'pronta':'bloqueada'}; bloqueios ${r.comparisonBlockers.join(', ')||'nenhum'}; mutacao ${r.mutationReady?'pronta':'bloqueada'}; bloqueios ${r.mutationBlockers.join(', ')||'nenhum'}.`),
+      '',
+      'Este gate apenas consolida evidencias. mutationAuthorized permanece false ate existir comparacao completa e executor nativo verificado.',''
     ]:[]),
     ...report.candidates.map(c=>`- ${c.aircraftId} ${c.from}–${c.to}: triagem ${c.screening.demandStatus}, teto de cobertura ${c.screening.coverageCeilingPercent===null?'indisponivel':c.screening.coverageCeilingPercent.toFixed(2)+'%'}, teto de receita/decolagem ${c.screening.grossRevenueCeilingPerDeparture??'indisponivel'}, prioridade ${c.priority.status==='rankable'?c.priority.recurringKnownContributionCeilingPerHour?.toFixed(2)+'/h':'indisponivel'}; Create route ${c.createControl?.observed?'observado':'nao observado'}, endpoints ${c.createControl?.phpEndpoints?.join(', ')||'nenhum'}, shape ${c.createControl?.onclickShape||'indisponivel'}; controles inspecionados ${c.routeActionDiagnostics.length}: ${c.routeActionDiagnostics.map(a=>[a.tag,a.id||'',a.label||'',a.phpEndpoints.join('+')||'',a.callbackShape||a.hrefShape||''].filter(Boolean).join(' ')).join(' || ')||'nenhum'}; listeners ${c.routeListenerDiagnostics.length}: ${c.routeListenerDiagnostics.map(a=>[a.scope,a.event,a.elementTag||'',a.elementId||'',a.elementLabel||'',a.phpEndpoints.join('+')||'',a.handlerShape||''].filter(Boolean).join(' ')).join(' || ')||'nenhum'}; ciclo ${c.roundTrip.status}, volta ${c.roundTrip.returnLeg.from}–${c.roundTrip.returnLeg.to}, demanda restante volta ${JSON.stringify(c.roundTrip.returnLeg.remainingAfterReservations)}, bloqueios ciclo ${c.roundTrip.blockers.join(', ')}; demanda restante ida ${c.demand.status}; reservas ${c.reservations.status} (${c.reservations.reservations.length} trechos); saldo simulado ida ${JSON.stringify(c.reservations.forwardAfterReservations)}; combustivel ao preco observado ${c.costs.fuelAtObservedMarketPrice??'indisponivel'}; CO2 de referencia ${c.costScenarios.co2.atDemandCeiling??'indisponivel'}; A-check de referencia ${c.costScenarios.aCheck.catalogProration??'indisponivel'}; custos efetivos faltantes ${c.effectiveCosts.missing.join(', ')}; pendencias ${c.missing.join(', ')}.`),'',
     `Candidatas descartadas antes da consulta de referencia por nao atingirem o limite nem no teto diario: ${report.screenedOutBeforeModelReference}.`,'',
