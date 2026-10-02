@@ -2,6 +2,7 @@ import { Cabins, CLASSES } from '../demand/types';
 import { CandidateQuote } from './quote-reader';
 import { MarketPriceReference, ModelCostReference } from './cost-reference-reader';
 import { AircraftMaintenanceReference } from './maintenance-reader';
+import { Co2CalibrationEvidence, estimateObservedCo2Quotas } from './co2-calibration';
 
 export const COST_COMPONENTS = ['fuel','co2','aCheck','wearRepair','airport','staff','marketing','otherRecurring'] as const;
 export type CostComponent = typeof COST_COMPONENTS[number];
@@ -48,7 +49,7 @@ export function effectiveCostBudget(quote:CandidateQuote,evidence:Partial<Record
  */
 export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null,remaining:Cabins|null,
   references:{fuel:MarketPriceReference|null;co2:MarketPriceReference|null;model:ModelCostReference|null;
-    maintenance:AircraftMaintenanceReference|null},now=new Date(),maxAgeSeconds=300) {
+    maintenance:AircraftMaintenanceReference|null;co2Calibration?:Co2CalibrationEvidence|null},now=new Date(),maxAgeSeconds=300) {
   const context=Number.isSafeInteger(maxAgeSeconds)&&maxAgeSeconds>0&&fresh(quote.observedAt,now,maxAgeSeconds)&&
     /^\d+$/.test(quote.aircraftId)&&/^[A-Z0-9]{3}$/.test(quote.from)&&/^[A-Z0-9]{3}$/.test(quote.to)&&quote.from!==quote.to&&
     Number.isFinite(quote.distanceKm)&&quote.distanceKm>0&&Number.isFinite(quote.durationSeconds)&&quote.durationSeconds>0&&
@@ -62,6 +63,12 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
     CLASSES.reduce((n,k)=>n+Math.min(capacity[k],remaining[k]),0):null;
   const co2Value=(pax:number|null)=>context&&pax!==null&&market(references.co2,'co2')?
     quote.distanceKm*quote.co2KgPerPaxKm*pax*references.co2!.pricePer1000/1000:null;
+  const calibratedQuotas=(cabins:Cabins|null)=>context&&cabins&&references.co2Calibration?
+    estimateObservedCo2Quotas(references.co2Calibration,quote.distanceKm,cabins):null;
+  const calibratedCo2Cost=(cabins:Cabins|null)=>{
+    const quotas=calibratedQuotas(cabins);
+    return quotas!==null&&market(references.co2,'co2')?quotas*references.co2!.pricePer1000/1000:null;
+  };
   const amount=(n:number|null)=>n!==null&&nonnegative(n)?n:null;
   const model=references.model;
   const aCheckValue=context&&model?.source==='inspected-catalog'&&model.modelId===quote.autopriceReference?.modelId&&
@@ -72,19 +79,26 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
   const sameAircraft=!!maintenance&&maintenance.aircraftId===quote.aircraftId&&maintenance.registration===quote.registration&&
     maintenance.source==='inspected-maintenance-plan'&&fresh(maintenance.observedAt,now,maxAgeSeconds)&&
     nonnegative(maintenance.hoursToCheck)&&nonnegative(maintenance.wearPercentage)&&maintenance.wearPercentage<=100;
-  const co2AtDemandCeiling=amount(co2Value(passengersAtDemandCeiling)),aCheckCatalogProration=amount(aCheckValue);
+  const calibrationVerified=references.co2Calibration?.formulaVerified===true;
+  const calibratedAtCapacity=amount(calibratedCo2Cost(capacity));
+  const calibratedAtDemandCeiling=amount(calibratedCo2Cost(remaining));
+  const co2AtDemandCeiling=calibrationVerified?calibratedAtDemandCeiling:amount(co2Value(passengersAtDemandCeiling));
+  const aCheckCatalogProration=amount(aCheckValue);
   const subtotal=fuel!==null&&co2AtDemandCeiling!==null&&aCheckCatalogProration!==null?
     fuel+co2AtDemandCeiling+aCheckCatalogProration:null;
   return {kind:'reference_sensitivity_only',comparisonReady:false,mutationAuthorized:false,
     fuelAtMarketReplacementPrice:fuel,passengersAtCapacity,passengersAtDemandCeiling,
-    co2:{atCapacity:amount(co2Value(passengersAtCapacity)),atDemandCeiling:co2AtDemandCeiling,
-      quotaConversionConfirmed:false,assumedQuotasPerKg:1,formulaSource:'AM4 calculator: Calculadoras (1)!G7 and Faturamento e Lucro!E14'},
+    co2:{atCapacity:calibrationVerified?calibratedAtCapacity:amount(co2Value(passengersAtCapacity)),atDemandCeiling:co2AtDemandCeiling,
+      quotaConversionConfirmed:calibrationVerified,assumedQuotasPerKg:calibrationVerified?null:1,
+      calibratedQuotasAtCapacity:calibrationVerified?calibratedQuotas(capacity):null,
+      calibratedQuotasAtDemandCeiling:calibrationVerified?calibratedQuotas(remaining):null,
+      formulaSource:calibrationVerified?'live flight history calibrated weighted-cabin formula':'AM4 calculator: Calculadoras (1)!G7 and Faturamento e Lucro!E14'},
     aCheck:{catalogProration:aCheckCatalogProration,effectiveAircraftCost:null,
       formulaSource:'AM4 calculator: Faturamento e Lucro!E15',includesWearRepair:false,
       hoursToCheck:sameAircraft?maintenance!.hoursToCheck:null,wearPercentage:sameAircraft?maintenance!.wearPercentage:null,
       checkBeforeProposedLeg:sameAircraft&&context?maintenance!.hoursToCheck<quote.durationSeconds/3600:null},
     partialSubtotalAtDemandCeiling:amount(subtotal),totalOperatingCost:null,
     setupFee:context&&nonnegative(quote.routeFee)?quote.routeFee:null,
-    missing:['CO2_QUOTA_CONVERSION','EFFECTIVE_A_CHECK_PRICE','WEAR_REPAIR_COST','AIRPORT_COST',
+    missing:[...(!calibrationVerified?['CO2_QUOTA_CONVERSION']:[]),'EFFECTIVE_A_CHECK_PRICE','WEAR_REPAIR_COST','AIRPORT_COST',
       'STAFF_ALLOCATION','MARKETING_ALLOCATION','OTHER_RECURRING_COSTS','INVENTORY_ACQUISITION_COST']};
 }
