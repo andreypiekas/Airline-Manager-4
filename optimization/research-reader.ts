@@ -171,7 +171,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   let airportCatalog:AirportCatalog|null=null;
   try {
     const loaded=await loadReference<AirportCatalog>('airports.json');
-    if(loaded.schemaVersion!==1||!Array.isArray(loaded.airports)||!loaded.source||!loaded.license)throw new Error();
+    if(![1,2].includes(loaded.schemaVersion)||!Array.isArray(loaded.airports)||!loaded.source||!loaded.license)throw new Error();
     airportCatalog=loaded;
   } catch {warnings.push('AIRPORT_REFERENCE_UNAVAILABLE');}
   let aircraftCatalog:AircraftCatalog|null=null;
