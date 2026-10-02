@@ -49,6 +49,16 @@ test('runway reference is distinguished from missing evidence but stays non-acti
  expect(insufficient.mutationAuthorized).toBe(false);
 });
 
+test('runway blocker clears only after reference, airportId and distance are cross-checked',()=>{
+ const baseRunway={status:'reference_verified' as const,adequate:true,originObserved:true,destinationObserved:true,
+  originRunwayFt:10000,destinationRunwayFt:9000,requiredRunwayFt:6000};
+ const pending=assessCandidateComparisonReadiness(candidate({runwayEvidence:baseRunway,runwayCrossChecked:false}));
+ expect(pending.comparisonBlockers).toContain('RUNWAY_REFERENCE_ONLY_NEEDS_LIVE_CORROBORATION');
+ const checked=assessCandidateComparisonReadiness(candidate({runwayEvidence:baseRunway,runwayCrossChecked:true}));
+ expect(checked.comparisonBlockers).not.toContain('RUNWAY_REFERENCE_ONLY_NEEDS_LIVE_CORROBORATION');
+ expect(checked.mutationAuthorized).toBe(false);
+});
+
 test('observed endpoint without contextual verification never opens mutation gate',()=>{
   const r=assessCandidateComparisonReadiness(candidate({
     createControl:{observed:true,phpEndpoints:['new_route_info.php']},
