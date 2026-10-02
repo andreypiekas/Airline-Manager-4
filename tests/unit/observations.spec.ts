@@ -98,6 +98,31 @@ test('passive jQuery event diagnostics expose delegated Create route handler wit
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 
+test('jQuery handler diagnostics scan the full handler for a late route endpoint',async({page})=>{
+  await fixture(page);
+  await page.locator('#btnCreateNewRoute').evaluate(e=>e.removeAttribute('onclick'));
+  await page.evaluate(()=>{
+    const filler='x'.repeat(5000);
+    const handler=new Function(`const filler="${filler}"; return "Ajax('late_route.php?id=123','routeAction',this)";`);
+    const jq:any=function(){};
+    jq._data=(element:any,key:string)=>{
+      if(key!=='events')return null;
+      if(element===document)return {click:[{selector:'#btnCreateNewRoute',handler}]};
+      return null;
+    };
+    (window as any).$=jq;(window as any).jQuery=jq;
+  });
+  const r=await readOpenCandidateQuote(page,identity);
+  expect(r.status).toBe('observed');
+  if(r.status!=='observed')return;
+  const listener=r.quote.routeListenerDiagnostics?.find(x=>x.source==='jquery-event'&&x.selector==='#btnCreateNewRoute');
+  expect(listener?.phpEndpoints).toContain('late_route.php');
+  expect(listener?.sourceLength).toBeGreaterThan(5000);
+  expect(listener?.handlerTailShape).toContain('late_route.php');
+  expect(JSON.stringify(listener)).not.toContain('123');
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 test('route action diagnostics retain endpoint shape but redact query values',async({page})=>{
   await fixture(page);
   await page.locator('#btnCreateNewRoute').evaluate(e=>e.setAttribute(
