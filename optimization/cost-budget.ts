@@ -59,8 +59,10 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
   const fuelValue=context&&market(references.fuel,'fuel')?quote.fuelLbs*references.fuel!.pricePer1000/1000:null;
   const fuel=fuelValue!==null&&nonnegative(fuelValue)?fuelValue:null;
   const passengersAtCapacity=context&&validCabins(capacity)?capacity.Y+capacity.J+capacity.F:null;
-  const passengersAtDemandCeiling=context&&validCabins(capacity)&&validCabins(remaining)?
-    CLASSES.reduce((n,k)=>n+Math.min(capacity[k],remaining[k]),0):null;
+  const cabinsAtDemandCeiling=context&&validCabins(capacity)&&validCabins(remaining)?
+    ({Y:Math.min(capacity.Y,remaining.Y),J:Math.min(capacity.J,remaining.J),F:Math.min(capacity.F,remaining.F)} as Cabins):null;
+  const passengersAtDemandCeiling=cabinsAtDemandCeiling?
+    cabinsAtDemandCeiling.Y+cabinsAtDemandCeiling.J+cabinsAtDemandCeiling.F:null;
   const co2Value=(pax:number|null)=>context&&pax!==null&&market(references.co2,'co2')?
     quote.distanceKm*quote.co2KgPerPaxKm*pax*references.co2!.pricePer1000/1000:null;
   const calibratedQuotas=(cabins:Cabins|null)=>context&&cabins&&references.co2Calibration?
@@ -81,7 +83,7 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
     nonnegative(maintenance.hoursToCheck)&&nonnegative(maintenance.wearPercentage)&&maintenance.wearPercentage<=100;
   const calibrationVerified=references.co2Calibration?.formulaVerified===true;
   const calibratedAtCapacity=amount(calibratedCo2Cost(capacity));
-  const calibratedAtDemandCeiling=amount(calibratedCo2Cost(remaining));
+  const calibratedAtDemandCeiling=amount(calibratedCo2Cost(cabinsAtDemandCeiling));
   const co2AtDemandCeiling=calibrationVerified?calibratedAtDemandCeiling:amount(co2Value(passengersAtDemandCeiling));
   const aCheckCatalogProration=amount(aCheckValue);
   const acquisitionVerified=model?.source==='community-reference'||model?.communityCrossCheck?.verified===true;
@@ -96,7 +98,7 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
     co2:{atCapacity:calibrationVerified?calibratedAtCapacity:amount(co2Value(passengersAtCapacity)),atDemandCeiling:co2AtDemandCeiling,
       quotaConversionConfirmed:calibrationVerified,assumedQuotasPerKg:calibrationVerified?null:1,
       calibratedQuotasAtCapacity:calibrationVerified?calibratedQuotas(capacity):null,
-      calibratedQuotasAtDemandCeiling:calibrationVerified?calibratedQuotas(remaining):null,
+      calibratedQuotasAtDemandCeiling:calibrationVerified?calibratedQuotas(cabinsAtDemandCeiling):null,
       formulaSource:calibrationVerified?'live flight history calibrated weighted-cabin formula':'AM4 calculator: Calculadoras (1)!G7 and Faturamento e Lucro!E14'},
     aCheck:{catalogProration:aCheckCatalogProration,effectiveAircraftCost:null,
       source:model?.source??null,
