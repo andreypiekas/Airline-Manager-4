@@ -10,7 +10,7 @@ export interface CandidateComparisonReadinessInput {
   effectiveCosts:{complete:boolean;missing:string[]};
   createControl:null|{observed:boolean;phpEndpoints?:string[]};
   routeListenerDiagnostics:Array<{phpEndpoints:string[]}>;
-  routeDirectionEvidence?:null|{verified:boolean;primaryCodesVerified:boolean;headerVerified:boolean;independentSources:number};
+  routeDirectionEvidence?:null|{verified:boolean;primaryMatchesContext:boolean;headerMatchesContext:boolean;independentSourcesAgree:boolean};
   routeMutationControl:null|{nativeClickReady:boolean;endpointVerified:boolean;targetVerified:boolean;
     aircraftIdMatchesContext:boolean;airportIdMatchesContext:boolean};
 }
@@ -35,8 +35,8 @@ export function assessCandidateComparisonReadiness(
 ):CandidateComparisonReadiness {
   const comparisonBlockers:string[]=[];
   if(!candidate.comparisonReady)comparisonBlockers.push('CANDIDATE_COMPARISON_NOT_READY');
-  if(!candidate.routeDirectionEvidence?.verified||!candidate.routeDirectionEvidence.primaryCodesVerified||
-    !candidate.routeDirectionEvidence.headerVerified||candidate.routeDirectionEvidence.independentSources<2)
+  if(!candidate.routeDirectionEvidence?.verified||!candidate.routeDirectionEvidence.primaryMatchesContext||
+    !candidate.routeDirectionEvidence.headerMatchesContext||!candidate.routeDirectionEvidence.independentSourcesAgree)
     comparisonBlockers.push('ROUTE_DIRECTION_INDEPENDENT_EVIDENCE_MISSING');
   if(!candidate.roundTrip.comparisonReady)comparisonBlockers.push('ROUND_TRIP_COMPARISON_NOT_READY');
   if(!candidate.demand.remaining)comparisonBlockers.push('OUTBOUND_DIRECTIONAL_REMAINING_DEMAND_MISSING');
