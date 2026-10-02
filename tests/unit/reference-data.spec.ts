@@ -1,10 +1,28 @@
 import { test, expect } from '@playwright/test';
-import { calendarReference, FuelCalendar, shortlistRoutes, RouteCatalog } from '../../optimization/reference-data';
+import { airportRunwayEvidence, AirportCatalog, calendarReference, FuelCalendar, shortlistRoutes, RouteCatalog } from '../../optimization/reference-data';
 import { AircraftSnapshot } from '../../demand/types';
 const a:AircraftSnapshot={aircraftId:'1',routeId:'2',registration:'TEST',routeLabel:'GRU-BSB',from:'GRU',to:'BSB',state:'ready',capacity:{Y:100,J:0,F:0},remaining:{Y:0,J:0,F:0},dailyTotal:{Y:1,J:1,F:1},observedAt:new Date().toISOString(),operational:{rangeKm:5000,minRunwayFt:5000,flightHours:1,cycles:1,homeBase:null,flightId:null}};
 const catalog:RouteCatalog={schemaVersion:1,source:'fixture',sha256:'test',routes:[{from:'GRU',to:'BSB',distanceKm:1000,referenceDemand:{Y:1000,J:0,F:0},sourceRow:2},{from:'GRU',to:'DTW',distanceKm:9000,referenceDemand:{Y:1000,J:0,F:0},sourceRow:3}]};
 test('reference route shortlist filters direct range and never supplies remaining demand or profit',()=>{
  const r=shortlistRoutes(a,'GRU',catalog);expect(r).toHaveLength(1);expect(r[0]).toMatchObject({to:'BSB',remainingDemand:null,estimatedProfit:null,mutationAuthorized:false});expect(a.remaining!.Y).toBe(0);
+});
+test('airport runway reference resolves both directions without authorizing comparison',()=>{
+ const airports:AirportCatalog={schemaVersion:1,source:'fixture-airports',license:'MIT',generatedAt:'2026-10-02',airports:[
+  {iata:'GRU',runwayFt:9843,sourceIds:[1]},{iata:'BSB',runwayFt:10827,sourceIds:[2]}
+ ]};
+ expect(airportRunwayEvidence('GRU','BSB',6000,airports)).toMatchObject({
+  originRunwayFt:9843,destinationRunwayFt:10827,adequate:true,status:'reference_verified',
+  comparisonReady:false,mutationAuthorized:false
+ });
+ expect(airportRunwayEvidence('BSB','GRU',10000,airports)).toMatchObject({adequate:false,status:'insufficient_reference'});
+});
+test('conflicting or missing runway reference fails closed',()=>{
+ const airports:AirportCatalog={schemaVersion:1,source:'fixture-airports',license:'MIT',generatedAt:'2026-10-02',airports:[
+  {iata:'GRU',runwayFt:null,sourceIds:[1,2],conflict:true,runwayCandidatesFt:[9000,10000]}
+ ]};
+ expect(airportRunwayEvidence('GRU','BSB',6000,airports)).toMatchObject({
+  status:'unavailable',adequate:null,originObserved:false,destinationObserved:false
+ });
 });
 test('reverse source is disclosed and not silently treated as a live directional quote',()=>{
  const r=shortlistRoutes(a,'BSB',catalog);expect(r[0]).toMatchObject({from:'BSB',to:'GRU',sourceDirection:'GRU-BSB',remainingDemand:null});
