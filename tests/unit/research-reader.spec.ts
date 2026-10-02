@@ -48,7 +48,7 @@ test('queries eligible aircraft, including second page, and restores a fresh lis
   await writeFile(testInfo.outputPath('simulation-report.json'),JSON.stringify(report,null,2)+'\n');
 });
 
-for(const variant of ['disabled','away','inflight','incomplete','duplicate','stale'])test(`skips research without any navigation: ${variant}`,async({page})=>{
+for(const variant of ['disabled','inflight','incomplete','duplicate','stale'])test(`skips research without any navigation: ${variant}`,async({page})=>{
   await fixture(page);const a=snapshot();const data=collection(a);
   if(variant==='away'){a.from='BBB';a.to='AAA'}if(variant==='inflight')a.state='inflight';if(variant==='incomplete')data.complete=false;
   if(variant==='duplicate')data.aircraft.push({...a});if(variant==='stale')a.observedAt='2000-01-01T00:00:00Z';
@@ -56,6 +56,17 @@ for(const variant of ['disabled','away','inflight','incomplete','duplicate','sta
   expect(r.aircraft.every(a=>a.status!=='queued')).toBe(true);expect(await page.evaluate(()=>(window as any).resets)).toBe(0);
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
+test('away-from-base aircraft may run only the passive diagnostic probe and never mutate',async({page})=>{
+  await fixture(page);
+  const a=snapshot();a.from='BBB';a.to='AAA';
+  const r=await researchFleetCandidates(page,collection(a),settings,{...config,maxSuggestions:1});
+  expect(r.aircraft[0].status).toBe('pending_base_return');
+  expect(r.diagnosticProbe).toBeNull();
+  expect(r.warnings).toContain('DIAGNOSTIC_ROUTE_CONTROL_UNAVAILABLE:101');
+  expect(await page.evaluate(()=>(window as any).resets)).toBeGreaterThan(0);
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 for(const option of ['badDetails','badPlanner','contextChanged','loadFailure','badPagination','loop'])test(`failure blocks research and restores the list: ${option}`,async({page})=>{
   await fixture(page,{[option]:true,secondPage:option==='badPagination'||option==='loop'});
   const r=await researchFleetCandidates(page,collection(),settings,{...config,maxSuggestions:1});
