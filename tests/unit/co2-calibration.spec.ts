@@ -52,7 +52,7 @@ function catalog(extra:RouteCatalog['routes']=[]):RouteCatalog{
 }
 
 test('verifies weighted cabin-unit CO2 formula from multiple observed mixes',()=>{
-  const r=calibrateCo2FromFlightHistory(aircraft(),[quote(),quote(factor,'BBB')],catalog(),now);
+  const r=calibrateCo2FromFlightHistory(aircraft(),[quote()],catalog(),now);
   expect(r.status).toBe('verified_weighted_cabin_units');
   expect(r.formulaVerified).toBe(true);
   expect(r.quoteFactor).toBe(factor);
