@@ -5,6 +5,9 @@ export interface ModelCostReference {
   modelId:number;modelName:string;observedAt:string;aCheckPrice:number;checkIntervalHours:number;
   catalogFields?:Array<{label:string;value:string}>;
   acquisitionCost?:number;
+  communityCrossCheck?:{
+    verified:boolean;fieldsMatched:string[];fieldsConflicted:string[];reason:string;acquisitionCost:number|null;
+  };
   source:'inspected-catalog'|'community-reference';effectiveAircraftMaintenanceCost:null;
 }
 export interface MarketPriceReference {
