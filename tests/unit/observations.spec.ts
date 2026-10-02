@@ -1,5 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-import { readOpenCandidateQuote, QuoteIdentity, parseQuoteAutoprice } from '../../optimization/quote-reader';
+import { readOpenCandidateQuote, readOpenCandidateQuoteAfterVerifiedAjax, QuoteIdentity, parseQuoteAutoprice } from '../../optimization/quote-reader';
 import { readOperationalObservation } from '../../optimization/observations';
 
 const identity: QuoteIdentity = { aircraftId: '101', registration: 'TEST-1', airportId: '200', from: 'AAA', to: 'BBB' };
@@ -18,6 +18,17 @@ async function fixture(page: Page) {
     <button id="btnCreateNewRoute" onclick="window.mutations++">Create route</button>
   </div></div>`);
 }
+test('verified direct Ajax reader relies on rendered identity instead of stale suggestion control',async({page})=>{
+  await fixture(page);
+  await page.locator('#introSuggestm').evaluate(e=>e.setAttribute('onclick','staleSuggestion(999,888)'));
+  const r=await readOpenCandidateQuoteAfterVerifiedAjax(page,identity);
+  expect(r).toMatchObject({status:'observed',quote:{aircraftId:'101',registration:'TEST-1',from:'AAA',to:'BBB',airportId:'200'}});
+  expect((await readOpenCandidateQuote(page,identity)).status).toBe('unavailable');
+  expect((await readOpenCandidateQuoteAfterVerifiedAjax(page,{...identity,registration:'OTHER'})).status).toBe('unavailable');
+  expect((await readOpenCandidateQuoteAfterVerifiedAjax(page,{...identity,to:'CCC'})).status).toBe('unavailable');
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 test('reads inspected quote without treating daily demand as remaining or clicking any control', async ({ page }) => {
   await fixture(page);
   const r = await readOpenCandidateQuote(page, identity);
