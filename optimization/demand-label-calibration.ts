@@ -25,6 +25,13 @@ export interface DemandLabelCalibrationReport {
 const validCabins=(v:Cabins|null):v is Cabins=>!!v&&CLASSES.every(k=>Number.isSafeInteger(v[k])&&v[k]>=0);
 const sameCabins=(a:Cabins,b:Cabins)=>CLASSES.every(k=>a[k]===b[k]);
 
+export function classifyDemandLabelSamples(samples:DemandLabelCalibrationSample[]):DemandLabelCalibrationReport['classification'] {
+  if(!samples.length)return 'mixed_or_unknown';
+  const allRemaining=samples.every(s=>s.matchesRemaining&&!s.matchesDailyTotal);
+  const allDaily=samples.every(s=>s.matchesDailyTotal&&!s.matchesRemaining);
+  return allRemaining?'remaining':allDaily?'daily_total':'mixed_or_unknown';
+}
+
 async function readOpenDemandQuote(page:Page,expected:{registration:string;from:string;to:string}) {
   const panel=page.locator('#newRouteInfo');
   await panel.waitFor({state:'visible',timeout:10000});
@@ -102,10 +109,8 @@ export async function calibrateDemandLabelOnCurrentRoutes(
     }
   }
   if(report.samples.length){
-    const allRemaining=report.samples.every(s=>s.matchesRemaining&&!s.matchesDailyTotal);
-    const allDaily=report.samples.every(s=>s.matchesDailyTotal&&!s.matchesRemaining);
     // If remaining equals daily total, that sample is deliberately inconclusive.
-    report.classification=allRemaining?'remaining':allDaily?'daily_total':'mixed_or_unknown';
+    report.classification=classifyDemandLabelSamples(report.samples);
     report.status='observed';report.observedAt=new Date().toISOString();
   }
   return report;
