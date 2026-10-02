@@ -209,20 +209,21 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     const aircraft=collection.aircraft.find(a=>a.aircraftId===quote.aircraftId);
     const capacity=capacityFor(quote,now);
     const screening=screeningByQuote.get(quote)!;
+    const co2Calibration=aircraft
+      ? calibrateCo2FromFlightHistory(aircraft,quotes.filter(q=>q.aircraftId===quote.aircraftId),routeCatalog,now,reservationsConfig.maxAgeSeconds)
+      : null;
     const costScenarios=candidateCostScenarios(quote,capacity,reservations.forwardAfterReservations,
-      {fuel:market.fuel,co2:market.co2,model,maintenance:maintenance.aircraft.find(a=>a.aircraftId===quote.aircraftId)||null},now,reservationsConfig.maxAgeSeconds);
+      {fuel:market.fuel,co2:market.co2,model,maintenance:maintenance.aircraft.find(a=>a.aircraftId===quote.aircraftId)||null,co2Calibration},now,reservationsConfig.maxAgeSeconds);
     const effectiveCosts=effectiveCostBudget(quote,{},now,reservationsConfig.maxAgeSeconds);
     const roundTrip=buildCandidateRoundTripScreen(quote,routeCatalog,reservations,now,reservationsConfig.maxAgeSeconds);
     const fuel=market.fuel&&fresh(market.fuel.observedAt)&&fresh(quote.observedAt)?quote.fuelLbs*market.fuel.pricePer1000/1000:null;
     const priority=candidatePriorityReference(quote,screening,costScenarios);
-    const co2Calibration=aircraft
-      ? calibrateCo2FromFlightHistory(aircraft,quotes.filter(q=>q.aircraftId===quote.aircraftId),routeCatalog,now,reservationsConfig.maxAgeSeconds)
-      : null;
     return {aircraftId:quote.aircraftId,from:quote.from,to:quote.to,quoteObservedAt:quote.observedAt,
       createControl:quote.createControl||null,routeActionDiagnostics:quote.routeActionDiagnostics||[],routeListenerDiagnostics:quote.routeListenerDiagnostics||[],routeMutationControl:quote.routeMutationControl||null,autopriceFunctionEvidence:quote.autopriceFunctionEvidence||null,quoteFieldDiagnostics:quote.quoteFieldDiagnostics||[],routeDirectionEvidence:quote.routeDirectionEvidence||null,co2Calibration,demand,screening,priority,roundTrip,reservations,costScenarios,effectiveCosts,modelCostReference:model,costs:{fuelAtObservedMarketPrice:fuel,co2:null,maintenance:null,airportAndOther:null},
       setupFee:quote.routeFee,costsComplete:false,netProfit:null,comparisonReady:false,mutationAuthorized:false,
       missing:['FUTURE_OTHER_AIRCRAFT_RESERVATIONS','REVERSE_LEG_ECONOMICS','EFFECTIVE_FARES_AND_LOAD_FACTOR',
-        'CO2_QUOTA_CONVERSION','AIRCRAFT_EFFECTIVE_MAINTENANCE','AIRPORT_AND_OTHER_COSTS','FUTURE_SCHEDULE_AND_RESET',
+        ...(!co2Calibration?.formulaVerified?['CO2_QUOTA_CONVERSION']:[]),
+        'AIRCRAFT_EFFECTIVE_MAINTENANCE','AIRPORT_AND_OTHER_COSTS','FUTURE_SCHEDULE_AND_RESET',
         ...(!demand.remaining?['DIRECTIONAL_REMAINING_DEMAND']:[]),...(fuel===null?['FUEL_MARKET_PRICE']:[])]};
   });
   const priorityRanking=rankCandidatePriorities(candidates);
