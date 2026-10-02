@@ -36,5 +36,37 @@ test('CO2 parser accepts bounded explanatory text without guessing duplicate sec
  expect(parseSupplyText(text,'co2',5000)).toEqual({pricePer1000:100,holding:100,remainingCapacity:900,balance:5000});
  expect(()=>parseSupplyText(text+'\nQUOTA COST\n$ 100\nPRICE CHANGE','co2',5000)).toThrow('SUPPLY_DATA_UNVERIFIED');
 });
+test('supply diagnostic is read-only and excludes account balance',async({page})=>{
+ await fixture(page);
+ const port=new SupplyPort(page,500);
+ await port.open('fuel');
+ const d=await port.diagnostic('fuel');
+ expect(d?.kind).toBe('fuel');
+ expect(JSON.stringify(d)).toContain('Current price');
+ expect(JSON.stringify(d)).not.toContain('100000');
+ expect(await page.evaluate(()=>(window as any).purchases)).toBe(0);
+});
+
+test('pre-mutation supply failure persists passive diagnostic',async({page})=>{
+ await fixture(page);
+ await page.locator('#smallMainMenu').evaluate((menu)=>{
+   const original=(window as any).popup;
+   (window as any).popup=()=>{original();};
+ });
+ const dir=await mkdtemp(join(tmpdir(),'am4-supply-'));
+ try{
+   class DiagnosticPort extends SupplyPort{
+     override async snapshot(kind:any){
+       if(kind==='co2')throw Error('SUPPLY_CAPACITY_INCONSISTENT');
+       return super.snapshot(kind);
+     }
+     override async diagnostic(kind:any){return {kind,rows:[{tag:'div',id:null,text:'CAPACITY',value:null,classShape:null}],panelText:['CAPACITY','900 / 1000 Quotas','HOLDING','100 Quotas'],mutationAuthorized:false as const};}
+   }
+   await expect(runSupplies(page,false,env,dir,new DiagnosticPort(page,500))).rejects.toThrow('SUPPLY_CAPACITY_INCONSISTENT');
+   const report=JSON.parse(await readFile(join(dir,'supply-report.json'),'utf8'));
+   expect(report.entries.at(-1)?.diagnostic?.panelText).toEqual(['CAPACITY','900 / 1000 Quotas','HOLDING','100 Quotas']);
+   expect(report.entries.at(-1)?.status).toBe('unavailable');
+ }finally{await rm(dir,{recursive:true,force:true})}
+});
 test('missing panel and inconsistent storage are rejected',async({page})=>{await fixture(page);await expect(new SupplyPort(page,100).snapshot('fuel')).rejects.toThrow();expect(()=>parseSupplyText('CURRENT PRICE\n$ 500\nPRICE CHANGE\nCAPACITY\n900 / 1000 Lbs\nHOLDING\n200 Lbs','fuel',1000)).toThrow();});
 test('real Actions reruns rejected before opening the supply menu',async({page})=>{await fixture(page);const dir=await mkdtemp(join(tmpdir(),'am4-supply-'));try{await expect(runSupplies(page,false,{...env,GITHUB_RUN_ATTEMPT:'2'},dir)).rejects.toThrow('RERUN');expect(await page.locator('#fuelMain').isVisible()).toBe(false);}finally{await rm(dir,{recursive:true,force:true})}});
