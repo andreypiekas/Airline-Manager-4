@@ -80,17 +80,24 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
     const durationSeconds = Number(time[1])*3600 + Number(time[2])*60 + Number(time[3]);
     const auto=panel.locator('#introAuto');
     const autopriceReference=await auto.count()===1 && await auto.isVisible()?parseQuoteAutoprice(await auto.getAttribute('onclick')||''):null;
-    // The live AM4 UI does not consistently expose the same element id for this
-    // action. Discover the unique visible native button by its accessible label,
-    // inspect only its structure, and never click it here.
-    const create=panel.getByRole('button',{name:/^Create route$/i});
-    const createCount=await create.count();
-    const createControl=inspectRouteCreateControl({
-      id:createCount===1?await create.getAttribute('id'):null,
-      label:createCount===1?(await create.innerText().catch(()=>'')):null,
-      onclick:createCount===1?await create.getAttribute('onclick'):null,
-      visible:createCount===1?await create.isVisible():false,
-      enabled:createCount===1?await create.isEnabled().catch(()=>false):false
+    // The live AM4 UI does not consistently expose the same tag/id for this
+    // action. Inspect any unique visible element that actually owns an onclick
+    // and whose rendered label starts with "Create route". Never click it here.
+    const createCandidates=await panel.locator('[onclick]').evaluateAll(elements=>elements.flatMap(e=>{
+      const visible=!!e.getClientRects().length;
+      const label=((e as HTMLElement).innerText||(e as HTMLInputElement).value||'').replace(/\s+/g,' ').trim();
+      if(!visible||!/^Create route(?:\b|\s|$)/i.test(label))return [];
+      const disabled=(e as HTMLButtonElement).disabled===true||e.getAttribute('aria-disabled')==='true'||e.classList.contains('disabled');
+      return [{
+        id:e.getAttribute('id'),
+        label:label.slice(0,100),
+        onclick:e.getAttribute('onclick'),
+        visible:true,
+        enabled:!disabled
+      }];
+    }));
+    const createControl=inspectRouteCreateControl(createCandidates.length===1?createCandidates[0]:{
+      id:null,label:null,onclick:null,visible:false,enabled:false
     });
     const quote: CandidateQuote = { ...identity, observedAt: new Date().toISOString(), distanceKm: integerText(raw.distance), durationSeconds,
       fuelLbs: integerText(raw.fuel), co2KgPerPaxKm: Number(raw.co2), costIndex: integerText(raw.costIndex), routeFee: integerText(raw.fee.replace(/^\$\s*/, '')),
