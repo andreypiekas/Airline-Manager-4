@@ -35,9 +35,14 @@ export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv
    entry.status='purchased';entry.reason='STOCK_AND_PAYMENT_CONFIRMED';await save();
   }
   await port.close();
- }catch{
-  const entry=report.entries.at(-1);if(entry){entry.reason=entry.status==='attempting'?'OUTCOME_UNKNOWN_NO_RETRY':'READ_OR_VALIDATION_FAILED';entry.status=entry.status==='attempting'?'unknown':'unavailable';}
-  report.halted=true;await save();throw Error('SUPPLY_HALTED_SEE_REPORT_NO_RETRY');
+ }catch(error){
+  const raw=error instanceof Error?error.message:'UNCLASSIFIED';
+  const code=/^[A-Z0-9_:-]{1,120}$/.test(raw)?raw:'UNCLASSIFIED';
+  const entry=report.entries.at(-1);if(entry){
+   entry.reason=entry.status==='attempting'?'OUTCOME_UNKNOWN_NO_RETRY:'+code:'READ_OR_VALIDATION_FAILED:'+code;
+   entry.status=entry.status==='attempting'?'unknown':'unavailable';
+  }
+  report.halted=true;await save();throw Error('SUPPLY_HALTED_SEE_REPORT_NO_RETRY:'+code);
  }
  console.log('[Supplies] '+JSON.stringify(report.entries.map(({kind,status,reason})=>({kind,status,reason}))));
  return report;
