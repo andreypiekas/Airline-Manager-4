@@ -3,6 +3,7 @@ import { CandidateQuote } from './quote-reader';
 import { MarketPriceReference, ModelCostReference } from './cost-reference-reader';
 import { AircraftMaintenanceReference } from './maintenance-reader';
 import { Co2CalibrationEvidence, estimateObservedCo2Quotas } from './co2-calibration';
+import type { GameModeEvidence } from './game-mode-evidence';
 
 export const COST_COMPONENTS = ['fuel','co2','aCheck','wearRepair','airport','staff','marketing','otherRecurring'] as const;
 export type CostComponent = typeof COST_COMPONENTS[number];
@@ -49,7 +50,7 @@ export function effectiveCostBudget(quote:CandidateQuote,evidence:Partial<Record
  */
 export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null,remaining:Cabins|null,
   references:{fuel:MarketPriceReference|null;co2:MarketPriceReference|null;model:ModelCostReference|null;
-    maintenance:AircraftMaintenanceReference|null;co2Calibration?:Co2CalibrationEvidence|null},now=new Date(),maxAgeSeconds=300) {
+    maintenance:AircraftMaintenanceReference|null;co2Calibration?:Co2CalibrationEvidence|null;gameModeEvidence?:GameModeEvidence|null},now=new Date(),maxAgeSeconds=300) {
   const context=Number.isSafeInteger(maxAgeSeconds)&&maxAgeSeconds>0&&fresh(quote.observedAt,now,maxAgeSeconds)&&
     /^\d+$/.test(quote.aircraftId)&&/^[A-Z0-9]{3}$/.test(quote.from)&&/^[A-Z0-9]{3}$/.test(quote.to)&&quote.from!==quote.to&&
     Number.isFinite(quote.distanceKm)&&quote.distanceKm>0&&Number.isFinite(quote.durationSeconds)&&quote.durationSeconds>0&&
@@ -73,10 +74,16 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
   };
   const amount=(n:number|null)=>n!==null&&nonnegative(n)?n:null;
   const model=references.model;
+  const mode=references.gameModeEvidence;
+  const exactMode=mode?.status==='verified'&&mode.aCheckCostMultiplier!==null&&mode.speedMultiplier!==null&&
+    Number.isFinite(mode.aCheckCostMultiplier)&&mode.aCheckCostMultiplier>0&&Number.isFinite(mode.speedMultiplier)&&mode.speedMultiplier>0;
   const aCheckValue=context&&!!model&&['inspected-catalog','community-reference'].includes(model.source)&&model.modelId===quote.autopriceReference?.modelId&&
     fresh(model.observedAt,now,maxAgeSeconds)&&nonnegative(model.aCheckPrice)&&model.aCheckPrice>0&&
     Number.isFinite(model.checkIntervalHours)&&model.checkIntervalHours>0?
-    model.aCheckPrice/model.checkIntervalHours*quote.durationSeconds/3600:null;
+    exactMode
+      ? model.aCheckPrice*mode!.aCheckCostMultiplier!*Math.ceil((quote.durationSeconds/3600)*mode!.speedMultiplier!)/model.checkIntervalHours
+      : model.aCheckPrice/model.checkIntervalHours*quote.durationSeconds/3600
+    : null;
   const maintenance=references.maintenance;
   const sameAircraft=!!maintenance&&maintenance.aircraftId===quote.aircraftId&&maintenance.registration===quote.registration&&
     maintenance.source==='inspected-maintenance-plan'&&fresh(maintenance.observedAt,now,maxAgeSeconds)&&
@@ -101,8 +108,8 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
       calibratedQuotasAtDemandCeiling:calibrationVerified?calibratedQuotas(cabinsAtDemandCeiling):null,
       formulaSource:calibrationVerified?'live flight history calibrated weighted-cabin formula':'AM4 calculator: Calculadoras (1)!G7 and Faturamento e Lucro!E14'},
     aCheck:{catalogProration:aCheckCatalogProration,effectiveAircraftCost:null,
-      source:model?.source??null,
-      formulaSource:'AM4 calculator: Faturamento e Lucro!E15',includesWearRepair:false,
+      source:model?.source??null,modeVerified:exactMode,
+      formulaSource:exactMode?'abc8747/am4 metrics::acheck_cost cross-checked game mode':'AM4 calculator: Faturamento e Lucro!E15',includesWearRepair:false,
       hoursToCheck:sameAircraft?maintenance!.hoursToCheck:null,wearPercentage:sameAircraft?maintenance!.wearPercentage:null,
       checkBeforeProposedLeg:sameAircraft&&context?maintenance!.hoursToCheck<quote.durationSeconds/3600:null},
     wearRepairReference:{expectedPerDepartureAtTraining0:repairAtTraining0,expectedPerDepartureAtTraining5:repairAtTraining5,
