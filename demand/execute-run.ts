@@ -27,11 +27,11 @@ export async function runDemandExecution(page:Page,config=readDemandConfig(),env
     await writeFile(target+'.tmp',JSON.stringify(report,null,2)+'\n');await rename(target+'.tmp',target);
     await writeFile(join(directory,'execution-report.md'),[
       `# Decolagens individuais — ${report.dryRun?'simulacao':'execucao real'}`,'',
-      `Escopo: retorno para a propria base pela rota existente. Avaliadas: ${report.summary.evaluated}; decolagens confirmadas: ${report.summary.departed}; simuladas: ${report.summary.simulated}; retidas: ${report.summary.held}; resultado incerto: ${report.summary.unknown}.`,'',
+      `Escopo: trechos da rota existente que saem da propria base ou retornam para ela. Avaliadas: ${report.summary.evaluated}; decolagens confirmadas: ${report.summary.departed}; simuladas: ${report.summary.simulated}; retidas: ${report.summary.held}; resultado incerto: ${report.summary.unknown}.`,'',
       '| Aeronave | Trecho | Estado | Motivo |','| --- | --- | --- | --- |',
       ...report.entries.map(e=>`| ${safe(e.registration)} | ${safe(e.from)} → ${safe(e.to)} | ${e.status} | ${safe(e.reason)} |`),'',
       'A cobertura por demanda nao e previsao de ocupacao. Embarque observado consta no JSON apos a decolagem.',
-      'Na propria base, revisao incompleta de candidatas/custos mantem a aeronave em solo. Rotas e tarifas continuam sem alteracoes. No workflow principal, abastecimento e documentado separadamente em supply-report.json.',''
+      'Na propria base, a aeronave pode decolar pela rota atual quando identidade, controle nativo e demanda fresca estiverem validados. Rotas e tarifas continuam sem alteracoes. No workflow principal, abastecimento e documentado separadamente em supply-report.json.',''
     ].join('\n'));
   };
   const report=await new IndividualDepartureExecutor(new PlaywrightDeparturePort(page),config,{...settings,
