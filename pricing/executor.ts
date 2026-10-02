@@ -53,7 +53,7 @@ function desiredFares(a:AircraftSnapshot, maxAgeSeconds:number, now=new Date()):
   const desired={Y:0,J:0,F:0} as Record<Cabin,number>;
   for(const k of CLASSES){
     const next=a.capacity[k]>0?plan.proposed[k]:a.fares.current[k];
-    if(!Number.isSafeInteger(next)||next!<=0)return null;
+    if(!Number.isSafeInteger(next)||next<=0)return null;
     desired[k]=next;
   }
   return desired;
