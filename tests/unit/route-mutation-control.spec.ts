@@ -31,8 +31,8 @@ test('verified native Create route handler matches aircraft and airport context'
     observed:true,source:'jquery-direct-click',endpointVerified:true,targetVerified:true,
     aircraftIdMatchesContext:true,airportIdMatchesContext:true,
     registrationInputVerified:true,seatInputsVerified:true,endCostIndexVerified:true,
-    nonCharterBranchVerified:true,charterBranchObserved:true,nativeClickReady:true,
-    mutationAuthorized:false
+    nonCharterBranchVerified:true,charterBranchObserved:true,stopoverIds:[0],ferryModes:[0],directRouteVerified:true,
+    nativeClickReady:true,mutationAuthorized:false
   });
   expect(r.shape).toContain('new_route_info.php?mode=do&id=#&airportId=#');
   expect(r.shape).not.toContain('101');
@@ -57,6 +57,16 @@ test('unknown endpoint or missing seat guard fails closed',()=>{
   expect(inspectRouteMutationHandlerSource(unknown,{aircraftId:'101',airportId:'200'}).nativeClickReady).toBe(false);
   const missing=source().replace('if(eSeat>0 && bSeat>0 && fSeat>0)','if(eSeat>0)');
   expect(inspectRouteMutationHandlerSource(missing,{aircraftId:'101',airportId:'200'}).nativeClickReady).toBe(false);
+});
+
+test('stopover or ferry handler remains observable but is not direct-route evidence',()=>{
+  const stopover=source().replaceAll('stopoverId=0','stopoverId=12');
+  const s=inspectRouteMutationHandlerSource(stopover,{aircraftId:'101',airportId:'200'});
+  expect(s).toMatchObject({endpointVerified:true,stopoverIds:[12],ferryModes:[0],directRouteVerified:false});
+  const ferry=source().replaceAll('ferry=0','ferry=1');
+  const f=inspectRouteMutationHandlerSource(ferry,{aircraftId:'101',airportId:'200'});
+  expect(f).toMatchObject({endpointVerified:true,stopoverIds:[0],ferryModes:[1],directRouteVerified:false});
+  expect(s.mutationAuthorized).toBe(false);expect(f.mutationAuthorized).toBe(false);
 });
 
 test('invalid expected ids never classify a control',()=>{
