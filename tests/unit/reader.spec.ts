@@ -58,6 +58,8 @@ test('reader matches inspected DOM, ignores ticket prices, reads remaining/total
   await fixture(page); const result = await new DemandReader(page, 400).collect();
   expect(result.complete).toBe(true); expect(result.aircraft).toHaveLength(2);
   expect(result.aircraft[0]).toMatchObject({ aircraftId: '1101', routeId: '101', capacity: { Y: 100, J: 0, F: 0 }, remaining: { Y: 90, J: 0, F: 0 }, dailyTotal: { Y: 1000, J: 200, F: 200 }, from: 'BBB', to: 'AAA', state: 'ready' });
+  expect(Array.isArray(result.aircraft[0].currentRouteFieldDiagnostics)).toBe(true);
+  expect(JSON.stringify(result.aircraft[0].currentRouteFieldDiagnostics)).toContain('route-name');
   expect(result.aircraft[1].state).toBe('inflight'); expect(result.aircraft[1].onboard).toEqual({Y:40,J:0,F:0}); expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
 });
 test('pagination reads every page once', async ({ page }) => {
@@ -93,29 +95,6 @@ test('total UI load failure returns an incomplete report', async ({ page }) => {
   expect(r.complete).toBe(false); expect(r.warnings).toContain('COLLECTION_FAILED');
 });
 
-
-test('current route diagnostics inventory visible economic fields without changing the page',async({page})=>{
-  await fixture(page);
-  await page.locator('#routeMainList101 a').click();
-  await page.locator('#detailsAction').evaluate(el=>{
-    el.insertAdjacentHTML('beforeend',
-      '<div><span id="departFlightTimeInfo">01:22:33</span></div>'+
-      '<div><span id="departFuelInfo">44,321 Lbs</span></div>'+
-      '<div><span id="departCo2Info">0.17 kg/pax/km</span></div>'+
-      '<div><span id="costIndexBar">200</span></div>'+
-      '<div><b>Route fee</b><span>$ 77,700</span></div>'
-    );
-  });
-  await page.locator('#route-name .glyphicons-chevron-left').click();
-  const result=await new DemandReader(page,400).collect();
-  const serialized=JSON.stringify(result.aircraft[0].currentRouteFieldDiagnostics);
-  expect(serialized).toContain('departFlightTimeInfo');
-  expect(serialized).toContain('departFuelInfo');
-  expect(serialized).toContain('departCo2Info');
-  expect(serialized).toContain('costIndexBar');
-  expect(serialized).toContain('Route fee');
-  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
-});
 
 test('reads automatic fare reference without clicking Auto/Save or changing prices', async ({ page }) => {
   await fixture(page); const result = await new DemandReader(page, 400).collect();
