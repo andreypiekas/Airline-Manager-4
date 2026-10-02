@@ -10,6 +10,8 @@ export interface CandidateComparisonReadinessInput {
   effectiveCosts:{complete:boolean;missing:string[]};
   createControl:null|{observed:boolean;phpEndpoints?:string[]};
   routeListenerDiagnostics:Array<{phpEndpoints:string[]}>;
+  routeMutationControl:null|{nativeClickReady:boolean;endpointVerified:boolean;targetVerified:boolean;
+    aircraftIdMatchesContext:boolean;airportIdMatchesContext:boolean};
 }
 
 export interface CandidateComparisonReadiness {
@@ -43,13 +45,13 @@ export function assessCandidateComparisonReadiness(
     'RUNWAY_EVIDENCE_MISSING'
   );
 
-  const nativeEndpoints=new Set([
-    ...(candidate.createControl?.phpEndpoints||[]),
-    ...candidate.routeListenerDiagnostics.flatMap(x=>x.phpEndpoints||[])
-  ]);
   const mutationBlockers:string[]=[];
   if(comparisonBlockers.length)mutationBlockers.push('COMPARISON_NOT_READY');
-  if(!candidate.createControl?.observed&&nativeEndpoints.size===0)mutationBlockers.push('NATIVE_ROUTE_MUTATION_CONTROL_UNVERIFIED');
+  if(!candidate.routeMutationControl?.endpointVerified)mutationBlockers.push('NATIVE_ROUTE_ENDPOINT_UNVERIFIED');
+  if(!candidate.routeMutationControl?.targetVerified)mutationBlockers.push('NATIVE_ROUTE_TARGET_UNVERIFIED');
+  if(!candidate.routeMutationControl?.aircraftIdMatchesContext)mutationBlockers.push('NATIVE_ROUTE_AIRCRAFT_CONTEXT_UNVERIFIED');
+  if(!candidate.routeMutationControl?.airportIdMatchesContext)mutationBlockers.push('NATIVE_ROUTE_AIRPORT_CONTEXT_UNVERIFIED');
+  if(!candidate.routeMutationControl?.nativeClickReady)mutationBlockers.push('NATIVE_ROUTE_MUTATION_CONTROL_UNVERIFIED');
   mutationBlockers.push('ROUTE_MUTATION_EXECUTOR_NOT_IMPLEMENTED');
 
   return {
