@@ -27,14 +27,25 @@ const sanitize=(value:string|null)=>{
     .trim()
     .slice(0,1800);
 };
+
 const sanitizeTail=(value:string|null)=>{
   if(!value)return null;
-  const tail=value.length>1800?value.slice(-1800):value;
-  return sanitize(tail);
+  return sanitize(value.length>1800?value.slice(-1800):value);
 };
-const endpoints=(value:string|null)=>value
-  ? [...new Set(Array.from(value.matchAll(/([A-Za-z0-9_-]+\\.php)(?:\\?|['"\\s]|$)/g),m=>m[1]))].slice(0,10)
-  : [];
+
+const uniqueMatches=(value:string|null,pattern:RegExp,index:number,limit:number)=>{
+  if(!value)return [] as string[];
+  const out:string[]=[];
+  for(const match of value.matchAll(pattern)){
+    const found=match[index];
+    if(found&&!out.includes(found))out.push(found);
+    if(out.length>=limit)break;
+  }
+  return out;
+};
+
+const endpoints=(value:string|null)=>
+  uniqueMatches(value,/([A-Za-z0-9_-]+\.php)(?:\?|['"\s]|$)/g,1,10);
 
 /**
  * Chromium-only passive listener inspection. It reads both DevTools listeners
@@ -59,35 +70,57 @@ export async function readRouteListenerDiagnostics(page:Page):Promise<RouteListe
       'return rows.slice(0,100);',
       '})()'
     ].join('');
+
     const result:any=await session.send('Runtime.evaluate',{
-      expression,returnByValue:true,includeCommandLineAPI:true,awaitPromise:false
+      expression,
+      returnByValue:true,
+      includeCommandLineAPI:true,
+      awaitPromise:false
     });
+
     const rows=Array.isArray(result?.result?.value)?result.result.value:[];
-    const diagnostics:RouteListenerDiagnostic[]=rows.flatMap((row:any):RouteListenerDiagnostic[]=>{
+    const diagnostics:RouteListenerDiagnostic[]=[];
+
+    for(const row of rows){
       const source=typeof row?.handlerSource==='string'?row.handlerSource:null;
       const shape=sanitize(source);
-      if(!shape)return [];
+      if(!shape)continue;
+
       const selector=typeof row?.selector==='string'?sanitize(row.selector):null;
-      const relevant=/route|create|new|flight|airport|ajax|submit|save|reroute/i.test(shape)||
+      const relevant=
+        /route|create|new|flight|airport|ajax|submit|save|reroute/i.test(shape)||
         /route|create|new|save/i.test(String(row?.elementLabel||''))||
         /route|create|new|save/i.test(selector||'');
-      if(!relevant)return [];
-      const ajaxTargets=source
-        ? [...new Set(Array.from(source.matchAll(/Ajax\\([^,]+,\\s*['"]([A-Za-z_][A-Za-z0-9_-]{0,80})['"]/g), (m:RegExpMatchArray)=>m[1])))] .slice(0,20)
-        : [];
-      const functionCalls=source
-        ? [...new Set(Array.from(source.matchAll(/(?:^|[^A-Za-z0-9_$])([A-Za-z_$][A-Za-z0-9_$]*(?:\\.[A-Za-z_$][A-Za-z0-9_$]*)*)\\s*\\(/g), (m:RegExpMatchArray)=>m[1])))]
-            .filter(x=>!['if','for','while','switch','function','return'].includes(x))
-            .slice(0,40)
-        : [];
-      const routeStringShapes=source
-        ? Array.from(source.matchAll(/(['"])([^'"\\n\\r]{1,300})\\1/g), (m:RegExpMatchArray)=>m[2])
-            .filter(x=>/route|create|airport|flight|ajax|php/i.test(x))
-            .map(x=>sanitize(x)!)
-            .filter(Boolean)
-            .slice(0,30)
-        : [];
-      return [{
+      if(!relevant)continue;
+
+      const ajaxTargets=uniqueMatches(
+        source,
+        /Ajax\([^,]+,\s*['"]([A-Za-z_][A-Za-z0-9_-]{0,80})['"]/g,
+        1,
+        20
+      );
+
+      const functionCalls=uniqueMatches(
+        source,
+        /(?:^|[^A-Za-z0-9_$])([A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*)\s*\(/g,
+        1,
+        60
+      )
+        .filter(x=>!['if','for','while','switch','function','return'].includes(x))
+        .slice(0,40);
+
+      const routeStringShapes=uniqueMatches(
+        source,
+        /(['"])([^'"\n\r]{1,300})\1/g,
+        2,
+        80
+      )
+        .filter(x=>/route|create|airport|flight|ajax|php/i.test(x))
+        .map(x=>sanitize(x))
+        .filter((x):x is string=>!!x)
+        .slice(0,30);
+
+      diagnostics.push({
         scope:['panel','document','element'].includes(row.scope)?row.scope:'element',
         source:row.sourceKind==='jquery-event'?'jquery-event':'dom-listener',
         event:typeof row.event==='string'?row.event.slice(0,30):'unknown',
@@ -102,14 +135,19 @@ export async function readRouteListenerDiagnostics(page:Page):Promise<RouteListe
         ajaxTargets,
         functionCalls,
         routeStringShapes
-      } as RouteListenerDiagnostic];
-    });
+      });
+    }
+
     const seen=new Set<string>();
     return diagnostics.filter(d=>{
       const key=JSON.stringify(d);
       if(seen.has(key))return false;
-      seen.add(key);return true;
+      seen.add(key);
+      return true;
     }).slice(0,50);
-  }catch{return [];}
-  finally{try{await session?.detach();}catch{}}
+  }catch{
+    return [];
+  }finally{
+    try{await session?.detach();}catch{}
+  }
 }
