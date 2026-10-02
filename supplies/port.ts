@@ -9,11 +9,20 @@ export function parseAmount(text:string):number {
  const n=Number(s.replace(/,/g,''));if(!Number.isFinite(n)||n<0||n>Number.MAX_SAFE_INTEGER)throw Error('SUPPLY_NUMBER_INVALID');return n;
 }
 export function parseSupplyText(text:string,kind:Commodity,balance:number):SupplySnapshot {
- const price=text.match(kind==='fuel'?/CURRENT PRICE\s+\$\s*([\d,]+)\s+PRICE CHANGE/i:/QUOTA COST\s+\$\s*([\d,]+)\s+PRICE CHANGE/i);
- const capacity=text.match(/CAPACITY\s+([\d,]+)\s*\/\s*([\d,]+)\s+(Lbs|Quotas)/i);
- const holding=text.match(/HOLDING\s+([\d,]+)\s+(Lbs|Quotas)/i);
+ const one=(re:RegExp)=>{
+  const matches=[...text.matchAll(re)];
+  if(matches.length!==1)throw Error('SUPPLY_DATA_UNVERIFIED');
+  return matches[0];
+ };
+ // AM4 may insert explanatory/status text between labels and values. Keep each
+ // read bounded to the local section and require exactly one matching section.
+ const price=one(kind==='fuel'
+  ? /CURRENT PRICE[\s\S]{0,160}?\$\s*([\d,]+)(?=[\s\S]{0,120}?PRICE CHANGE)/gi
+  : /QUOTA COST[\s\S]{0,160}?\$\s*([\d,]+)(?=[\s\S]{0,120}?PRICE CHANGE)/gi);
+ const capacity=one(/CAPACITY[\s\S]{0,160}?([\d,]+)\s*\/\s*([\d,]+)\s+(Lbs|Quotas)/gi);
+ const holding=one(/HOLDING[\s\S]{0,160}?([\d,]+)\s+(Lbs|Quotas)/gi);
  const unit=kind==='fuel'?'lbs':'quotas';
- if(!price||!capacity||!holding||capacity[3].toLowerCase()!==unit||holding[2].toLowerCase()!==unit)throw Error('SUPPLY_DATA_UNVERIFIED');
+ if(capacity[3].toLowerCase()!==unit||holding[2].toLowerCase()!==unit)throw Error('SUPPLY_DATA_UNVERIFIED');
  const remainingCapacity=parseAmount(capacity[1]),total=parseAmount(capacity[2]),stock=parseAmount(holding[1]);
  if(total!==remainingCapacity+stock)throw Error('SUPPLY_CAPACITY_INCONSISTENT');
  return {pricePer1000:parseAmount(price[1]),holding:stock,remainingCapacity,balance};
