@@ -52,6 +52,24 @@ test('discovers Create route when the live control is a non-button element with 
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 
+test('route action diagnostics retain endpoint shape but redact query values',async({page})=>{
+  await fixture(page);
+  await page.locator('#btnCreateNewRoute').evaluate(e=>e.setAttribute(
+    'onclick',
+    "Ajax('route_create.php?id=123&token=SECRET','routeAction',this);"
+  ));
+  const r=await readOpenCandidateQuote(page,identity);
+  expect(r.status).toBe('observed');
+  if(r.status!=='observed')return;
+  const serialized=JSON.stringify(r.quote.routeActionDiagnostics);
+  expect(serialized).toContain('route_create.php');
+  expect(serialized).toContain('id=<value>');
+  expect(serialized).toContain('token=<value>');
+  expect(serialized).not.toContain('SECRET');
+  expect(serialized).not.toContain('123');
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 for (const mismatch of [{ aircraftId:'102' }, { airportId:'201' }, { registration:'OTHER' }, { from:'BBB',to:'AAA' }]) {
   test(`rejects mismatched quote identity ${JSON.stringify(mismatch)}`, async ({ page }) => {
     await fixture(page); expect((await readOpenCandidateQuote(page,{...identity,...mismatch})).status).toBe('unavailable');
