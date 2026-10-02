@@ -11,6 +11,8 @@ export interface CandidateComparisonReadinessInput {
   createControl:null|{observed:boolean;phpEndpoints?:string[]};
   routeListenerDiagnostics:Array<{phpEndpoints:string[]}>;
   routeDirectionEvidence?:null|{verified:boolean;primaryMatchesContext:boolean;headerMatchesContext:boolean;independentSourcesAgree:boolean};
+  runwayEvidence?:null|{status:'reference_verified'|'insufficient_reference'|'unavailable';adequate:boolean|null;
+    originObserved:boolean;destinationObserved:boolean;originRunwayFt:number|null;destinationRunwayFt:number|null;requiredRunwayFt:number};
   routeMutationControl:null|{nativeClickReady:boolean;endpointVerified:boolean;targetVerified:boolean;
     aircraftIdMatchesContext:boolean;airportIdMatchesContext:boolean};
 }
@@ -43,10 +45,16 @@ export function assessCandidateComparisonReadiness(
   if(!candidate.costsComplete)comparisonBlockers.push('FULL_COSTS_MISSING');
   if(!candidate.effectiveCosts.complete)comparisonBlockers.push(...candidate.effectiveCosts.missing.map(x=>'EFFECTIVE_COST:'+x));
   comparisonBlockers.push(...candidate.roundTrip.blockers.map(x=>'ROUND_TRIP:'+x));
+  const runway=candidate.runwayEvidence;
+  if(!runway||runway.status==='unavailable'||!runway.originObserved||!runway.destinationObserved)
+    comparisonBlockers.push('RUNWAY_EVIDENCE_MISSING');
+  else if(runway.adequate===false)
+    comparisonBlockers.push('RUNWAY_REFERENCE_INSUFFICIENT');
+  else
+    comparisonBlockers.push('RUNWAY_REFERENCE_ONLY_NEEDS_LIVE_CORROBORATION');
   comparisonBlockers.push(
     'CURRENT_ROUTE_FULL_ECONOMICS_MISSING',
-    'EXPECTED_LOAD_FACTOR_EVIDENCE_MISSING',
-    'RUNWAY_EVIDENCE_MISSING'
+    'EXPECTED_LOAD_FACTOR_EVIDENCE_MISSING'
   );
 
   const mutationBlockers:string[]=[];
