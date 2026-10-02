@@ -1,0 +1,91 @@
+name: Dispatch live diagnostic once
+
+on:
+  push:
+    paths:
+      - '.github/run-live-diagnostic-once'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Verificar compilacao
+        run: npm run typecheck
+
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Executar diagnostico live somente leitura
+        env:
+          EMAIL: ${{ secrets.EMAIL }}
+          PASSWORD: ${{ secrets.PASSWORD }}
+
+          ENABLE_RETURN_JOURNAL: 'false'
+          ENABLE_TICKET_PRICING: 'true'
+          ENABLE_TICKET_PRICING_EXECUTION: 'false'
+
+          ENABLE_ROUTE_RESEARCH: 'true'
+          ROUTE_RESEARCH_MAX_AIRCRAFT: '3'
+          ROUTE_RESEARCH_MAX_SUGGESTIONS: '5'
+          ROUTE_RESERVATION_NEXT_LEGS: ${{ vars.ROUTE_RESERVATION_NEXT_LEGS || '2' }}
+          ROUTE_RESERVATION_POOL_SCOPE: ${{ vars.ROUTE_RESERVATION_POOL_SCOPE || 'airport-pair' }}
+          ENABLE_ROUTE_OPTIMIZER: 'true'
+          ROUTE_MIN_OCCUPANCY_PERCENT: ${{ vars.ROUTE_MIN_OCCUPANCY_PERCENT || '80' }}
+          ROUTE_MIN_IMPROVEMENT_PERCENT: ${{ vars.ROUTE_MIN_IMPROVEMENT_PERCENT || '0' }}
+          ROUTE_REVIEW_TIMEZONE: ${{ vars.ROUTE_REVIEW_TIMEZONE }}
+          AIRLINE_BASES_JSON: ${{ vars.AIRLINE_BASES_JSON }}
+          AIRCRAFT_ORIGINS_JSON: ${{ vars.AIRCRAFT_ORIGINS_JSON || '[]' }}
+
+          ENABLE_DEMAND_MANAGER: 'true'
+          DEMAND_DRY_RUN: 'true'
+          DEMAND_FAIL_SAFE: 'true'
+          DEMAND_MAX_DEPARTURES_PER_RUN: '20'
+          MIN_DEMAND_PERCENTAGE: ${{ vars.MIN_DEMAND_PERCENTAGE || '80' }}
+          DEMAND_THRESHOLD_MODE: ${{ vars.DEMAND_THRESHOLD_MODE || 'aggregate' }}
+          DEMAND_POOL_SCOPE: ${{ vars.DEMAND_POOL_SCOPE || 'airport-pair' }}
+          DEMAND_MAX_AGE_SECONDS: ${{ vars.DEMAND_MAX_AGE_SECONDS || '300' }}
+
+          ENABLE_FUEL: 'false'
+          ENABLE_MAINTENANCE: 'false'
+          ENABLE_CAMPAIGN: 'false'
+          ENABLE_DEPART: 'false'
+          PAKSI_VIDEO: 'false'
+        run: |
+          if [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
+            echo "::error::Secrets EMAIL e PASSWORD sao obrigatorios."
+            exit 1
+          fi
+          rm -rf test-results/demand
+          mkdir -p test-results
+          xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed 2>&1 | tee test-results/live-diagnostic.log
+
+      - name: Resumo do diagnostico
+        if: always()
+        run: |
+          for f in test-results/demand/route-research.md test-results/demand/candidate-data.md test-results/demand/optimization-report.md test-results/demand/demand-report.md; do
+            if [ -f "$f" ]; then cat "$f" >> "$GITHUB_STEP_SUMMARY"; fi
+          done
+
+      - name: Enviar diagnostico
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-diagnostic
+          path: |
+            test-results/demand/
+            test-results/live-diagnostic.log
+          if-no-files-found: ignore
+          retention-days: 2
