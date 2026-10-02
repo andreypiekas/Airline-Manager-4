@@ -16,6 +16,7 @@ import { emptyFinanceHistory, readFinanceHistoryReference } from './finance-read
 import { screenCandidateEconomics } from './economic-screen';
 import { buildCandidateRoundTripScreen } from './round-trip-screen';
 import { loadReference, RouteCatalog } from './reference-data';
+import { CandidateQuote } from './quote-reader';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
