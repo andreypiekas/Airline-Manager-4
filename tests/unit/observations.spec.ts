@@ -21,7 +21,8 @@ async function fixture(page: Page) {
 test('reads inspected quote without treating daily demand as remaining or clicking any control', async ({ page }) => {
   await fixture(page);
   const r = await readOpenCandidateQuote(page, identity);
-  expect(r).toMatchObject({ status: 'observed', quote: { ...identity, distanceKm: 1955, durationSeconds: 5894, fuelLbs: 23695, co2KgPerPaxKm: .15, costIndex: 200, routeFee: 45716, aircraftOnRoute: 0, dailyDemand: {Y:431,J:169,F:162}, remainingDemand: null, netProfit: null, comparisonReady: false, mutationAuthorized: false } });
+  expect(r).toMatchObject({ status: 'observed', quote: { ...identity, distanceKm: 1955, durationSeconds: 5894, fuelLbs: 23695, co2KgPerPaxKm: .15, costIndex: 200, routeFee: 45716, aircraftOnRoute: 0, dailyDemand: {Y:431,J:169,F:162}, remainingDemand: null, netProfit: null, comparisonReady: false, mutationAuthorized: false,
+    createControl:{observed:true,visible:true,enabled:true,id:'btnCreateNewRoute',label:'Create route',onclickShape:'window.mutations++',phpEndpoints:[],ajaxTargets:[],mutationAuthorized:false} } });
   expect(await page.locator('#eSeat').inputValue()).toBe('999');
   expect(await page.locator('#routeReg').inputValue()).toBe('TEST');
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
