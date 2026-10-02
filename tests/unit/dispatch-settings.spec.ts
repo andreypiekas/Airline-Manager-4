@@ -11,10 +11,11 @@ test('absent settings default to simulation and one-flight limit',()=>expect(res
 test('cron with no new inputs inherits the repository activation and limit',()=>expect(resolveDepartureSettings({AM4_REPOSITORY_EXECUTE:'true',AM4_REPOSITORY_MAX_DEPARTURES:'3'})).toMatchObject({dryRun:false,maxDepartures:3}));
 test('default zero input does not shadow the repository limit',()=>expect(resolveDepartureSettings({AM4_INPUT_MAX_DEPARTURES:'0',AM4_REPOSITORY_MAX_DEPARTURES:'4'}).maxDepartures).toBe(4));
 test('explicit positive input overrides repository limit',()=>expect(resolveDepartureSettings({AM4_INPUT_MAX_DEPARTURES:'2',AM4_REPOSITORY_MAX_DEPARTURES:'4'}).maxDepartures).toBe(2));
+test('repository zero limit falls back to safe default one',()=>expect(resolveDepartureSettings({AM4_REPOSITORY_MAX_DEPARTURES:'0'})).toMatchObject({maxDepartures:1,limitSource:'default:1'}));
 test('simulation override prevents operations even with both activation switches true',()=>expect(resolveDepartureSettings({AM4_INPUT_MODE:'simulation',AM4_INPUT_EXECUTE:'true',AM4_REPOSITORY_EXECUTE:'true'}).dryRun).toBe(true));
 test('production input is explicit activation',()=>expect(resolveDepartureSettings({AM4_INPUT_MODE:'production',AM4_REPOSITORY_EXECUTE:'false'}).dryRun).toBe(false));
 test('legacy activation input still works',()=>expect(resolveDepartureSettings({AM4_INPUT_EXECUTE:'true',AM4_REPOSITORY_EXECUTE:'false'}).dryRun).toBe(false));
-for(const [index,env] of [{AM4_INPUT_MODE:'automatic'},{AM4_REPOSITORY_EXECUTE:'tru'},{AM4_INPUT_EXECUTE:'yes'},{AM4_INPUT_MAX_DEPARTURES:'-1'},{AM4_INPUT_MAX_DEPARTURES:'21'},{AM4_INPUT_MAX_DEPARTURES:'1.5'},{AM4_REPOSITORY_MAX_DEPARTURES:'0'},{AM4_REPOSITORY_MAX_DEPARTURES:'99'},{AM4_REPOSITORY_MAX_DEPARTURES:'1\nother=secret'}].entries())
+for(const [index,env] of [{AM4_INPUT_MODE:'automatic'},{AM4_REPOSITORY_EXECUTE:'tru'},{AM4_INPUT_EXECUTE:'yes'},{AM4_INPUT_MAX_DEPARTURES:'-1'},{AM4_INPUT_MAX_DEPARTURES:'21'},{AM4_INPUT_MAX_DEPARTURES:'1.5'},{AM4_REPOSITORY_MAX_DEPARTURES:'99'},{AM4_REPOSITORY_MAX_DEPARTURES:'1\nother=secret'}].entries())
  test(`invalid settings fail before any game login case ${index}`,()=>expect(()=>resolveDepartureSettings(env)).toThrow());
 test('both workflows wire repository variables into the shared resolver and use its outputs',async()=>{
  for(const name of ['playwright.yml','individual-departures.yml']){
