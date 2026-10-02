@@ -188,7 +188,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     comparisonReady:false,mutationAuthorized:false,uiRestored:true,warnings:[]
   };
   let demandResetCalibration:ReturnType<typeof calibrateDemandResetWindows>={
-    status:'unavailable',windows:[],warnings:[],comparisonReady:false,mutationAuthorized:false
+    status:'unavailable',windows:[],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false,mutationAuthorized:false
   };
   let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true,stage:'not_requested',warnings:[],unitLabels:[]};
   let maintenance:Awaited<ReturnType<typeof readAircraftMaintenanceReferences>>={status:'not_requested',stage:'not_requested',observedAt:new Date().toISOString(),complete:false,uiClosed:true,aircraft:[],warnings:[]};
@@ -295,8 +295,9 @@ export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof 
     ...report.demandLabelCalibration.samples.map(s=>`- ${s.aircraftId} ${s.from}–${s.to}: quote ${JSON.stringify(s.quoteDemand)}; remaining ${JSON.stringify(s.remaining)}; dailyTotal ${JSON.stringify(s.dailyTotal)}; match remaining ${s.matchesRemaining}; match daily ${s.matchesDailyTotal}.`),
     'O rotulo somente pode ser promovido a demanda restante se varias observacoes atuais e independentes o confirmarem; igualdade remaining=dailyTotal fica inconclusiva.','',
     '## Ledger historico do reset de demanda','',
-    `- Status: ${report.demandResetCalibration.status}; janelas verificadas: ${report.demandResetCalibration.windows.length}.`,
+    `- Status: ${report.demandResetCalibration.status}; janelas verificadas: ${report.demandResetCalibration.windows.length}; limite superior da idade do reset: ${report.demandResetCalibration.resetAgeUpperBoundMinutes??'indisponivel'} min.`,
     ...report.demandResetCalibration.windows.map(w=>`- ${w.pairKey}: consumo confirmado ${JSON.stringify(w.consumed)}; bucket incluido ate ${w.includedMaxAgeMinutes} min; proximo bucket excluido em ${w.excludedMinAgeMinutes} min.`),
+    ...report.demandResetCalibration.upperBoundSources.map(s=>`- Limite superior por ${s.aircraftId} ${s.from}–${s.to}: ultima decolagem no mesmo sentido ha ${s.newestSameDirectionFlightAgeMinutes} min, enquanto remaining=dailyTotal.`),
     'A reconstrucao candidata so e usada quando todo o historico da frota cobre a janela calibrada e nenhum voo do par cai na faixa ambigua do reset.','',
     ...(report.priorityRanking.length?[
       '## Ranking de referencia entre candidatas observadas','',
