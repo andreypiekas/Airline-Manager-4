@@ -16,6 +16,10 @@ export interface CandidateQuote extends QuoteIdentity {
   dailyDemand: Cabins;
   autopriceReference: QuoteAutopriceReference | null;
   createControl?: RouteCreateControlEvidence;
+  routeActionDiagnostics?: Array<{
+    tag:string;id:string|null;label:string|null;role:string|null;type:string|null;
+    callbackShape:string|null;hrefShape:string|null;phpEndpoints:string[];attributeNames:string[];
+  }>;
   remainingDemand: null;
   netProfit: null;
   comparisonReady: false;
@@ -99,9 +103,49 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
     const createControl=inspectRouteCreateControl(createCandidates.length===1?createCandidates[0]:{
       id:null,label:null,onclick:null,visible:false,enabled:false
     });
+
+    // Passive structural inventory for the live route quote. This is intentionally
+    // broad because AM4 may bind Create route through a non-button element or a
+    // delegated listener. Values/tokens are never retained: only labels, tag/id,
+    // attribute names, endpoint names and redacted callback/href shapes.
+    const routeActionDiagnostics=await panel.locator('button,a,input,[role="button"],[onclick]').evaluateAll(elements=>{
+      const sanitize=(value:string|null)=>{
+        if(!value)return null;
+        return value
+          .replace(/([?&][A-Za-z0-9_-]+)=([^&'"\s)]+)/g,'$1=<value>')
+          .replace(/\d+/g,'#')
+          .replace(/\s+/g,' ')
+          .trim()
+          .slice(0,400);
+      };
+      const endpoints=(value:string|null)=>value
+        ? [...new Set(Array.from(value.matchAll(/([A-Za-z0-9_-]+\.php)(?:\?|['"\s]|$)/g),m=>m[1]))].slice(0,10)
+        : [];
+      return elements.flatMap(e=>{
+        if(!e.getClientRects().length)return [];
+        const label=((e as HTMLElement).innerText||(e as HTMLInputElement).value||e.getAttribute('aria-label')||e.getAttribute('title')||'')
+          .replace(/\s+/g,' ').trim().slice(0,120);
+        const onclick=e.getAttribute('onclick');
+        const href=e.getAttribute('href')||e.getAttribute('formaction');
+        const phpEndpoints=[...new Set([...endpoints(onclick),...endpoints(href)])];
+        const relevant=!!onclick||!!href||/create|route|new|confirm|save|open|depart/i.test(label);
+        if(!relevant)return [];
+        return [{
+          tag:e.tagName.toLowerCase(),
+          id:e.getAttribute('id')?.slice(0,100)||null,
+          label:label||null,
+          role:e.getAttribute('role')?.slice(0,60)||null,
+          type:e.getAttribute('type')?.slice(0,60)||null,
+          callbackShape:sanitize(onclick),
+          hrefShape:sanitize(href),
+          phpEndpoints,
+          attributeNames:Array.from(e.attributes).map(a=>a.name).filter(n=>n!=='style').slice(0,30)
+        }];
+      }).slice(0,20);
+    });
     const quote: CandidateQuote = { ...identity, observedAt: new Date().toISOString(), distanceKm: integerText(raw.distance), durationSeconds,
       fuelLbs: integerText(raw.fuel), co2KgPerPaxKm: Number(raw.co2), costIndex: integerText(raw.costIndex), routeFee: integerText(raw.fee.replace(/^\$\s*/, '')),
-      aircraftOnRoute: integerText(raw.aircraft), autopriceReference, createControl, dailyDemand: { Y: integerText(raw.daily[0]), J: integerText(raw.daily[1]), F: integerText(raw.daily[2]) },
+      aircraftOnRoute: integerText(raw.aircraft), autopriceReference, createControl, routeActionDiagnostics, dailyDemand: { Y: integerText(raw.daily[0]), J: integerText(raw.daily[1]), F: integerText(raw.daily[2]) },
       remainingDemand: null, netProfit: null, comparisonReady: false, mutationAuthorized: false };
     if (quote.distanceKm <= 0 || durationSeconds <= 0 || quote.fuelLbs <= 0 || !Number.isFinite(quote.co2KgPerPaxKm) || quote.costIndex > 200) throw new Error();
     return { status: 'observed', quote };
