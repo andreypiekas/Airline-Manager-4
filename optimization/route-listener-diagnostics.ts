@@ -53,7 +53,7 @@ export async function readRouteListenerDiagnostics(page:Page):Promise<RouteListe
       expression,returnByValue:true,includeCommandLineAPI:true,awaitPromise:false
     });
     const rows=Array.isArray(result?.result?.value)?result.result.value:[];
-    const diagnostics=rows.flatMap((row:any)=>{
+    const diagnostics:RouteListenerDiagnostic[]=rows.flatMap((row:any):RouteListenerDiagnostic[]=>{
       const source=typeof row?.handlerSource==='string'?row.handlerSource:null;
       const shape=sanitize(source);
       if(!shape)return [];
