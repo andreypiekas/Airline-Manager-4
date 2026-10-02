@@ -6,10 +6,17 @@ export interface RouteCatalog { schemaVersion: number; source: string; sha256: s
 export interface CalendarDay { day: number; page: number; verified: boolean; fuel: number[][]; co2: number[][]; fuelIssues: boolean; co2Issues: boolean }
 export interface FuelCalendar { monthLength: number; utcOffsetMinutes: number; source: string; status: string; days: CalendarDay[] }
 export interface AirportReference {
-  iata:string; runwayFt:number|null; sourceIds:number[]; conflict?:boolean; runwayCandidatesFt?:number[];
+  iata:string; runwayFt:number|null; lat?:number|null; lng?:number|null; market?:number|null; hubCost?:number|null;
+  sourceIds:number[]; conflict?:boolean; runwayCandidatesFt?:number[]; coordinateCandidates?:Array<{lat:number;lng:number}>;
 }
 export interface AirportCatalog {
   schemaVersion:number; source:string; license:string; generatedAt:string; airports:AirportReference[];
+}
+export interface AirportDistanceEvidence {
+  from:string;to:string;distanceKm:number|null;quoteDistanceKm:number|null;deltaKm:number|null;
+  originSourceIds:number[];destinationSourceIds:number[];destinationAirportIdMatches:boolean|null;
+  source:string|null;status:'cross_checked'|'reference_only'|'unavailable';
+  comparisonReady:false;mutationAuthorized:false;
 }
 export interface AircraftReferenceVariant {
   modelId:number;shortname:string;manufacturer:string;modelName:string;type:number;priority:number;engineId:number;engineName:string;
@@ -49,13 +56,40 @@ export function aircraftReferenceByModel(
   return {status:'unique',reference:primary[0],source:catalog.source};
 }
 
+export function airportDistanceEvidence(
+  from:string,to:string,catalog:AirportCatalog|null,quoteDistanceKm:number|null=null,destinationAirportId:string|null=null
+):AirportDistanceEvidence {
+  const base:AirportDistanceEvidence={from,to,distanceKm:null,quoteDistanceKm,deltaKm:null,originSourceIds:[],destinationSourceIds:[],
+    destinationAirportIdMatches:null,source:null,status:'unavailable',comparisonReady:false,mutationAuthorized:false};
+  if(!catalog||![1,2].includes(catalog.schemaVersion)||!Array.isArray(catalog.airports)||!/^[A-Z0-9]{3}$/.test(from)||
+    !/^[A-Z0-9]{3}$/.test(to)||from===to)return base;
+  const one=(iata:string)=>{
+    const rows=catalog.airports.filter(a=>a.iata===iata&&!a.conflict&&Number.isFinite(a.lat)&&Number.isFinite(a.lng));
+    return rows.length===1?rows[0]:null;
+  };
+  const a=one(from),b=one(to);
+  if(!a||!b)return {...base,source:catalog.source,originSourceIds:a?.sourceIds||[],destinationSourceIds:b?.sourceIds||[]};
+  const rad=(n:number)=>n*Math.PI/180, dLat=rad(b.lat!-a.lat!), dLng=rad(b.lng!-a.lng!);
+  const h=Math.sin(dLat/2)**2+Math.cos(rad(a.lat!))*Math.cos(rad(b.lat!))*Math.sin(dLng/2)**2;
+  const distance=2*6371*Math.asin(Math.min(1,Math.sqrt(h)));
+  if(!Number.isFinite(distance)||distance<=0)return base;
+  const rounded=Math.round(distance);
+  const validQuote=typeof quoteDistanceKm==='number'&&Number.isFinite(quoteDistanceKm)&&quoteDistanceKm>0;
+  const delta=validQuote?Math.abs(rounded-quoteDistanceKm!):null;
+  const idMatches=destinationAirportId===null?null:
+    (/^[1-9]\d*$/.test(destinationAirportId)&&b.sourceIds.includes(Number(destinationAirportId)));
+  const cross=validQuote&&delta!==null&&delta<=2&&idMatches!==false;
+  return {...base,distanceKm:rounded,deltaKm:delta,originSourceIds:[...a.sourceIds],destinationSourceIds:[...b.sourceIds],
+    destinationAirportIdMatches:idMatches,source:catalog.source,status:cross?'cross_checked':'reference_only'};
+}
+
 export function airportRunwayEvidence(from:string,to:string,requiredRunwayFt:number,catalog:AirportCatalog|null):AirportRunwayEvidence {
   const base:AirportRunwayEvidence={
     from,to,requiredRunwayFt,originRunwayFt:null,destinationRunwayFt:null,
     originObserved:false,destinationObserved:false,adequate:null,source:null,status:'unavailable',
     comparisonReady:false,mutationAuthorized:false
   };
-  if(!catalog||catalog.schemaVersion!==1||!Array.isArray(catalog.airports)||!/^[A-Z0-9]{3}$/.test(from)||
+  if(!catalog||![1,2].includes(catalog.schemaVersion)||!Array.isArray(catalog.airports)||!/^[A-Z0-9]{3}$/.test(from)||
     !/^[A-Z0-9]{3}$/.test(to)||from===to||!Number.isFinite(requiredRunwayFt)||requiredRunwayFt<0)return base;
   const unique=(iata:string)=>{
     const rows=catalog.airports.filter(a=>a.iata===iata&&!a.conflict&&Number.isSafeInteger(a.runwayFt)&&a.runwayFt!>0);
