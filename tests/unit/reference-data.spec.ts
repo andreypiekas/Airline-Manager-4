@@ -1,10 +1,23 @@
 import { test, expect } from '@playwright/test';
-import { aircraftReferenceByModel, AircraftCatalog, airportRunwayEvidence, AirportCatalog, calendarReference, FuelCalendar, shortlistRoutes, RouteCatalog } from '../../optimization/reference-data';
+import { aircraftReferenceByModel, AircraftCatalog, airportDistanceEvidence, airportRunwayEvidence, AirportCatalog, calendarReference, FuelCalendar, shortlistRoutes, RouteCatalog } from '../../optimization/reference-data';
 import { AircraftSnapshot } from '../../demand/types';
 const a:AircraftSnapshot={aircraftId:'1',routeId:'2',registration:'TEST',routeLabel:'GRU-BSB',from:'GRU',to:'BSB',state:'ready',capacity:{Y:100,J:0,F:0},remaining:{Y:0,J:0,F:0},dailyTotal:{Y:1,J:1,F:1},observedAt:new Date().toISOString(),operational:{rangeKm:5000,minRunwayFt:5000,flightHours:1,cycles:1,homeBase:null,flightId:null}};
 const catalog:RouteCatalog={schemaVersion:1,source:'fixture',sha256:'test',routes:[{from:'GRU',to:'BSB',distanceKm:1000,referenceDemand:{Y:1000,J:0,F:0},sourceRow:2},{from:'GRU',to:'DTW',distanceKm:9000,referenceDemand:{Y:1000,J:0,F:0},sourceRow:3}]};
 test('reference route shortlist filters direct range and never supplies remaining demand or profit',()=>{
  const r=shortlistRoutes(a,'GRU',catalog);expect(r).toHaveLength(1);expect(r[0]).toMatchObject({to:'BSB',remainingDemand:null,estimatedProfit:null,mutationAuthorized:false});expect(a.remaining!.Y).toBe(0);
+});
+test('airport coordinates cross-check a live quote without creating demand',()=>{
+ const airports:AirportCatalog={schemaVersion:2,source:'fixture-airports',license:'MIT',generatedAt:'2026-10-02',airports:[
+  {iata:'AAA',runwayFt:10000,lat:0,lng:0,sourceIds:[1]},
+  {iata:'BBB',runwayFt:9000,lat:0,lng:1,sourceIds:[99]}
+ ]};
+ const r=airportDistanceEvidence('AAA','BBB',airports,111,'99');
+ expect(r).toMatchObject({
+  status:'cross_checked',distanceKm:111,deltaKm:0,destinationAirportIdMatches:true,
+  comparisonReady:false,mutationAuthorized:false
+ });
+ const wrong=airportDistanceEvidence('AAA','BBB',airports,111,'100');
+ expect(wrong.status).toBe('reference_only');
 });
 test('airport runway reference resolves both directions without authorizing comparison',()=>{
  const airports:AirportCatalog={schemaVersion:1,source:'fixture-airports',license:'MIT',generatedAt:'2026-10-02',airports:[
