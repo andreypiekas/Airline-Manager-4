@@ -90,6 +90,8 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   const quotes=research.aircraft.flatMap(a=>a.result?.quotes||[]);
   const models:ModelCostReference[]=[];const warnings:string[]=[];
   const modelReads:ModelCostReadResult[]=[];
+  const now=new Date();
+  const fresh=(stamp:string)=>{const age=now.getTime()-Date.parse(stamp);return Number.isFinite(age)&&age>=0&&age<=reservationsConfig.maxAgeSeconds*1000;};
   const capacityFor=(quote:CandidateQuote)=>{
     const aircraft=collection.aircraft.find(a=>a.aircraftId===quote.aircraftId);
     return collection.complete&&aircraft&&aircraft.registration===quote.registration&&aircraft.operational&&!aircraft.issue&&fresh(aircraft.observedAt)?aircraft.capacity:null;
@@ -139,8 +141,6 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
       catch{uiRestored=false;warnings.push('FINANCE_LIST_RESTORE_FAILED');}
     }
   }
-  const now=new Date();
-  const fresh=(stamp:string)=>{const age=now.getTime()-Date.parse(stamp);return Number.isFinite(age)&&age>=0&&age<=reservationsConfig.maxAgeSeconds*1000;};
   const candidates=quotes.map(quote=>{
     const demand=candidateDemandEvidence(quote,collection,now,reservationsConfig.maxAgeSeconds);
     const model=models.find(m=>m.modelId===quote.autopriceReference?.modelId)||null;
