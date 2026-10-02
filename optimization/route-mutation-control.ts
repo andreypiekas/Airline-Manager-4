@@ -1,5 +1,5 @@
 import { Page } from '@playwright/test';
-import { QuoteIdentity } from './quote-reader';
+import type { QuoteIdentity } from './quote-reader';
 
 export interface RouteMutationControlEvidence {
   observed:boolean;
