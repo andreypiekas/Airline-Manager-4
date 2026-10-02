@@ -1,6 +1,6 @@
 # Decolagens individuais em producao
 
-O executor suporta **somente o retorno para a propria base pela rota existente**. O workflow principal executa abastecimento separado antes da frota, conforme [SUPPLIES.md](SUPPLIES.md); o executor isolado nao compra. Nao executa servicos nem modifica rotas/tarifas. A comparacao economica de candidatas continua sem fornecedores completos de saldo, horarios futuros e custos efetivos; uma aeronave na propria base fica em solo com `BASE_ROUTE_REVIEW_INCOMPLETE`.
+O executor opera **os dois sentidos da rota existente**: pode sair da propria base ou retornar para ela, desde que identidade, rota, controle nativo e demanda fresca estejam validados. O workflow principal executa abastecimento separado antes da frota, conforme [SUPPLIES.md](SUPPLIES.md); o executor isolado nao compra. Nao modifica rotas nem tarifas.
 
 ## Controles
 
@@ -15,7 +15,7 @@ O executor suporta **somente o retorno para a propria base pela rota existente**
 
 1. Coleta integral fresca, com detalhes de cada aeronave vinculada a rota.
 2. Nova coleta antes de cada alvo original; pousos durante a execucao aguardam a proxima execucao.
-3. Origem explicita por ID ou unica base nos extremos da rota. Origem ambigua, revisao incompleta na base ou destino diferente da propria base: retencao.
+3. Origem explicita por ID ou unica base nos extremos da rota. O trecho atual precisa incluir a base operacional confirmada: pode sair dela ou retornar para ela. Origem ambigua ou trecho sem a base confirmada: retencao.
 4. Releitura individual de identidade, trecho, layout e demanda restante. Demanda diaria nunca substitui saldo restante.
 5. Alocacao conservadora entre aeronaves prontas do mesmo par, pela ordem dos cartoes. Nao e um otimizador de lucro nem um horario futuro confirmado.
 6. Verificacao do handler inteiro observado em Actions 36917592989 e 36918147380, com somente efeitos de interface e `route_depart.php?id=...&ref=list&costIndex=...`. Comentarios com URLs, comandos extras, parametros extras e IDs divergentes sao rejeitados. O indice nativo nao e alterado.
