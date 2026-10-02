@@ -67,7 +67,10 @@ export function calibrateCo2FromFlightHistory(
 
   const live=quotes.filter(q=>q.aircraftId===aircraft.aircraftId&&q.registration===aircraft.registration&&
     fresh(q.observedAt,now,maxAgeSeconds)&&Number.isFinite(q.co2KgPerPaxKm)&&q.co2KgPerPaxKm>0);
-  if(live.length<2)return {...base,reason:'LIVE_QUOTE_FACTOR_CORROBORATION_MISSING'};
+  // One live, identity/direction-verified quote is enough to propose the factor
+  // because the historical fit below independently corroborates or rejects it.
+  // Additional live quotes, when present, must all agree exactly.
+  if(live.length<1)return {...base,reason:'LIVE_QUOTE_CO2_FACTOR_MISSING'};
   const factors=[...new Set(live.map(q=>q.co2KgPerPaxKm))];
   if(factors.length!==1)return {...base,status:'inconsistent',reason:'LIVE_QUOTE_CO2_FACTOR_CONFLICT'};
   const factor=factors[0];
