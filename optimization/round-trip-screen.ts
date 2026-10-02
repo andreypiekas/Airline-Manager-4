@@ -1,6 +1,6 @@
 import { Cabins, CLASSES } from '../demand/types';
 import { CandidateQuote } from './quote-reader';
-import { RouteCatalog } from './reference-data';
+import { airportDistanceEvidence, AirportCatalog, AirportDistanceEvidence, RouteCatalog } from './reference-data';
 
 export interface RoundTripReservationEvidence {
   forwardAfterReservations: Cabins | null;
@@ -32,6 +32,7 @@ export interface CandidateRoundTripScreen {
     distanceKm: number;
     distanceDeltaKm: number;
   };
+  distanceReference: AirportDistanceEvidence | null;
   blockers: string[];
   comparisonReady: false;
   mutationAuthorized: false;
@@ -51,7 +52,8 @@ export function buildCandidateRoundTripScreen(
   catalog: RouteCatalog | null,
   reservations: RoundTripReservationEvidence,
   now = new Date(),
-  maxAgeSeconds = 300
+  maxAgeSeconds = 300,
+  airportCatalog: AirportCatalog | null = null
 ): CandidateRoundTripScreen {
   const result: CandidateRoundTripScreen = {
     status: 'unavailable',
@@ -74,6 +76,7 @@ export function buildCandidateRoundTripScreen(
       liveQuoteAvailable: false,
     },
     routeReference: null,
+    distanceReference: null,
     blockers: [],
     comparisonReady: false,
     mutationAuthorized: false,
@@ -110,7 +113,13 @@ export function buildCandidateRoundTripScreen(
   } else if (references.length > 1) {
     result.blockers.push('AMBIGUOUS_ROUTE_REFERENCE');
   } else {
-    result.blockers.push('ROUTE_REFERENCE_UNAVAILABLE');
+    const distance=airportDistanceEvidence(quote.from,quote.to,airportCatalog,quote.distanceKm,quote.airportId);
+    result.distanceReference=distance;
+    if(distance.status==='cross_checked'&&distance.distanceKm!==null){
+      result.returnLeg.routeDistanceReferenceKm=distance.distanceKm;
+    } else {
+      result.blockers.push('ROUTE_REFERENCE_UNAVAILABLE');
+    }
   }
 
   if (!result.outbound.remainingAfterReservations) result.blockers.push('OUTBOUND_REMAINING_DEMAND_UNAVAILABLE');
@@ -127,9 +136,10 @@ export function buildCandidateRoundTripScreen(
     'RETURN_EFFECTIVE_COSTS_REQUIRED'
   );
 
-  result.status = result.routeReference && result.returnLeg.remainingAfterReservations
+  const structural=!!result.routeReference||result.distanceReference?.status==='cross_checked';
+  result.status = structural && result.returnLeg.remainingAfterReservations
     ? 'partial'
-    : result.routeReference
+    : structural
       ? 'structural_only'
       : 'unavailable';
 
