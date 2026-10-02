@@ -111,3 +111,47 @@ export function calibrateCurrentFareLoadFactor(
     currentFarePolicyVerified:true,currentRouteDirectModelVerified:true,
     reason:'CURRENT_FARE_HISTORY_SUPPORTS_DIRECT_ALPHA_ABOVE_ONE_EXPECTED_LOAD'};
 }
+
+
+export interface CandidateLoadFactorEvidence {
+  aircraftId:string;from:string;to:string;
+  verified:boolean;
+  expectedByCabin:Cabins|null;
+  expectedAggregate:number|null;
+  source:'current-fare-history-transferred-to-direct-alpha-above-one';
+  reason:string;
+  comparisonReady:false;
+  mutationAuthorized:false;
+}
+
+/**
+ * Community evidence says a direct pax route priced above Auto uses the same
+ * expected load factor independent of distance. Transfer is allowed only when
+ * the candidate is separately proven direct and all active cabin prices remain
+ * above the observed Auto reference.
+ */
+export function transferCurrentFareLoadFactor(
+  calibration:LoadFactorCalibrationEvidence,
+  quote:CandidateQuote,
+  capacity:Cabins|null,
+  adjustedFares:Cabins|null,
+  directCandidateVerified:boolean
+):CandidateLoadFactorEvidence {
+  const base:CandidateLoadFactorEvidence={
+    aircraftId:quote.aircraftId,from:quote.from,to:quote.to,verified:false,expectedByCabin:null,expectedAggregate:null,
+    source:'current-fare-history-transferred-to-direct-alpha-above-one',reason:'TRANSFER_EVIDENCE_INCOMPLETE',
+    comparisonReady:false,mutationAuthorized:false
+  };
+  if(calibration.aircraftId!==quote.aircraftId||calibration.status!=='verified_current_fare_empirical'||
+    calibration.expectedLoadFactor===null||!Number.isFinite(calibration.expectedLoadFactor)||
+    calibration.expectedLoadFactor<=0||calibration.expectedLoadFactor>1||!validCabins(capacity)||!validCabins(adjustedFares)||
+    !directCandidateVerified||!quote.autopriceReference)return base;
+  const automatic=quote.autopriceReference.effectiveFares||quote.autopriceReference.base;
+  if(!validCabins(automatic))return base;
+  const aboveAuto=CLASSES.every(k=>capacity[k]===0||
+    adjustedFares[k]>automatic[k]&&automatic[k]>0);
+  if(!aboveAuto)return {...base,reason:'CANDIDATE_FARE_NOT_STRICTLY_ABOVE_AUTO'};
+  const f=calibration.expectedLoadFactor;
+  return {...base,verified:true,expectedAggregate:f,expectedByCabin:{Y:f,J:f,F:f},
+    reason:'EMPIRICAL_CURRENT_FARE_LOAD_TRANSFERRED_TO_VERIFIED_DIRECT_ABOVE_AUTO_ROUTE'};
+}
