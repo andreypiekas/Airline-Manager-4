@@ -18,6 +18,16 @@ test('reverse-only source cannot supply demand for the candidate direction',()=>
 test('no existing route does not convert daily demand or zero listed aircraft to remaining',()=>{
  const a=aircraft();a.to='BSB';expect(candidateDemandEvidence({...quote,dailyDemand:{Y:1000,J:50,F:10},aircraftOnRoute:0},collection(a),now).remaining).toBeNull();
 });
+test('verified fleet-history ledger can reconstruct pair remaining when no current route exists',()=>{
+ const h=(relativeTime:string,from:string,to:string,Y:number,J:number,F:number)=>({relativeTime,from,to,registrationLabel:'X',co2Quotas:0,onboard:{Y,J,F},fuelLbs:0,revenue:0});
+ const a=aircraft();a.to='BSB';a.operational!.cycles=2;a.flightHistory={status:'observed',observedAt:now.toISOString(),source:'inspected-aircraft-flight-history',complete:false,
+  entries:[h('2 hours ago','GRU','XAP',20,2,0),h('23 hours ago','GRU','BSB',1,0,0)],comparisonReady:false,mutationAuthorized:false};
+ const calibration:any={status:'verified',windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:1200,excludedMinAgeMinutes:1260,
+  consumed:{Y:80,J:5,F:3},observedAt:now.toISOString(),sourceAircraftIds:['1']}],warnings:[],comparisonReady:false,mutationAuthorized:false};
+ const r=candidateDemandEvidence({...quote,dailyDemand:{Y:100,J:20,F:5}},collection(a),now,300,calibration);
+ expect(r).toMatchObject({status:'historical_pair_reconstructed',remaining:{Y:80,J:18,F:5},reverseRemaining:{Y:80,J:18,F:5},
+  reason:'HISTORICAL_PAIR_LEDGER_VERIFIED'});
+});
 for(const variant of ['stale','future','duplicate','missing','excess','negative','fraction','issue','unverified'])test(`invalid matching observations fail closed: ${variant}`,()=>{
  const a=aircraft();const c=collection(a);
  if(variant==='stale')a.observedAt='2000-01-01T00:00:00Z';if(variant==='future')a.observedAt='2027-01-01T00:00:00Z';
