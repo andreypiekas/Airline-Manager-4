@@ -50,6 +50,24 @@ test('daily demand is a ceiling only and never makes comparison actionable',()=>
   expect(r.mutationAuthorized).toBe(false);
 });
 
+test('verified VIP effective fares can be used for read-only revenue ceiling',()=>{
+  const r=screenCandidateEconomics(
+    quote({autopriceReference:{base:{Y:1000,J:2000,F:3000},modelId:383,effectiveFares:{Y:1800,J:3600,F:5400}}}),
+    {Y:100,J:10,F:10},
+    80,
+    now
+  );
+  expect(r).toMatchObject({
+    status:'screened',
+    demandStatus:'potentially_sufficient',
+    adjustedFareReference:{Y:1980,J:3880,F:5720},
+    grossRevenueCeilingPerDeparture:294000,
+    firstDepartureAfterSetupFeeCeiling:244000,
+    comparisonReady:false,
+    mutationAuthorized:false
+  });
+});
+
 test('VIP auto reference remains unavailable until its effective candidate fare is verified',()=>{
   const r=screenCandidateEconomics(
     quote({autopriceReference:{base:{Y:1000,J:2000,F:3000},modelId:371,effectiveFares:null}}),
