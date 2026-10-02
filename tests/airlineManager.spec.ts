@@ -34,7 +34,65 @@ test('All Operations', async ({ page }) => {
       return !['false', '0', 'off', 'no'].includes(raw);
     };
 
-    const closeOpenPanel = async () => {
+    const closeOpenPanel = async (context = 'painel') => {
+      const popup = page.locator('#popup.modal.show').first();
+
+      const popupVisible = async () =>
+        popup.isVisible({ timeout: 500 }).catch(() => false);
+
+      const waitPopupClosed = async (timeout = 1500) =>
+        popup.waitFor({ state: 'hidden', timeout }).then(() => true).catch(() => false);
+
+      if (await popupVisible()) {
+        console.log(`[UI] Modal bloqueante detectado (${context}); tentando fechar com seguranca...`);
+
+        // 1. Bootstrap/modais convencionais normalmente respondem ao Escape.
+        await page.keyboard.press('Escape').catch(() => undefined);
+        await waitPopupClosed();
+
+        // 2. Procura apenas controles explicitamente reconhecidos como fechamento.
+        if (await popupVisible()) {
+          const dismissSelectors = [
+            '#popup.modal.show [data-dismiss="modal"]',
+            '#popup.modal.show [data-bs-dismiss="modal"]',
+            '#popup.modal.show .btn-close',
+            '#popup.modal.show button.close'
+          ];
+
+          for (const selector of dismissSelectors) {
+            const dismiss = page.locator(selector).first();
+            if (await dismiss.isVisible({ timeout: 300 }).catch(() => false)) {
+              await dismiss.click({ timeout: 3000 }).catch(() => undefined);
+              if (await waitPopupClosed()) break;
+            }
+          }
+        }
+
+        // 3. Usa a propria funcao da interface do AM4, a mesma chamada pelo menu Fleet.
+        if (await popupVisible()) {
+          const appDismissed = await page.evaluate(() => {
+            const fn = (window as any).hideAllWhenClick;
+            if (typeof fn !== 'function') return false;
+            fn();
+            return true;
+          }).catch(() => false);
+
+          if (appDismissed) await waitPopupClosed(2500);
+        }
+
+        // Nunca espera o timeout global de 15 minutos por um popup interceptando cliques.
+        if (await popupVisible()) {
+          await page.screenshot({
+            path: 'test-results/blocking-popup.png',
+            fullPage: true
+          }).catch(() => undefined);
+          throw new Error(`[UI] Nao foi possivel fechar #popup antes de ${context}.`);
+        }
+
+        console.log(`[UI] Modal bloqueante fechado (${context}).`);
+      }
+
+      // Fecha paineis laterais comuns sem depender de um ponto fixo.
       const x = Math.floor(Math.random() * 401) + 200;
       const y = Math.floor(Math.random() * 16) + 15;
       await GeneralUtils.humanMouseMove(page, x, y);
@@ -42,7 +100,26 @@ test('All Operations', async ({ page }) => {
       await page.mouse.down();
       await GeneralUtils.randomSleep(70, 160);
       await page.mouse.up();
-      await GeneralUtils.randomSleep(700, 1200);
+      await GeneralUtils.randomSleep(500, 900);
+
+      // Um modal pode aparecer/continuar aberto depois do clique fora; nao segue silenciosamente.
+      if (await popupVisible()) {
+        const appDismissed = await page.evaluate(() => {
+          const fn = (window as any).hideAllWhenClick;
+          if (typeof fn !== 'function') return false;
+          fn();
+          return true;
+        }).catch(() => false);
+        if (appDismissed) await waitPopupClosed(2500);
+      }
+
+      if (await popupVisible()) {
+        await page.screenshot({
+          path: 'test-results/blocking-popup.png',
+          fullPage: true
+        }).catch(() => undefined);
+        throw new Error(`[UI] #popup continua bloqueando a interface antes de ${context}.`);
+      }
     };
 
     const runDemandMaintenance = async () => {
@@ -59,7 +136,7 @@ test('All Operations', async ({ page }) => {
       const maintenanceUtils = new MaintenanceUtils(page);
       const maintenanceMenu = page.locator('div:nth-child(4) > #mapMaint > img');
 
-      await closeOpenPanel();
+      await closeOpenPanel('abrir manutencao');
       await GeneralUtils.moveAndClick(page, maintenanceMenu, 20000);
       await page.getByRole('button', { name: ' Plan' })
         .waitFor({ state: 'visible', timeout: 15000 });
@@ -68,7 +145,7 @@ test('All Operations', async ({ page }) => {
       await GeneralUtils.randomSleep(1500, 3000);
       await maintenanceUtils.repairPlanes();
       await GeneralUtils.randomSleep(1500, 3000);
-      await closeOpenPanel();
+      await closeOpenPanel('finalizar manutencao');
       console.log('[Operacao] Manutencao automatica finalizada.');
     };
 
@@ -86,14 +163,14 @@ test('All Operations', async ({ page }) => {
       const campaignUtils = new CampaignUtils(page);
       const campaignMenu = page.locator('div:nth-child(5) > #mapMaint > img');
 
-      await closeOpenPanel();
+      await closeOpenPanel('abrir campanhas');
       await GeneralUtils.moveAndClick(page, campaignMenu, 20000);
       await page.getByRole('button', { name: ' Marketing' })
         .waitFor({ state: 'visible', timeout: 15000 });
 
       await campaignUtils.createCampaign();
       await GeneralUtils.randomSleep(1500, 3000);
-      await closeOpenPanel();
+      await closeOpenPanel('finalizar campanhas');
       console.log('[Operacao] Campanhas automaticas finalizadas.');
     };
 
@@ -110,7 +187,25 @@ test('All Operations', async ({ page }) => {
       throw new Error('[Demand] Menu Fleet nao confirmado; nenhuma operacao autorizada.');
     }
 
-    await fleetMenu.click();
+    await closeOpenPanel('abrir Fleet/Routes');
+
+    let fleetOpened = false;
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        // Timeout curto evita consumir os 15 minutos do teste caso um modal volte a interceptar.
+        await fleetMenu.click({ timeout: 15000 });
+        fleetOpened = true;
+        break;
+      } catch (error) {
+        console.warn(`[UI] Falha ao abrir Fleet/Routes (tentativa ${attempt}/2).`);
+        if (attempt === 2) throw error;
+        await closeOpenPanel('recuperar abertura de Fleet/Routes');
+      }
+    }
+
+    if (!fleetOpened) {
+      throw new Error('[Demand] Fleet/Routes nao abriu apos recuperacao da interface.');
+    }
     await runDemandSimulation(page, demandConfig);
     if (!demandConfig.dryRun && moduleEnabled('ENABLE_DEPART')) {
       await runDemandExecution(page, demandConfig);
