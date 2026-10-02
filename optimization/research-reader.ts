@@ -247,7 +247,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     const costScenarios=candidateCostScenarios(quote,capacity,reservations.forwardAfterReservations,
       {fuel:market.fuel,co2:market.co2,model,maintenance:maintenance.aircraft.find(a=>a.aircraftId===quote.aircraftId)||null,co2Calibration},now,reservationsConfig.maxAgeSeconds);
     const effectiveCosts=effectiveCostBudget(quote,{},now,reservationsConfig.maxAgeSeconds);
-    const roundTrip=buildCandidateRoundTripScreen(quote,routeCatalog,reservations,now,reservationsConfig.maxAgeSeconds);
+    const roundTrip=buildCandidateRoundTripScreen(quote,routeCatalog,reservations,now,reservationsConfig.maxAgeSeconds,airportCatalog);
     const fuel=market.fuel&&fresh(market.fuel.observedAt)&&fresh(quote.observedAt)?quote.fuelLbs*market.fuel.pricePer1000/1000:null;
     const priority=candidatePriorityReference(quote,screening,costScenarios);
     return {aircraftId:quote.aircraftId,from:quote.from,to:quote.to,quoteObservedAt:quote.observedAt,
