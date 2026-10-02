@@ -97,6 +97,10 @@ test('total UI load failure returns an incomplete report', async ({ page }) => {
 test('reads automatic fare reference without clicking Auto/Save or changing prices', async ({ page }) => {
   await fixture(page); const result = await new DemandReader(page, 400).collect();
   expect(result.aircraft[0].fares).toMatchObject({ automatic: { Y: 1234, J: 3456, F: 17890 }, current: { Y: 9999, J: 9999, F: 9999 }, source: 'inspected-auto-control' });
+  expect(result.aircraft[0].fares?.controls).toEqual([
+    {id:'',label:'Auto',tag:'BUTTON',type:null,onclickShape:'ticketPriceSuggest(#,#,#,this,#);'},
+    {id:'',label:'Save',tag:'BUTTON',type:null,onclickShape:'window.mutations++'}
+  ]);
   expect(await page.locator('#eTicket').inputValue()).toBe('9999');
   expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
 });
