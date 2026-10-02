@@ -5,6 +5,7 @@ import { optimizationConfig } from '../optimization/report';
 import { readDemandConfig } from '../demand/config';
 import { runDemandSimulation } from '../demand/run';
 import { executionEnvironment, runDemandExecution } from '../demand/execute-run';
+import { pricingExecutionSettings, runTicketPricingExecution } from '../pricing/run';
 import { withRunLock } from '../utils/run-lock';
 import { loginForReadOnlyCollection } from '../utils/read-only-login';
 import { test } from '@playwright/test';
@@ -26,6 +27,7 @@ test('All Operations', async ({ page }) => {
     supplyConfig(); // Valida a politica de compras antes do login.
     optimizationConfig(); // Rejeita configuracoes invalidas antes do login.
     researchConfig();
+    pricingExecutionSettings(); // Valida o contexto do ajuste real de tarifas antes do login.
     test.setTimeout(demandConfig.dryRun ? 600000 : 900000);
 
     const moduleEnabled = (name: string, defaultValue = true) => {
@@ -207,6 +209,9 @@ test('All Operations', async ({ page }) => {
       throw new Error('[Demand] Fleet/Routes nao abriu apos recuperacao da interface.');
     }
     await runDemandSimulation(page, demandConfig);
+    if (!demandConfig.dryRun && moduleEnabled('ENABLE_TICKET_PRICING_EXECUTION', false)) {
+      await test.step('Ajustar tarifas por rota', async () => await runTicketPricingExecution(page));
+    }
     if (!demandConfig.dryRun && moduleEnabled('ENABLE_DEPART')) {
       await runDemandExecution(page, demandConfig);
     }
