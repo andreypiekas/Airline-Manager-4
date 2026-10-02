@@ -18,6 +18,24 @@ test('reference calculation uses physical passengers and catalog hourly check ra
   aCheck:{catalogProration:400,checkBeforeProposedLeg:true,effectiveAircraftCost:null,includesWearRepair:false},
   partialSubtotalAtDemandCeiling:6500,totalOperatingCost:null,setupFee:2000,comparisonReady:false});
 });
+test('verified live-history CO2 calibration replaces the one-quota-per-kg sensitivity assumption',()=>{
+ const ref=references();
+ ref.co2Calibration={
+  aircraftId:'1',status:'verified_weighted_cabin_units',observedAt:stamp,quoteFactor:.2,fixedQuotasPerKm:.05,samples:[],
+  weightedResidualSpread:0,physicalResidualSpread:.1,weightedMeanAbsoluteErrorRatio:0,physicalMeanAbsoluteErrorRatio:.1,
+  formulaVerified:true,reason:'verified',comparisonReady:false,mutationAuthorized:false
+ };
+ const r=candidateCostScenarios(quote,capacity,remaining,ref,now);
+ const capacityQuotas=Math.round(1000*(.05+.2*(50+2*20+3*10)));
+ const remainingQuotas=Math.round(1000*(.05+.2*(40+2*10+3*5)));
+ expect(r.co2).toMatchObject({
+  quotaConversionConfirmed:true,assumedQuotasPerKg:null,
+  calibratedQuotasAtCapacity:capacityQuotas,calibratedQuotasAtDemandCeiling:remainingQuotas,
+  atCapacity:capacityQuotas*.1,atDemandCeiling:remainingQuotas*.1
+ });
+ expect(r.missing).not.toContain('CO2_QUOTA_CONVERSION');
+ expect(r.comparisonReady).toBe(false);
+});
 test('absent remaining demand blocks occupancy-based subtotals without interpreting daily totals as remaining',()=>{
  const r=candidateCostScenarios({...quote,dailyDemand:{Y:1000,J:100,F:100}},capacity,null,references(),now);
  expect(r.co2.atDemandCeiling).toBeNull();expect(r.partialSubtotalAtDemandCeiling).toBeNull();expect(r.co2.atCapacity).toBe(1600);
