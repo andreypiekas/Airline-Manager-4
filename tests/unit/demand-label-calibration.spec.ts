@@ -3,7 +3,7 @@ import { classifyDemandLabelSamples, DemandLabelCalibrationSample } from '../../
 
 const sample=(quoteDemand={Y:80,J:10,F:0},remaining={Y:80,J:10,F:0},dailyTotal={Y:200,J:40,F:0}):DemandLabelCalibrationSample=>({
   aircraftId:'1',registration:'TEST',routeId:'10',from:'AAA',to:'BBB',airportId:99,
-  observedAt:new Date().toISOString(),quoteDemand,remaining,dailyTotal,
+  observedAt:new Date().toISOString(),quoteDemand,remaining,dailyTotal,currentRouteQuote:null,
   matchesRemaining:['Y','J','F'].every(k=>quoteDemand[k as 'Y']===remaining[k as 'Y']),
   matchesDailyTotal:['Y','J','F'].every(k=>quoteDemand[k as 'Y']===dailyTotal[k as 'Y'])
 });
