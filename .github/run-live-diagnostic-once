@@ -1,1 +1,1 @@
-trigger: 2026-10-02 inspect operational route fields read-only
+trigger: 2026-10-02 read-only route direction evidence after dual-source validation
