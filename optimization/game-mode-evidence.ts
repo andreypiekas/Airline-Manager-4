@@ -55,8 +55,12 @@ export function inferGameModeEvidence(
   const variant=matches[0],expectedSpeed=variant.speedKph*speedMultiplier*ciSpeed;
   const ciFuel=quote.costIndex/500+.6;
   const fuelCandidates=[0,1,2,3].filter(t=>{
-    const expected=variant.fuelLbsPerKm*quote.distanceKm*ciFuel*(1-t/100);
-    return Math.abs(expected-quote.fuelLbs)/Math.max(1,quote.fuelLbs)<=.02;
+    const roundedDistance=Math.ceil(quote.distanceKm*100)/100;
+    const expected=variant.fuelLbsPerKm*roundedDistance*ciFuel*(1-t/100);
+    // Training levels differ by 1%; use a tight rounding allowance so adjacent
+    // levels cannot all qualify. If a modified engine breaks the reference
+    // formula, fuelTraining remains unknown rather than guessed.
+    return Math.abs(expected-quote.fuelLbs)<=Math.max(2,quote.fuelLbs*.001);
   });
   return {
     ...base,status:'verified',mode,variantPriority:variant.priority,engineId:variant.engineId,
