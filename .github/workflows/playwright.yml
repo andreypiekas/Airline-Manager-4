@@ -119,10 +119,10 @@ jobs:
     - name: Executar bot Airline Manager 4
       id: bot
       env:
-        ENABLE_RETURN_JOURNAL: 'true'
+        ENABLE_RETURN_JOURNAL: ${{ inputs.departure_mode == 'simulation' && 'false' || 'true' }}
         RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
         ENABLE_TICKET_PRICING: ${{ vars.ENABLE_TICKET_PRICING || 'true' }}
-        ENABLE_TICKET_PRICING_EXECUTION: ${{ vars.ENABLE_TICKET_PRICING_EXECUTION || 'true' }}
+        ENABLE_TICKET_PRICING_EXECUTION: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_TICKET_PRICING_EXECUTION || 'true') }}
         TICKET_PRICING_EXECUTION_ACK: native-route-price-save-v1
         TICKET_PRICING_MAX_ADJUSTMENTS_PER_RUN: ${{ vars.TICKET_PRICING_MAX_ADJUSTMENTS_PER_RUN || '5' }}
         ROUTE_REVIEW_TIMEZONE: ${{ vars.ROUTE_REVIEW_TIMEZONE }}
@@ -157,10 +157,10 @@ jobs:
         INCREASE_AIRLINE_REPUTATION: ${{ vars.INCREASE_AIRLINE_REPUTATION || 'false' }}
         CAMPAIGN_TYPE: ${{ vars.CAMPAIGN_TYPE || '1' }}
         CAMPAIGN_DURATION: ${{ vars.CAMPAIGN_DURATION || '4' }}
-        ENABLE_FUEL: ${{ vars.ENABLE_FUEL || 'true' }}
-        ENABLE_MAINTENANCE: ${{ vars.ENABLE_MAINTENANCE || 'true' }}
-        ENABLE_CAMPAIGN: ${{ vars.ENABLE_CAMPAIGN || 'true' }}
-        ENABLE_DEPART: ${{ vars.ENABLE_DEPART || 'true' }}
+        ENABLE_FUEL: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_FUEL || 'true') }}
+        ENABLE_MAINTENANCE: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_MAINTENANCE || 'true') }}
+        ENABLE_CAMPAIGN: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_CAMPAIGN || 'true') }}
+        ENABLE_DEPART: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_DEPART || 'true') }}
         PAKSI_VIDEO: ${{ inputs.paksa_simpan_video }}
       run: |
         if [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
@@ -172,7 +172,7 @@ jobs:
         xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed 2>&1 | tee test-results/bot.log
       
     - name: Persistir registro de retornos
-      if: success() && steps.state_restore.outcome == 'success' && steps.bot.outcome == 'success'
+      if: success() && inputs.departure_mode != 'simulation' && steps.state_restore.outcome == 'success' && steps.bot.outcome == 'success'
       env:
         GITHUB_TOKEN: ${{ github.token }}
         RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
