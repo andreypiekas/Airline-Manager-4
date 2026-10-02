@@ -149,15 +149,15 @@ jobs:
         MAX_CO2_PRICE: ${{ vars.MAX_CO2_PRICE }}
         MAX_FUEL_PURCHASE_PER_RUN: ${{ vars.MAX_FUEL_PURCHASE_PER_RUN }}
         MAX_CO2_PURCHASE_PER_RUN: ${{ vars.MAX_CO2_PURCHASE_PER_RUN }}
-        REPAIR_WEAR: ${{ vars.REPAIR_WEAR }}
-        HOURS_CHECK: ${{ vars.HOURS_CHECK }}
-        INCREASE_AIRLINE_REPUTATION: ${{ vars.INCREASE_AIRLINE_REPUTATION }}
-        CAMPAIGN_TYPE: ${{ vars.CAMPAIGN_TYPE }}
-        CAMPAIGN_DURATION: ${{ vars.CAMPAIGN_DURATION }}
+        REPAIR_WEAR: ${{ vars.REPAIR_WEAR || '30' }}
+        HOURS_CHECK: ${{ vars.HOURS_CHECK || '20' }}
+        INCREASE_AIRLINE_REPUTATION: ${{ vars.INCREASE_AIRLINE_REPUTATION || 'false' }}
+        CAMPAIGN_TYPE: ${{ vars.CAMPAIGN_TYPE || '1' }}
+        CAMPAIGN_DURATION: ${{ vars.CAMPAIGN_DURATION || '4' }}
         ENABLE_FUEL: ${{ vars.ENABLE_FUEL || 'true' }}
-        ENABLE_MAINTENANCE: ${{ vars.ENABLE_MAINTENANCE }}
-        ENABLE_CAMPAIGN: ${{ vars.ENABLE_CAMPAIGN }}
-        ENABLE_DEPART: ${{ vars.ENABLE_DEPART }}
+        ENABLE_MAINTENANCE: ${{ vars.ENABLE_MAINTENANCE || 'true' }}
+        ENABLE_CAMPAIGN: ${{ vars.ENABLE_CAMPAIGN || 'true' }}
+        ENABLE_DEPART: ${{ vars.ENABLE_DEPART || 'true' }}
         PAKSI_VIDEO: ${{ inputs.paksa_simpan_video }}
       run: |
         if [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
