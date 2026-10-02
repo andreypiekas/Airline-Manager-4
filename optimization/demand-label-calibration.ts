@@ -5,10 +5,12 @@ import { integerText } from '../demand/parsing';
 import { DemandReader } from '../demand/reader';
 import { findFleetRoute, openFleetList } from '../demand/navigation';
 import type { AirportCatalog } from './reference-data';
+import { CandidateQuote, readOpenCandidateQuote } from './quote-reader';
 
 export interface DemandLabelCalibrationSample {
   aircraftId:string;registration:string;routeId:string;from:string;to:string;airportId:number;
   observedAt:string;quoteDemand:Cabins;remaining:Cabins;dailyTotal:Cabins;
+  currentRouteQuote:CandidateQuote|null;
   matchesRemaining:boolean;matchesDailyTotal:boolean;
 }
 export interface DemandLabelCalibrationReport {
@@ -94,9 +96,13 @@ export async function calibrateDemandLabelOnCurrentRoutes(
       },{url});
       const raw=await readOpenDemandQuote(page,{registration:fresh.registration,from:fresh.from,to:fresh.to});
       const quoteDemand={Y:integerText(raw[0]),J:integerText(raw[1]),F:integerText(raw[2])};
+      const full=await readOpenCandidateQuote(page,{
+        aircraftId:fresh.aircraftId,registration:fresh.registration,airportId:String(airportId),from:fresh.from,to:fresh.to
+      });
+      const currentRouteQuote=full.status==='observed'&&sameCabins(full.quote.dailyDemand,quoteDemand)?full.quote:null;
       const sample:DemandLabelCalibrationSample={
         aircraftId:fresh.aircraftId,registration:fresh.registration,routeId:fresh.routeId,from:fresh.from,to:fresh.to,airportId,
-        observedAt:new Date().toISOString(),quoteDemand,remaining:{...fresh.remaining},dailyTotal:{...fresh.dailyTotal},
+        observedAt:new Date().toISOString(),quoteDemand,remaining:{...fresh.remaining},dailyTotal:{...fresh.dailyTotal},currentRouteQuote,
         matchesRemaining:sameCabins(quoteDemand,fresh.remaining),matchesDailyTotal:sameCabins(quoteDemand,fresh.dailyTotal)
       };
       report.samples.push(sample);
