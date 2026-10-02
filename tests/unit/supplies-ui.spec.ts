@@ -3,6 +3,7 @@ import {mkdtemp,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {SupplyPort,parseSupplyText,purchaseCallback} from '../../supplies/port';
+import {planPurchase,supplyConfig} from '../../supplies/policy';
 import {runSupplies} from '../../supplies/run';
 const env={ENABLE_DEMAND_MANAGER:'true',DEMAND_FAIL_SAFE:'true',DEMAND_POOL_SCOPE:'airport-pair',DEMAND_EXECUTION_ACK:'individual-return-legs-v1',GITHUB_ACTIONS:'true',GITHUB_REPOSITORY:'andreypiekas/Airline-Manager-4',GITHUB_RUN_ID:'123',GITHUB_RUN_ATTEMPT:'1',MAX_FUEL_PRICE:'550',MAX_CO2_PRICE:'120'};
 async function fixture(page:Page,variant=''){
@@ -36,6 +37,12 @@ test('CO2 parser accepts bounded explanatory text without guessing duplicate sec
  expect(parseSupplyText(text,'co2',5000)).toEqual({pricePer1000:100,holding:100,remainingCapacity:900,balance:5000});
  expect(()=>parseSupplyText(text+'\nQUOTA COST\n$ 100\nPRICE CHANGE','co2',5000)).toThrow('SUPPLY_DATA_UNVERIFIED');
 });
+test('CO2 parser accepts observed negative holding only when it does not consume storage',()=>{
+ const text='QUOTA COST\n$ 160\nPRICE CHANGE\n00:17:37\nCAPACITY\n4,820,500 / 4,820,500 Quotas\nHOLDING\n-3,226,210 Quotas';
+ expect(parseSupplyText(text,'co2',14737661)).toEqual({pricePer1000:160,holding:-3226210,remainingCapacity:4820500,balance:14737661});
+ expect(()=>parseSupplyText(text.replace('4,820,500 / 4,820,500','4,000,000 / 4,820,500'),'co2',14737661)).toThrow('SUPPLY_CAPACITY_INCONSISTENT');
+});
+
 test('supply diagnostic is read-only and excludes account balance',async({page})=>{
  await fixture(page);
  const port=new SupplyPort(page,500);
@@ -69,4 +76,12 @@ test('pre-mutation supply failure persists passive diagnostic',async({page})=>{
  }finally{await rm(dir,{recursive:true,force:true})}
 });
 test('missing panel and inconsistent storage are rejected',async({page})=>{await fixture(page);await expect(new SupplyPort(page,100).snapshot('fuel')).rejects.toThrow();expect(()=>parseSupplyText('CURRENT PRICE\n$ 500\nPRICE CHANGE\nCAPACITY\n900 / 1000 Lbs\nHOLDING\n200 Lbs','fuel',1000)).toThrow();});
+test('negative CO2 holding skips expensive market and blocks cheap purchase until deficit policy is verified',()=>{
+ const snapshot={pricePer1000:160,holding:-3226210,remainingCapacity:4820500,balance:14737661};
+ const expensive=supplyConfig({...env,MAX_CO2_PRICE:'120'});
+ expect(planPurchase(snapshot,'co2',expensive).reason).toBe('PRICE_NOT_BELOW_LIMIT');
+ const cheap=supplyConfig({...env,MAX_CO2_PRICE:'200'});
+ expect(planPurchase(snapshot,'co2',cheap)).toMatchObject({quantity:0,reason:'CO2_DEFICIT_PURCHASE_POLICY_UNVERIFIED'});
+});
+
 test('real Actions reruns rejected before opening the supply menu',async({page})=>{await fixture(page);const dir=await mkdtemp(join(tmpdir(),'am4-supply-'));try{await expect(runSupplies(page,false,{...env,GITHUB_RUN_ATTEMPT:'2'},dir)).rejects.toThrow('RERUN');expect(await page.locator('#fuelMain').isVisible()).toBe(false);}finally{await rm(dir,{recursive:true,force:true})}});
