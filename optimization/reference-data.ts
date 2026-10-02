@@ -11,6 +11,15 @@ export interface AirportReference {
 export interface AirportCatalog {
   schemaVersion:number; source:string; license:string; generatedAt:string; airports:AirportReference[];
 }
+export interface AircraftReferenceVariant {
+  modelId:number;shortname:string;manufacturer:string;modelName:string;type:number;priority:number;engineId:number;engineName:string;
+  speedKph:number;fuelLbsPerKm:number;co2KgPerPaxKm:number;acquisitionCost:number;capacityUnits:number;minRunwayFt:number;
+  aCheckPrice:number;rangeKm:number;checkIntervalHours:number;
+}
+export interface AircraftCatalog {
+  schemaVersion:number;source:string;upstreamCommit:string;license:string;generatedAt:string;
+  models:Array<{modelId:number;variants:AircraftReferenceVariant[]}>;
+}
 export interface AirportRunwayEvidence {
   from:string;to:string;requiredRunwayFt:number;
   originRunwayFt:number|null;destinationRunwayFt:number|null;
@@ -21,9 +30,25 @@ export interface AirportRunwayEvidence {
   comparisonReady:false;
   mutationAuthorized:false;
 }
-export async function loadReference<T>(name: 'routes.json' | 'airports.json' | 'fuel-calendar-30.json' | 'fuel-calendar-31.json'): Promise<T> {
+export async function loadReference<T>(name: 'routes.json' | 'airports.json' | 'aircrafts.json' | 'fuel-calendar-30.json' | 'fuel-calendar-31.json'): Promise<T> {
   return JSON.parse(await readFile(join(__dirname, '../data/reference', name), 'utf8')) as T;
 }
+export function aircraftReferenceByModel(
+  modelId:number,catalog:AircraftCatalog|null
+):{status:'unique'|'ambiguous'|'unavailable';reference:AircraftReferenceVariant|null;source:string|null}{
+  if(!Number.isSafeInteger(modelId)||modelId<1||!catalog||catalog.schemaVersion!==1||!Array.isArray(catalog.models))
+    return {status:'unavailable',reference:null,source:null};
+  const rows=catalog.models.filter(m=>m.modelId===modelId);
+  if(rows.length!==1||!Array.isArray(rows[0].variants)||!rows[0].variants.length)
+    return {status:'unavailable',reference:null,source:catalog.source};
+  const variants=rows[0].variants.filter(v=>v.modelId===modelId&&Number.isSafeInteger(v.priority)&&v.priority>=0&&
+    Number.isFinite(v.acquisitionCost)&&v.acquisitionCost>0&&Number.isFinite(v.aCheckPrice)&&v.aCheckPrice>0&&
+    Number.isFinite(v.checkIntervalHours)&&v.checkIntervalHours>0&&Number.isFinite(v.minRunwayFt)&&v.minRunwayFt>0);
+  const primary=variants.filter(v=>v.priority===0);
+  if(primary.length!==1)return {status:'ambiguous',reference:null,source:catalog.source};
+  return {status:'unique',reference:primary[0],source:catalog.source};
+}
+
 export function airportRunwayEvidence(from:string,to:string,requiredRunwayFt:number,catalog:AirportCatalog|null):AirportRunwayEvidence {
   const base:AirportRunwayEvidence={
     from,to,requiredRunwayFt,originRunwayFt:null,destinationRunwayFt:null,
