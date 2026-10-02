@@ -45,7 +45,7 @@ export function inspectRouteMutationHandlerSource(
 
   const active=source.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\s+/g,'');
   const calls=[...active.matchAll(
-    /Ajax\('new_route_info\.php\?mode=(\d+)&id=(\d+)&airportId=(\d+)&reg='\+reg\+'&e='\+eSeat\+'&b='\+bSeat\+'&f='\+fSeat\+'&endCostIndex='\+endCostIndex\+'&stopoverId=(\d+)&ferry=(\d+)(?:&charter=(\d+)&cycles='\+cCycles\+)?'&intro='\+intro,'routeNewAction',this,false,true\);/g
+    /Ajax\('new_route_info\.php\?mode=(\d+)&id=(\d+)&airportId=(\d+)&reg='\+reg\+'&e='\+eSeat\+'&b='\+bSeat\+'&f='\+fSeat\+'&endCostIndex='\+endCostIndex\+'&stopoverId=(\d+)&ferry=(\d+)(?:&charter=(\d+)&cycles='\+cCycles\+')?&intro='\+intro,'routeNewAction',this,false,true\);/g
   )];
 
   const endpointVerified=calls.length>=1;
