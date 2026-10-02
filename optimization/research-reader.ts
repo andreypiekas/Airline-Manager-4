@@ -44,9 +44,10 @@ export async function researchFleetCandidates(page: Page, collection: Collection
     routeId:a.routeId,status:!config.enabled || !optimization.routesEnabled ? 'disabled' : !a.detailsVerified ? 'data_unavailable' :
       !a.operationalOrigin ? 'origin_unavailable' : a.state !== 'ready' ? 'pending_inflight' : a.currentAirport !== a.operationalOrigin ? 'pending_base_return' : 'queued',
     result:null as Awaited<ReturnType<typeof collectOpenRouteSuggestions>> | null}));
-  const report = {schemaVersion:2,generatedAt:new Date().toISOString(),dryRun:true,mutationAuthorized:false,
+  const report = {schemaVersion:3,generatedAt:new Date().toISOString(),dryRun:true,mutationAuthorized:false,
     candidatesComplete:false,comparisonReady:false,collectionComplete:collection.complete,config,uiRestored:true,warnings:[] as string[],aircraft,
-    diagnosticProbe:null as Awaited<ReturnType<typeof probeOpenRouteControl>> | null};
+    diagnosticProbe:null as Awaited<ReturnType<typeof probeOpenRouteControl>> | null,
+    diagnosticProbes:[] as Awaited<ReturnType<typeof probeOpenRouteControl>>[]};
   let attempted=0;
   for (const entry of aircraft) {
     if (entry.status !== 'queued') continue;
@@ -76,9 +77,14 @@ export async function researchFleetCandidates(page: Page, collection: Collection
     }
   }
   if(config.enabled&&optimization.routesEnabled&&report.uiRestored&&attempted===0){
-    const probeEntry=aircraft.find(a=>a.status==='pending_base_return');
-    const expected=probeEntry?collection.aircraft.find(a=>a.aircraftId===probeEntry.aircraftId):null;
-    if(probeEntry&&expected){
+    // Diagnostic-only fallback: inspect up to five ready aircraft that are away
+    // from their confirmed base. These probes never become route candidates and
+    // never authorize a mutation; they only broaden live UI evidence across
+    // different aircraft/models while normal optimization remains base-only.
+    const pending=aircraft.filter(a=>a.status==='pending_base_return').slice(0,5);
+    for(const probeEntry of pending){
+      const expected=collection.aircraft.find(a=>a.aircraftId===probeEntry.aircraftId);
+      if(!expected)continue;
       try{
         await openList(page,config.timeout);
         await findRoute(page,expected,config.timeout);
@@ -94,13 +100,19 @@ export async function researchFleetCandidates(page: Page, collection: Collection
           throw new Error('DIAGNOSTIC_PLANNER_CONTROL_UNVERIFIED');
         await reroute.click({timeout:config.timeout});
         await page.locator('#flightInfoContainer #introSuggest').waitFor({state:'visible',timeout:config.timeout});
-        report.diagnosticProbe=await probeOpenRouteControl(page,fresh,fresh.from,config.timeout);
+        const probe=await probeOpenRouteControl(page,fresh,fresh.from,config.timeout);
+        report.diagnosticProbes.push(probe);
+        if(!report.diagnosticProbe)report.diagnosticProbe=probe;
       }catch{
         report.warnings.push('DIAGNOSTIC_ROUTE_CONTROL_UNAVAILABLE:'+probeEntry.aircraftId);
       }finally{
         try{await openList(page,config.timeout);}
-        catch{report.uiRestored=false;report.warnings.push('DIAGNOSTIC_LIST_RESTORE_FAILED');}
+        catch{
+          report.uiRestored=false;
+          report.warnings.push('DIAGNOSTIC_LIST_RESTORE_FAILED');
+        }
       }
+      if(!report.uiRestored)break;
     }
   }
   return report;
@@ -110,20 +122,20 @@ export async function writeRouteResearchReport(report: Awaited<ReturnType<typeof
   await mkdir(directory,{recursive:true});
   await writeFile(join(directory,'route-research.json'),JSON.stringify(report,null,2)+'\n');
   const rows = report.aircraft.map(a => `- ${a.aircraftId}: ${a.status}; origem ${a.origin ?? 'indisponivel'}; orcamentos mantidos ${a.result?.quotes.length ?? 0}; sugestoes examinadas ${a.result?.scanned ?? 0}; descartadas por teto de ocupacao ${a.result?.screenedOut.length ?? 0}.`);
-  const diagnostic=report.diagnosticProbe?[
+  const probeRows=report.diagnosticProbes.length?report.diagnosticProbes:(report.diagnosticProbe?[report.diagnosticProbe]:[]);
+  const diagnostic=probeRows.length?[
     '',
-    '## Sonda estrutural fora da base — somente leitura',
+    '## Sondas estruturais fora da base — somente leitura',
     '',
-    `- Aeronave ${report.diagnosticProbe.aircraftId} em ${report.diagnosticProbe.currentAirport}: ${report.diagnosticProbe.status}.`,
-    ...(report.diagnosticProbe.observation?[
-      `- Trecho inspecionado: ${report.diagnosticProbe.observation.from}–${report.diagnosticProbe.observation.to}; Create route ${report.diagnosticProbe.observation.createControl?.observed?'observado':'nao observado'}; endpoints ${report.diagnosticProbe.observation.createControl?.phpEndpoints?.join(', ')||'nenhum'}; shape ${report.diagnosticProbe.observation.createControl?.onclickShape||'indisponivel'}.`,
-      `- Controles: ${report.diagnosticProbe.observation.routeActionDiagnostics.map(a=>[a.tag,a.id||'',a.label||'',a.phpEndpoints.join('+')||'',a.callbackShape||a.hrefShape||''].filter(Boolean).join(' ')).join(' || ')||'nenhum'}.`,
-      `- Listeners: ${report.diagnosticProbe.observation.routeListenerDiagnostics.map(a=>[a.scope,a.event,a.elementTag||'',a.elementId||'',a.elementLabel||'',a.phpEndpoints.join('+')||'',a.handlerShape||''].filter(Boolean).join(' ')).join(' || ')||'nenhum'}.`,
-      `- Create route validado no contexto: ${report.diagnosticProbe.observation.routeMutationControl?.nativeClickReady?'sim':'nao'}.`,
-      `- Autoprice passivo: ${report.diagnosticProbe.observation.autopriceFunctionEvidence?.observed?'observado':'indisponivel'}; rede ${report.diagnosticProbe.observation.autopriceFunctionEvidence?.networkMutationObserved?'detectada':'nao detectada'}; inputs Y/J/F ${JSON.stringify(report.diagnosticProbe.observation.autopriceFunctionEvidence?.formTargets||null)}; constantes ${report.diagnosticProbe.observation.autopriceFunctionEvidence?.numericConstants?.join(', ')||'nenhuma'}; modelos ${report.diagnosticProbe.observation.autopriceFunctionEvidence?.modelIds?.join(', ')||'nenhum'}.`,
-      `- Campos operacionais visiveis: ${report.diagnosticProbe.observation.quoteFieldDiagnostics.map(f=>[f.tag,f.id||'',f.label||'',f.title||''].filter(Boolean).join(' ')).join(' || ')||'nenhum'}.`
-    ]:[]),
-    ...report.diagnosticProbe.warnings.map(w=>'- '+w)
+    ...probeRows.flatMap(probe=>[
+      `- Aeronave ${probe.aircraftId} em ${probe.currentAirport}: ${probe.status}.`,
+      ...(probe.observation?[
+        `  - Trecho: ${probe.observation.from}–${probe.observation.to}; Create route validado ${probe.observation.routeMutationControl?.nativeClickReady?'sim':'nao'}.`,
+        `  - Autoprice: ${probe.observation.autopriceFunctionEvidence?.observed?'observado':'indisponivel'}; transformacao ${probe.observation.autopriceFunctionEvidence?.fareTransformVerified?'verificada':'nao verificada'}; modelos VIP ${probe.observation.autopriceFunctionEvidence?.vipModelIds?.join(', ')||'nenhum'}; multiplicador ${probe.observation.autopriceFunctionEvidence?.vipMultiplier??'indisponivel'}.`,
+        `  - Campos operacionais: ${probe.observation.quoteFieldDiagnostics.map(f=>[f.id||'',f.label||'',f.title||''].filter(Boolean).join(' ')).join(' || ')||'nenhum'}.`
+      ]:[]),
+      ...probe.warnings.map(w=>'  - '+w)
+    ])
   ]:[];
   await writeFile(join(directory,'route-research.md'),['# Consulta de rotas — somente leitura','',...rows,...diagnostic,'',
     'Sugestoes limitadas nao demonstram a melhor rota. Demanda restante, custos completos e tarifas efetivas ainda precisam ser confirmados.',
