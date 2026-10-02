@@ -37,6 +37,21 @@ test('discovers Create route by accessible label even when the live control has 
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 
+test('discovers Create route when the live control is a non-button element with onclick',async({page})=>{
+  await fixture(page);
+  await page.locator('#btnCreateNewRoute').evaluate(e=>{
+    const a=document.createElement('a');
+    a.textContent='Create route';
+    a.setAttribute('onclick',e.getAttribute('onclick')||'');
+    e.replaceWith(a);
+  });
+  const r=await readOpenCandidateQuote(page,identity);
+  expect(r).toMatchObject({status:'observed',quote:{createControl:{
+    observed:true,visible:true,enabled:true,id:null,label:'Create route',onclickShape:'window.mutations++',mutationAuthorized:false
+  }}});
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 for (const mismatch of [{ aircraftId:'102' }, { airportId:'201' }, { registration:'OTHER' }, { from:'BBB',to:'AAA' }]) {
   test(`rejects mismatched quote identity ${JSON.stringify(mismatch)}`, async ({ page }) => {
     await fixture(page); expect((await readOpenCandidateQuote(page,{...identity,...mismatch})).status).toBe('unavailable');
