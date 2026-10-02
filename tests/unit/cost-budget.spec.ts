@@ -36,6 +36,21 @@ test('verified live-history CO2 calibration replaces the one-quota-per-kg sensit
  expect(r.missing).not.toContain('CO2_QUOTA_CONVERSION');
  expect(r.comparisonReady).toBe(false);
 });
+test('calibrated CO2 demand ceiling is capped by cabin capacity, not raw remaining demand',()=>{
+ const ref=references();
+ ref.co2Calibration={
+  aircraftId:'1',status:'verified_weighted_cabin_units',observedAt:stamp,quoteFactor:.2,fixedQuotasPerKm:.05,samples:[],
+  weightedResidualSpread:0,physicalResidualSpread:.1,weightedMeanAbsoluteErrorRatio:0,physicalMeanAbsoluteErrorRatio:.1,
+  formulaVerified:true,reason:'verified',comparisonReady:false,mutationAuthorized:false
+ };
+ const hugeRemaining={Y:500,J:200,F:100};
+ const r=candidateCostScenarios(quote,capacity,hugeRemaining,ref,now);
+ const capacityQuotas=Math.round(1000*(.05+.2*(50+2*20+3*10)));
+ expect(r.passengersAtDemandCeiling).toBe(80);
+ expect(r.co2.calibratedQuotasAtDemandCeiling).toBe(capacityQuotas);
+ expect(r.co2.atDemandCeiling).toBe(capacityQuotas*.1);
+ expect(r.co2.calibratedQuotasAtDemandCeiling).toBe(r.co2.calibratedQuotasAtCapacity);
+});
 test('community model fallback can supply reference A-check and repair sensitivity without becoming effective cost',()=>{
  const ref=references();
  ref.model={...ref.model!,source:'community-reference',acquisitionCost:860590,aCheckPrice:12705,checkIntervalHours:2000};
