@@ -9,7 +9,7 @@ async function fixture(page: Page) {
   <button id="introSuggestm" onclick="playSound('neutral_click');Ajax('new_route_info.php?id=101&airportId=200&ferry=0','newRouteInfo',this,false,true);">Next</button>
   <div id="newRouteInfo"><div id="newRouteContainer">
     <div class="blue-bg">TEST-1<div><span>Close</span></div></div>
-    <div class="col-3 m-text"><b>AAA</b></div><div class="col-2"><span class="s-text">1,955</span>km</div><div class="col-3 m-text"><b>BBB</b></div>
+    <div class="row p-0"><div class="col-3 m-text"><b>AAA</b></div><div class="col-2"><span class="s-text">1,955</span>km</div><div class="col-3 m-text"><b>BBB</b></div></div>
     <table><tr><td colspan="3">Daily pax demand</td></tr><tr>${['economy','business','first'].map(n=>`<td><img src="assets/${n}_seat.png"></td>`).join('')}</tr><tr><td>431</td><td>169</td><td>162</td></tr></table>
     <div><div>A/C on route</div><div>0</div></div>
     <span id="departFlightTimeInfo">01:38:14</span><span id="departFuelInfo">23,695</span><span id="departCo2Info">0.15</span><div id="costIndexBar">200</div>
@@ -138,6 +138,14 @@ test('route action diagnostics retain endpoint shape but redact query values',as
   expect(serialized).toContain('token=<value>');
   expect(serialized).not.toContain('SECRET');
   expect(serialized).not.toContain('123');
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
+test('rejects candidate when the independent rendered route header disagrees with primary codes',async({page})=>{
+  await fixture(page);
+  await page.locator('.row.p-0 .col-3.m-text').last().evaluate(e=>e.innerHTML='<b>CCC</b>');
+  const r=await readOpenCandidateQuote(page,identity);
+  expect(r.status).toBe('unavailable');
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 
