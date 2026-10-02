@@ -1,6 +1,7 @@
 import { Cabins, CLASSES } from '../demand/types';
 import { CandidateQuote } from './quote-reader';
 import { airportDistanceEvidence, AirportCatalog, AirportDistanceEvidence, RouteCatalog } from './reference-data';
+import type { ReverseLegEquivalentEvidence } from './reverse-leg-equivalence';
 
 export interface RoundTripReservationEvidence {
   forwardAfterReservations: Cabins | null;
@@ -25,6 +26,8 @@ export interface CandidateRoundTripScreen {
     routeDistanceReferenceKm: number | null;
     remainingAfterReservations: Cabins | null;
     liveQuoteAvailable: false;
+    equivalentQuoteAvailable: boolean;
+    equivalentQuoteSource: string | null;
   };
   routeReference: null | {
     source: string;
@@ -55,7 +58,8 @@ export function buildCandidateRoundTripScreen(
   reservations: RoundTripReservationEvidence,
   now = new Date(),
   maxAgeSeconds = 300,
-  airportCatalog: AirportCatalog | null = null
+  airportCatalog: AirportCatalog | null = null,
+  reverseEquivalent: ReverseLegEquivalentEvidence | null = null
 ): CandidateRoundTripScreen {
   const result: CandidateRoundTripScreen = {
     status: 'unavailable',
@@ -76,6 +80,8 @@ export function buildCandidateRoundTripScreen(
         ? { ...reservations.reverseAfterReservations }
         : null,
       liveQuoteAvailable: false,
+      equivalentQuoteAvailable: false,
+      equivalentQuoteSource: null,
     },
     routeReference: null,
     distanceReference: null,
@@ -129,15 +135,24 @@ export function buildCandidateRoundTripScreen(
   if (!reservations.futureScheduleComplete && reservations.futureCompetitionComplete !== true)
     result.blockers.push('FUTURE_COMPETITION_COVERAGE_INCOMPLETE');
 
-  // These require a real reverse-leg quote or an independently validated equivalent source.
-  result.blockers.push(
-    'RETURN_LIVE_QUOTE_REQUIRED',
-    'RETURN_EFFECTIVE_FARES_REQUIRED',
-    'RETURN_DURATION_REQUIRED',
-    'RETURN_FUEL_REQUIRED',
-    'RETURN_CO2_REQUIRED',
-    'RETURN_EFFECTIVE_COSTS_REQUIRED'
-  );
+  // A real reverse quote is preferred, but a separately cross-checked direct-route
+  // symmetry proof may replace only the direction-invariant quote fields. Demand,
+  // load and effective costs remain independent requirements.
+  const equivalent=reverseEquivalent?.status==='verified'&&reverseEquivalent.from===quote.to&&reverseEquivalent.to===quote.from&&
+    reverseEquivalent.distanceKm===quote.distanceKm&&reverseEquivalent.durationSeconds===quote.durationSeconds&&
+    reverseEquivalent.fuelLbs===quote.fuelLbs&&reverseEquivalent.co2KgPerPaxKm===quote.co2KgPerPaxKm;
+  result.returnLeg.equivalentQuoteAvailable=equivalent;
+  result.returnLeg.equivalentQuoteSource=equivalent?reverseEquivalent!.source:null;
+  if(!equivalent){
+    result.blockers.push(
+      'RETURN_LIVE_QUOTE_REQUIRED',
+      'RETURN_EFFECTIVE_FARES_REQUIRED',
+      'RETURN_DURATION_REQUIRED',
+      'RETURN_FUEL_REQUIRED',
+      'RETURN_CO2_REQUIRED'
+    );
+  }
+  result.blockers.push('RETURN_EFFECTIVE_COSTS_REQUIRED');
 
   const structural=!!result.routeReference||result.distanceReference?.status==='cross_checked';
   result.status = structural && result.returnLeg.remainingAfterReservations
