@@ -34,6 +34,21 @@ test('independent route direction evidence is required by the comparison gate',(
   expect(verified.mutationAuthorized).toBe(false);
 });
 
+test('runway reference is distinguished from missing evidence but stays non-actionable',()=>{
+ const verified=assessCandidateComparisonReadiness(candidate({
+  runwayEvidence:{status:'reference_verified',adequate:true,originObserved:true,destinationObserved:true,
+   originRunwayFt:10000,destinationRunwayFt:9000,requiredRunwayFt:6000}
+ }));
+ expect(verified.comparisonBlockers).not.toContain('RUNWAY_EVIDENCE_MISSING');
+ expect(verified.comparisonBlockers).toContain('RUNWAY_REFERENCE_ONLY_NEEDS_LIVE_CORROBORATION');
+ const insufficient=assessCandidateComparisonReadiness(candidate({
+  runwayEvidence:{status:'insufficient_reference',adequate:false,originObserved:true,destinationObserved:true,
+   originRunwayFt:10000,destinationRunwayFt:5000,requiredRunwayFt:6000}
+ }));
+ expect(insufficient.comparisonBlockers).toContain('RUNWAY_REFERENCE_INSUFFICIENT');
+ expect(insufficient.mutationAuthorized).toBe(false);
+});
+
 test('observed endpoint without contextual verification never opens mutation gate',()=>{
   const r=assessCandidateComparisonReadiness(candidate({
     createControl:{observed:true,phpEndpoints:['new_route_info.php']},
