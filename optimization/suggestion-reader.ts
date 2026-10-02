@@ -83,6 +83,7 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
       airportId:string;from:string;to:string;
       createControl:CandidateQuote['createControl']|null;
       routeActionDiagnostics:NonNullable<CandidateQuote['routeActionDiagnostics']>;
+      routeListenerDiagnostics:NonNullable<CandidateQuote['routeListenerDiagnostics']>;
     },
     warnings:[] as string[],
     mutationAuthorized:false as false
@@ -126,7 +127,8 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
     result.observation={
       airportId,from:read.quote.from,to:read.quote.to,
       createControl:read.quote.createControl||null,
-      routeActionDiagnostics:read.quote.routeActionDiagnostics||[]
+      routeActionDiagnostics:read.quote.routeActionDiagnostics||[],
+      routeListenerDiagnostics:read.quote.routeListenerDiagnostics||[]
     };
     result.status='observed';
 
