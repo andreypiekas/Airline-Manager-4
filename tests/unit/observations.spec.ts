@@ -70,6 +70,34 @@ test('passive listener diagnostics capture registered route handlers without exe
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 
+test('passive jQuery event diagnostics expose delegated Create route handler without executing it',async({page})=>{
+  await fixture(page);
+  await page.locator('#btnCreateNewRoute').evaluate(e=>e.removeAttribute('onclick'));
+  await page.evaluate(()=>{
+    const handler=function(){ return "Ajax('create_route.php?id=123&token=SECRET','newRouteInfo',this)"; };
+    const jq:any=function(){};
+    jq._data=(element:any,key:string)=>{
+      if(key!=='events')return null;
+      if(element===document)return {click:[{selector:'#btnCreateNewRoute',handler}]};
+      return null;
+    };
+    (window as any).$=jq;
+    (window as any).jQuery=jq;
+  });
+  const r=await readOpenCandidateQuote(page,identity);
+  expect(r.status).toBe('observed');
+  if(r.status!=='observed')return;
+  const serialized=JSON.stringify(r.quote.routeListenerDiagnostics);
+  expect(serialized).toContain('jquery-event');
+  expect(serialized).toContain('#btnCreateNewRoute');
+  expect(serialized).toContain('create_route.php');
+  expect(serialized).toContain('id=<value>');
+  expect(serialized).toContain('token=<value>');
+  expect(serialized).not.toContain('SECRET');
+  expect(serialized).not.toContain('123');
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 test('route action diagnostics retain endpoint shape but redact query values',async({page})=>{
   await fixture(page);
   await page.locator('#btnCreateNewRoute').evaluate(e=>e.setAttribute(
