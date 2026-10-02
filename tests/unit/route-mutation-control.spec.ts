@@ -34,7 +34,7 @@ test('verified native Create route handler matches aircraft and airport context'
     nonCharterBranchVerified:true,charterBranchObserved:true,nativeClickReady:true,
     mutationAuthorized:false
   });
-  expect(r.shape).toContain('new_route_info.php?mode=#&id=#&airportId=#');
+  expect(r.shape).toContain('new_route_info.php?mode=do&id=#&airportId=#');
   expect(r.shape).not.toContain('101');
   expect(r.shape).not.toContain('200');
   expect(r.shape).not.toContain('999');
