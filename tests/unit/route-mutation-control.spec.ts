@@ -14,12 +14,12 @@ const source=(aircraftId='101',airportId='200')=>`function() {
         var cCycles = $('#charterCycles').val();
         if(is_numeric(cCycles) && cCycles>0 && cCycles<=10) {
           $(this).remove();
-          Ajax('new_route_info.php?mode=2&id=${aircraftId}&airportId=${airportId}&reg='+reg+'&e='+eSeat+'&b='+bSeat+'&f='+fSeat+'&endCostIndex='+endCostIndex+'&stopoverId=0&ferry=0&charter=1&cycles='+cCycles+'&intro='+intro,'routeNewAction',this,false,true);
+          Ajax('new_route_info.php?mode=do&id=${aircraftId}&airportId=${airportId}&reg='+reg+'&e='+eSeat+'&b='+bSeat+'&f='+fSeat+'&endCostIndex='+endCostIndex+'&stopoverId=0&ferry=0&charter=1&cycles='+cCycles+'&intro='+intro,'routeNewAction',this,false,true);
         }
       } else {
-        /* Ajax('new_route_info.php?mode=9&id=999&airportId=999&reg='+reg+'&e='+eSeat+'&b='+bSeat+'&f='+fSeat+'&stopoverId=0&ferry=0&intro='+intro,'routeNewAction',this,false,true); */
+        /* Ajax('new_route_info.php?mode=old&id=999&airportId=999&reg='+reg+'&e='+eSeat+'&b='+bSeat+'&f='+fSeat+'&stopoverId=0&ferry=0&intro='+intro,'routeNewAction',this,false,true); */
         $(this).remove();
-        Ajax('new_route_info.php?mode=1&id=${aircraftId}&airportId=${airportId}&reg='+reg+'&e='+eSeat+'&b='+bSeat+'&f='+fSeat+'&endCostIndex='+endCostIndex+'&stopoverId=0&ferry=0&intro='+intro,'routeNewAction',this,false,true);
+        Ajax('new_route_info.php?mode=do&id=${aircraftId}&airportId=${airportId}&reg='+reg+'&e='+eSeat+'&b='+bSeat+'&f='+fSeat+'&endCostIndex='+endCostIndex+'&stopoverId=0&ferry=0&intro='+intro,'routeNewAction',this,false,true);
       }
     }
   }
