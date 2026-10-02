@@ -6,6 +6,8 @@ export interface RoundTripReservationEvidence {
   forwardAfterReservations: Cabins | null;
   reverseAfterReservations: Cabins | null;
   futureScheduleComplete: boolean;
+  /** All other aircraft's bounded next legs were conservatively debited without relying on exact times. */
+  futureCompetitionComplete?: boolean;
 }
 
 export interface CandidateRoundTripScreen {
@@ -124,7 +126,8 @@ export function buildCandidateRoundTripScreen(
 
   if (!result.outbound.remainingAfterReservations) result.blockers.push('OUTBOUND_REMAINING_DEMAND_UNAVAILABLE');
   if (!result.returnLeg.remainingAfterReservations) result.blockers.push('RETURN_REMAINING_DEMAND_UNAVAILABLE');
-  if (!reservations.futureScheduleComplete) result.blockers.push('FUTURE_SCHEDULE_INCOMPLETE');
+  if (!reservations.futureScheduleComplete && reservations.futureCompetitionComplete !== true)
+    result.blockers.push('FUTURE_COMPETITION_COVERAGE_INCOMPLETE');
 
   // These require a real reverse-leg quote or an independently validated equivalent source.
   result.blockers.push(
