@@ -24,6 +24,7 @@ import { calibrateCo2FromFlightHistory } from './co2-calibration';
 import { calibrateDemandLabelOnCurrentRoutes } from './demand-label-calibration';
 import { calibrateDemandResetWindows } from './demand-reset-ledger';
 import { crossCheckCommunityAircraftReference } from './model-reference-crosscheck';
+import { readReputationDiagnostics } from './reputation-diagnostics';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -194,6 +195,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true,stage:'not_requested',warnings:[],unitLabels:[]};
   let maintenance:Awaited<ReturnType<typeof readAircraftMaintenanceReferences>>={status:'not_requested',stage:'not_requested',observedAt:new Date().toISOString(),complete:false,uiClosed:true,aircraft:[],warnings:[]};
   let financeHistory=emptyFinanceHistory();
+  let reputation=await readReputationDiagnostics(page);
   // Market and maintenance sources must be validated even when no aircraft is eligible for research.
   if(research.config.enabled&&uiRestored){
     demandLabelCalibration=await calibrateDemandLabelOnCurrentRoutes(page,collection,airportCatalog,research.config.timeout,3);
@@ -295,8 +297,8 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   });
   const priorityRanking=rankCandidatePriorities(candidates);
   const routeReadiness=summarizeComparisonReadiness(candidates);
-  return {schemaVersion:11,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
-    uiRestored,screenedOutBeforeModelReference,demandLabelCalibration,demandResetCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
+  return {schemaVersion:12,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
+    uiRestored,screenedOutBeforeModelReference,reputation,demandLabelCalibration,demandResetCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
     warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
@@ -304,6 +306,10 @@ export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof 
   await writeFile(join(directory,'candidate-data.json'),JSON.stringify(report,null,2)+'\n');
   await writeFile(join(directory,'finance-history.json'),JSON.stringify(report.financeHistory,null,2)+'\n');
   await writeFile(join(directory,'candidate-data.md'),['# Evidencias das candidatas — simulacao','',
+    '## Diagnostico de reputacao — somente leitura','',
+    `- Status: ${report.reputation.status}; percentuais observados sem classificacao: ${report.reputation.parsedPercentages.join(', ')||'nenhum'}.`,
+    ...report.reputation.entries.map(e=>`- ${e.tag}${e.id?'#'+e.id:''}: ${e.text||e.title||e.ariaLabel||'sem texto'}.`),
+    'Nenhum percentual e tratado como reputacao PAX ou fator de carga ate a estrutura real ser confirmada por parser estrito.','',
     '## Calibracao do rotulo Daily pax demand','',
     `- Status: ${report.demandLabelCalibration.status}; classificacao: ${report.demandLabelCalibration.classification}; amostras: ${report.demandLabelCalibration.samples.length}.`,
     ...report.demandLabelCalibration.samples.map(s=>`- ${s.aircraftId} ${s.from}–${s.to}: quote ${JSON.stringify(s.quoteDemand)}; remaining ${JSON.stringify(s.remaining)}; dailyTotal ${JSON.stringify(s.dailyTotal)}; match remaining ${s.matchesRemaining}; match daily ${s.matchesDailyTotal}.`),
