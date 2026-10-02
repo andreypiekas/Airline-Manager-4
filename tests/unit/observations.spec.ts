@@ -27,6 +27,16 @@ test('reads inspected quote without treating daily demand as remaining or clicki
   expect(await page.locator('#routeReg').inputValue()).toBe('TEST');
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
+test('discovers Create route by accessible label even when the live control has no stable id',async({page})=>{
+  await fixture(page);
+  await page.locator('#btnCreateNewRoute').evaluate(e=>e.removeAttribute('id'));
+  const r=await readOpenCandidateQuote(page,identity);
+  expect(r).toMatchObject({status:'observed',quote:{createControl:{
+    observed:true,visible:true,enabled:true,id:null,label:'Create route',onclickShape:'window.mutations++',mutationAuthorized:false
+  }}});
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
 for (const mismatch of [{ aircraftId:'102' }, { airportId:'201' }, { registration:'OTHER' }, { from:'BBB',to:'AAA' }]) {
   test(`rejects mismatched quote identity ${JSON.stringify(mismatch)}`, async ({ page }) => {
     await fixture(page); expect((await readOpenCandidateQuote(page,{...identity,...mismatch})).status).toBe('unavailable');
