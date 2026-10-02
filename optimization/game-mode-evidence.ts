@@ -14,6 +14,7 @@ export interface GameModeEvidence {
   fareBaseMatches:boolean;
   speedMatches:boolean;
   fuelMatches:boolean;
+  co2FactorMatches:boolean;
   source:'live-quote-crosschecked-community-formula';
   reason:string;
   comparisonReady:false;
@@ -31,7 +32,7 @@ export function inferGameModeEvidence(
 ):GameModeEvidence {
   const base:GameModeEvidence={
     status:'unavailable',mode:null,variantPriority:null,engineId:null,speedMultiplier:null,aCheckCostMultiplier:null,
-    fuelTraining:null,observedSpeedKph:null,expectedSpeedKph:null,fareBaseMatches:false,speedMatches:false,fuelMatches:false,
+    fuelTraining:null,observedSpeedKph:null,expectedSpeedKph:null,fareBaseMatches:false,speedMatches:false,fuelMatches:false,co2FactorMatches:false,
     source:'live-quote-crosschecked-community-formula',reason:'EVIDENCE_INCOMPLETE',comparisonReady:false,mutationAuthorized:false
   };
   if(!quote.autopriceReference||!Number.isFinite(quote.distanceKm)||quote.distanceKm<=0||
@@ -62,11 +63,13 @@ export function inferGameModeEvidence(
     // formula, fuelTraining remains unknown rather than guessed.
     return Math.abs(expected-quote.fuelLbs)<=Math.max(2,quote.fuelLbs*.001);
   });
+  const co2FactorMatches=near(quote.co2KgPerPaxKm,variant.co2KgPerPaxKm,1e-9);
   return {
     ...base,status:'verified',mode,variantPriority:variant.priority,engineId:variant.engineId,
     speedMultiplier,aCheckCostMultiplier,fuelTraining:fuelCandidates.length===1?fuelCandidates[0]:null,
     observedSpeedKph:observedSpeed,expectedSpeedKph:expectedSpeed,fareBaseMatches:true,speedMatches:true,
-    fuelMatches:fuelCandidates.length>=1,
-    reason:fuelCandidates.length===1?'FARE_SPEED_AND_FUEL_CROSSCHECKED':'FARE_AND_SPEED_CROSSCHECKED',
+    fuelMatches:fuelCandidates.length>=1,co2FactorMatches,
+    reason:fuelCandidates.length===1&&co2FactorMatches?'FARE_SPEED_FUEL_AND_CO2_CROSSCHECKED':
+      co2FactorMatches?'FARE_SPEED_AND_CO2_CROSSCHECKED':'CO2_FACTOR_REFERENCE_MISMATCH',
   };
 }
