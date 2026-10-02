@@ -1,4 +1,5 @@
 import { Cabins, Cabin, CLASSES, AircraftSnapshot } from '../demand/types';
+import type { PricingSaveControlEvidence } from './control-evidence';
 
 export const PAX_PERCENT: Cabins = { Y: 110, J: 108, F: 106 };
 export interface FareControlEvidence {
@@ -13,6 +14,7 @@ export interface FareObservation {
   current: Cabins | null;
   source: 'inspected-auto-control' | 'unavailable';
   controls?: FareControlEvidence[];
+  saveControl?: PricingSaveControlEvidence;
   issue?: string;
 }
 export interface FarePlan {
