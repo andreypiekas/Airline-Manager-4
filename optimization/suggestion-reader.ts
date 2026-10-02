@@ -1,11 +1,15 @@
 import { expect, Page } from '@playwright/test';
 import { AircraftSnapshot } from '../demand/types';
 import { CandidateQuote, readOpenCandidateQuote } from './quote-reader';
+import { screenCandidateEconomics } from './economic-screen';
 
 /** Bounded native suggestions from an ALREADY OPEN planner. Only inspection clicks. */
-export async function collectOpenRouteSuggestions(page: Page, aircraft: AircraftSnapshot, origin: string | null, limit=3, timeout=10000) {
-  const result={aircraftId:aircraft.aircraftId,quotes:[] as CandidateQuote[],status:'unavailable',warnings:[] as string[],candidatesComplete:false,comparisonReady:false,mutationAuthorized:false};
-  if(!Number.isSafeInteger(limit)||limit<1||limit>10||!Number.isSafeInteger(timeout)||timeout<1||timeout>30000)throw new Error('SUGGESTION_CONFIG_INVALID');
+export async function collectOpenRouteSuggestions(page: Page, aircraft: AircraftSnapshot, origin: string | null, limit=3, timeout=10000, minCoveragePercent=80, scanLimit=Math.min(10,Math.max(limit,limit*3))) {
+  const result={aircraftId:aircraft.aircraftId,quotes:[] as CandidateQuote[],screenedOut:[] as {airportId:string;to:string;coverageCeilingPercent:number|null;reason:string}[],
+    scanned:0,status:'unavailable',warnings:[] as string[],candidatesComplete:false,comparisonReady:false,mutationAuthorized:false};
+  if(!Number.isSafeInteger(limit)||limit<1||limit>10||!Number.isSafeInteger(timeout)||timeout<1||timeout>30000||
+    !Number.isFinite(minCoveragePercent)||minCoveragePercent<=0||minCoveragePercent>100||
+    !Number.isSafeInteger(scanLimit)||scanLimit<limit||scanLimit>20)throw new Error('SUGGESTION_CONFIG_INVALID');
   // Never research a replacement for a plane away from its own confirmed origin.
   const age=Date.now()-Date.parse(aircraft.observedAt);
   if(!Number.isFinite(age)||age<0||age>300000){result.warnings.push('AIRCRAFT_OBSERVATION_EXPIRED');return result;}
@@ -14,7 +18,7 @@ export async function collectOpenRouteSuggestions(page: Page, aircraft: Aircraft
   }
   const seen=new Set<string>();
   try {
-    for(let i=0;i<limit;i++) {
+    for(let i=0;i<scanLimit && result.quotes.length<limit;i++) {
       const suggest=page.locator(i===0?'#introSuggest':'#introSuggestOR');
       if(await suggest.count()!==1||!await suggest.isVisible()||!await suggest.isEnabled())throw new Error();
       const callback=(await suggest.getAttribute('onclick')||'').trim();
@@ -41,7 +45,13 @@ export async function collectOpenRouteSuggestions(page: Page, aircraft: Aircraft
       if(codes.length!==2||codes[0].trim()!==origin||!/^[A-Z]{3}$/.test(codes[1].trim()))throw new Error();
       const read=await readOpenCandidateQuote(page,{aircraftId:aircraft.aircraftId,registration:aircraft.registration,airportId,from:origin,to:codes[1].trim()});
       if(read.status!=='observed')throw new Error();
-      result.quotes.push(read.quote);
+      result.scanned++;
+      const screening=screenCandidateEconomics(read.quote,aircraft.capacity,minCoveragePercent,new Date(),300);
+      if(screening.demandStatus==='cannot_meet_threshold') {
+        result.screenedOut.push({airportId,to:read.quote.to,coverageCeilingPercent:screening.coverageCeilingPercent,reason:screening.reason});
+      } else {
+        result.quotes.push(read.quote);
+      }
       const back=panel.getByRole('button',{name:/Back$/});
       if(await back.count()!==1)throw new Error();
       // Confirm the inspected close-only callback before clicking. Never click Create route.
@@ -50,6 +60,8 @@ export async function collectOpenRouteSuggestions(page: Page, aircraft: Aircraft
     }
     result.status=result.quotes.length?'observed':'unavailable';
   } catch {result.status=result.quotes.length?'partial':'unavailable';result.warnings.push('SUGGESTION_LOADING_OR_IDENTITY_FAILED');}
+  if(result.screenedOut.length)result.warnings.push(`SCREENED_OUT_BELOW_DAILY_DEMAND_CEILING:${result.screenedOut.length}`);
+  if(result.scanned>=scanLimit&&result.quotes.length<limit)result.warnings.push('SUGGESTION_SCAN_LIMIT_REACHED');
   result.warnings.push('NATIVE_SUGGESTIONS_NOT_EXHAUSTIVE','REMAINING_DEMAND_AND_FULL_COSTS_MISSING');
   return result;
 }
