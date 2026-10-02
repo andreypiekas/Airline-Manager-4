@@ -66,7 +66,7 @@ export async function calibrateDemandLabelOnCurrentRoutes(
     comparisonReady:false,mutationAuthorized:false,uiRestored:true,warnings:[]
   };
   if(!Number.isSafeInteger(timeout)||timeout<1||timeout>30000||!Number.isSafeInteger(maxSamples)||maxSamples<1||maxSamples>10||
-    !collection.complete||!airports||airports.schemaVersion!==1||!Array.isArray(airports.airports))return report;
+    !collection.complete||!airports||![1,2].includes(airports.schemaVersion)||!Array.isArray(airports.airports))return report;
   const eligible=collection.aircraft.filter(a=>a.state==='ready'&&!a.issue&&validCabins(a.remaining)&&validCabins(a.dailyTotal)&&
     /^[1-9]\d*$/.test(a.aircraftId)&&/^[1-9]\d*$/.test(a.routeId)&&/^[A-Z0-9]{3}$/.test(a.from)&&/^[A-Z0-9]{3}$/.test(a.to)&&a.from!==a.to);
   for(const expected of eligible.slice(0,maxSamples)){
