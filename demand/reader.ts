@@ -8,6 +8,7 @@ import { AIRCRAFT_DETAILS_CONTROL, aircraftIdFromDetailsControl } from './identi
 import { flightCountdownObservation } from '../optimization/flight-timing';
 import { departureControlShape } from './departure-control-evidence';
 import { readCurrentRouteFieldDiagnostics } from '../optimization/current-route-diagnostics';
+import { readFlightHistoryEvidence } from '../optimization/flight-history';
 
 interface RouteCard {
   routeId: string; aircraftId: string; registration: string; routeLabel: string;
@@ -155,6 +156,7 @@ export class DemandReader {
       .map(s=>s.trim()).filter(s=>/\b(?:reset|renewal|renews?|renewed|refill|replenishment)\b/i.test(s)).slice(0,10).map(s=>s.slice(0,200));
     item.operational = await readOperationalObservation(details);
     item.currentRouteFieldDiagnostics = await readCurrentRouteFieldDiagnostics(details);
+    item.flightHistory = await readFlightHistoryEvidence(details);
     // Countdown was inspected in flight. Zero/malformed values never confirm landing or departure.
     item.timing = card.inflight && await details.locator('#timer').count()===1 ?
       flightCountdownObservation(item.aircraftId,item.routeId,await details.locator('#timer').innerText(),new Date().toISOString()) : null;
