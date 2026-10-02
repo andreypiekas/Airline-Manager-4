@@ -4,6 +4,7 @@ import { integerText } from '../demand/parsing';
 export interface ModelCostReference {
   modelId:number;modelName:string;observedAt:string;aCheckPrice:number;checkIntervalHours:number;
   catalogFields?:Array<{label:string;value:string}>;
+  acquisitionCost?:number;
   source:'inspected-catalog'|'community-reference';effectiveAircraftMaintenanceCost:null;
 }
 export interface MarketPriceReference {
