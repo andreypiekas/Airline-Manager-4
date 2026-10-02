@@ -27,11 +27,11 @@ const empty=():RouteMutationControlEvidence=>({
 });
 
 const safeShape=(source:string)=>{
-  const cleaned=source.replace(//*[sS]*?*//g,'');
+  const cleaned=source.replace(/\/\*[\s\S]*?\*\//g,'');
   return cleaned
-    .replace(/([?&](?:mode|id|airportId|stopoverId|ferry|charter))=d+/g,'$1=#')
-    .replace(/d+/g,'#')
-    .replace(/s+/g,' ')
+    .replace(/([?&](?:mode|id|airportId|stopoverId|ferry|charter))=\d+/g,'$1=#')
+    .replace(/\d+/g,'#')
+    .replace(/\s+/g,' ')
     .trim()
     .slice(0,1200);
 };
@@ -41,9 +41,9 @@ export function inspectRouteMutationHandlerSource(
   expected:{aircraftId:string;airportId:string}
 ):RouteMutationControlEvidence{
   const result=empty();
-  if(!source||!/^[1-9]d*$/.test(expected.aircraftId)||!/^[1-9]d*$/.test(expected.airportId))return result;
+  if(!source||!/^[1-9]\d*$/.test(expected.aircraftId)||!/^[1-9]\d*$/.test(expected.airportId))return result;
 
-  const active=source.replace(//*[sS]*?*//g,'').replace(/s+/g,'');
+  const active=source.replace(/\/\*[\s\S]*?\*\//g,'').replace(/\s+/g,'');
   const calls=[...active.matchAll(
     /Ajax\('new_route_info\.php\?mode=(\d+)&id=(\d+)&airportId=(\d+)&reg='\+reg\+'&e='\+eSeat\+'&b='\+bSeat\+'&f='\+fSeat\+'&endCostIndex='\+endCostIndex\+'&stopoverId=(\d+)&ferry=(\d+)(?:&charter=(\d+)&cycles='\+cCycles\+)?'&intro='\+intro,'routeNewAction',this,false,true\);/g
   )];
