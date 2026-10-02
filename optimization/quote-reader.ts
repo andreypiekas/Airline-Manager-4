@@ -4,7 +4,7 @@ import { integerText } from '../demand/parsing';
 import { inspectRouteCreateControl, RouteCreateControlEvidence } from './route-create-control';
 import { readRouteListenerDiagnostics, RouteListenerDiagnostic } from './route-listener-diagnostics';
 import { readRouteMutationControl, RouteMutationControlEvidence } from './route-mutation-control';
-import { readAutopriceFunctionEvidence, AutopriceFunctionEvidence } from './autoprice-diagnostics';
+import { readAutopriceFunctionEvidence, effectiveAutopriceBase, AutopriceFunctionEvidence } from './autoprice-diagnostics';
 
 export interface QuoteIdentity { aircraftId: string; registration: string; airportId: string; from: string; to: string }
 export interface CandidateQuote extends QuoteIdentity {
@@ -32,7 +32,7 @@ export interface CandidateQuote extends QuoteIdentity {
   mutationAuthorized: false;
 }
 /** Raw callback reference; effective VIP adjustments in autoPrice remain unverified. */
-export interface QuoteAutopriceReference { base: Cabins; modelId: number; effectiveFares: null }
+export interface QuoteAutopriceReference { base: Cabins; modelId: number; effectiveFares: Cabins | null }
 export function parseQuoteAutoprice(callback: string): QuoteAutopriceReference | null {
   const match=callback.trim().match(/^(?:playSound\('neutral_click'\);\s*)?autoPrice\((\d+),(\d+),(\d+),(\d+)\);?$/);
   if(!match)return null;
@@ -89,7 +89,7 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
     if (!time || !/^\$\s*[\d,]+$/.test(raw.fee) || !/^\d+(?:\.\d+)?$/.test(raw.co2)) throw new Error();
     const durationSeconds = Number(time[1])*3600 + Number(time[2])*60 + Number(time[3]);
     const auto=panel.locator('#introAuto');
-    const autopriceReference=await auto.count()===1 && await auto.isVisible()?parseQuoteAutoprice(await auto.getAttribute('onclick')||''):null;
+    let autopriceReference=await auto.count()===1 && await auto.isVisible()?parseQuoteAutoprice(await auto.getAttribute('onclick')||''):null;
     // The live AM4 UI does not consistently expose the same tag/id for this
     // action. Inspect any unique visible element that actually owns an onclick
     // and whose rendered label starts with "Create route". Never click it here.
@@ -152,6 +152,9 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
     const routeListenerDiagnostics=await readRouteListenerDiagnostics(page);
     const routeMutationControl=await readRouteMutationControl(page,identity);
     const autopriceFunctionEvidence=autopriceReference?await readAutopriceFunctionEvidence(page):undefined;
+    if(autopriceReference&&autopriceFunctionEvidence){
+      autopriceReference={...autopriceReference,effectiveFares:effectiveAutopriceBase(autopriceReference.base,autopriceReference.modelId,autopriceFunctionEvidence)};
+    }
     const quote: CandidateQuote = { ...identity, observedAt: new Date().toISOString(), distanceKm: integerText(raw.distance), durationSeconds,
       fuelLbs: integerText(raw.fuel), co2KgPerPaxKm: Number(raw.co2), costIndex: integerText(raw.costIndex), routeFee: integerText(raw.fee.replace(/^\$\s*/, '')),
       aircraftOnRoute: integerText(raw.aircraft), autopriceReference, createControl, routeActionDiagnostics, routeListenerDiagnostics, routeMutationControl, autopriceFunctionEvidence, dailyDemand: { Y: integerText(raw.daily[0]), J: integerText(raw.daily[1]), F: integerText(raw.daily[2]) },
