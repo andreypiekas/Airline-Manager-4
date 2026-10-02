@@ -41,9 +41,23 @@ export class PlaywrightDeparturePort implements DeparturePort {
     if(results[0].status!=='fulfilled'||results[1].status!=='fulfilled'||!results[0].value.ok())throw Error('DEPARTURE_REQUEST_UNCONFIRMED');
   }
   async confirm(expected:AircraftSnapshot){
-    const result=await this.collect();
-    if(!result.complete)return null;
-    const matches=result.aircraft.filter(a=>a.aircraftId===expected.aircraftId&&a.routeId===expected.routeId);
-    return matches.length===1?matches[0]:null;
+    // Never retry the departure click. We may, however, re-read the Fleet a few
+    // times because the native request can succeed before the list/countdown has
+    // finished propagating through the UI.
+    let last:AircraftSnapshot|null=null;
+    for(let attempt=0;attempt<3;attempt++){
+      if(attempt>0)await this.page.waitForTimeout(attempt===1?1200:2200);
+      try{
+        const result=await this.collect();
+        if(!result.complete)continue;
+        const matches=result.aircraft.filter(a=>a.aircraftId===expected.aircraftId&&a.routeId===expected.routeId);
+        if(matches.length!==1)continue;
+        last=matches[0];
+        if(last.state==='inflight')return last;
+      }catch{
+        // Safe read retry only; no mutation is repeated.
+      }
+    }
+    return last;
   }
 }
