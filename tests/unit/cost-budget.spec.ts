@@ -36,6 +36,20 @@ test('verified live-history CO2 calibration replaces the one-quota-per-kg sensit
  expect(r.missing).not.toContain('CO2_QUOTA_CONVERSION');
  expect(r.comparisonReady).toBe(false);
 });
+test('community model fallback can supply reference A-check and repair sensitivity without becoming effective cost',()=>{
+ const ref=references();
+ ref.model={...ref.model!,source:'community-reference',acquisitionCost:860590,aCheckPrice:12705,checkIntervalHours:2000};
+ const r=candidateCostScenarios(quote,capacity,remaining,ref,now);
+ expect(r.aCheck).toMatchObject({source:'community-reference',effectiveAircraftCost:null});
+ expect(r.wearRepairReference).toMatchObject({
+  acquisitionCost:860590,
+  expectedPerDepartureAtTraining0:860590/1000*.0075,
+  expectedPerDepartureAtTraining5:860590/1000*.0075*.9,
+  effectiveCostConfirmed:false
+ });
+ expect(r.missing).toContain('WEAR_REPAIR_COST');
+ expect(r.comparisonReady).toBe(false);
+});
 test('absent remaining demand blocks occupancy-based subtotals without interpreting daily totals as remaining',()=>{
  const r=candidateCostScenarios({...quote,dailyDemand:{Y:1000,J:100,F:100}},capacity,null,references(),now);
  expect(r.co2.atDemandCeiling).toBeNull();expect(r.partialSubtotalAtDemandCeiling).toBeNull();expect(r.co2.atCapacity).toBe(1600);
