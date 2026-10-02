@@ -1,0 +1,27 @@
+name: Dispatch production once
+
+on:
+  push:
+    paths:
+      - '.github/run-production-once'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch main production workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run playwright.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref main \
+            -f departure_mode=production \
+            -f execute_individual=true \
+            -f max_individual_departures=20 \
+            -f aktifkan_random_delay=false \
+            -f paksa_simpan_video=false
