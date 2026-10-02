@@ -5,9 +5,47 @@ export interface ReferenceRoute { from: string; to: string; distanceKm: number; 
 export interface RouteCatalog { schemaVersion: number; source: string; sha256: string; routes: ReferenceRoute[] }
 export interface CalendarDay { day: number; page: number; verified: boolean; fuel: number[][]; co2: number[][]; fuelIssues: boolean; co2Issues: boolean }
 export interface FuelCalendar { monthLength: number; utcOffsetMinutes: number; source: string; status: string; days: CalendarDay[] }
-export async function loadReference<T>(name: 'routes.json' | 'fuel-calendar-30.json' | 'fuel-calendar-31.json'): Promise<T> {
+export interface AirportReference {
+  iata:string; runwayFt:number|null; sourceIds:number[]; conflict?:boolean; runwayCandidatesFt?:number[];
+}
+export interface AirportCatalog {
+  schemaVersion:number; source:string; license:string; generatedAt:string; airports:AirportReference[];
+}
+export interface AirportRunwayEvidence {
+  from:string;to:string;requiredRunwayFt:number;
+  originRunwayFt:number|null;destinationRunwayFt:number|null;
+  originObserved:boolean;destinationObserved:boolean;
+  adequate:boolean|null;
+  source:string|null;
+  status:'reference_verified'|'insufficient_reference'|'unavailable';
+  comparisonReady:false;
+  mutationAuthorized:false;
+}
+export async function loadReference<T>(name: 'routes.json' | 'airports.json' | 'fuel-calendar-30.json' | 'fuel-calendar-31.json'): Promise<T> {
   return JSON.parse(await readFile(join(__dirname, '../data/reference', name), 'utf8')) as T;
 }
+export function airportRunwayEvidence(from:string,to:string,requiredRunwayFt:number,catalog:AirportCatalog|null):AirportRunwayEvidence {
+  const base:AirportRunwayEvidence={
+    from,to,requiredRunwayFt,originRunwayFt:null,destinationRunwayFt:null,
+    originObserved:false,destinationObserved:false,adequate:null,source:null,status:'unavailable',
+    comparisonReady:false,mutationAuthorized:false
+  };
+  if(!catalog||catalog.schemaVersion!==1||!Array.isArray(catalog.airports)||!/^[A-Z0-9]{3}$/.test(from)||
+    !/^[A-Z0-9]{3}$/.test(to)||from===to||!Number.isFinite(requiredRunwayFt)||requiredRunwayFt<0)return base;
+  const unique=(iata:string)=>{
+    const rows=catalog.airports.filter(a=>a.iata===iata&&!a.conflict&&Number.isSafeInteger(a.runwayFt)&&a.runwayFt!>0);
+    return rows.length===1?rows[0]:null;
+  };
+  const origin=unique(from),destination=unique(to);
+  const observed=!!origin&&!!destination;
+  if(!observed)return {...base,originRunwayFt:origin?.runwayFt??null,destinationRunwayFt:destination?.runwayFt??null,
+    originObserved:!!origin,destinationObserved:!!destination,source:catalog.source};
+  const adequate=Math.min(origin!.runwayFt!,destination!.runwayFt!)>=requiredRunwayFt;
+  return {...base,originRunwayFt:origin!.runwayFt!,destinationRunwayFt:destination!.runwayFt!,
+    originObserved:true,destinationObserved:true,adequate,source:catalog.source,
+    status:adequate?'reference_verified':'insufficient_reference'};
+}
+
 /** Shortlist for live research, not a profit ranking or permission to replace a route. */
 export function shortlistRoutes(a: AircraftSnapshot, origin: string | null, catalog: RouteCatalog, limit = 10) {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) throw new Error('REFERENCE_LIMIT_INVALID');
