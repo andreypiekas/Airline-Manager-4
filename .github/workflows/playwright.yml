@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
     inputs:
       departure_mode:
-        description: 'Modo fixo de producao'
+        description: 'Modo da execucao: producao ou simulacao live somente leitura'
         type: choice
         default: production
-        options: [production]
+        options: [production, simulation]
       execute_individual:
         description: 'Compatibilidade: o runner executa sempre em producao'
         type: boolean
@@ -109,8 +109,8 @@ jobs:
     - name: Resolver modo e limite de decolagens
       id: departure_settings
       env:
-        AM4_INPUT_MODE: production
-        AM4_INPUT_EXECUTE: 'true'
+        AM4_INPUT_MODE: ${{ inputs.departure_mode || 'production' }}
+        AM4_INPUT_EXECUTE: ${{ inputs.departure_mode == 'production' && 'true' || 'false' }}
         AM4_INPUT_MAX_DEPARTURES: '20'
         AM4_REPOSITORY_EXECUTE: ${{ vars.EXECUTE_INDIVIDUAL }}
         AM4_REPOSITORY_MAX_DEPARTURES: ${{ vars.MAX_INDIVIDUAL_DEPARTURES }}
