@@ -26,7 +26,7 @@ export interface DemandLabelCalibrationReport {
 
 const validCabins=(v:Cabins|null):v is Cabins=>!!v&&CLASSES.every(k=>Number.isSafeInteger(v[k])&&v[k]>=0);
 const sameCabins=(a:Cabins,b:Cabins)=>CLASSES.every(k=>a[k]===b[k]);
-export const demandCalibrationAirportCatalogSupported=(airports:AirportCatalog|null)=>
+export const demandCalibrationAirportCatalogSupported=(airports:AirportCatalog|null):airports is AirportCatalog=>
   !!airports&&[1,2].includes(airports.schemaVersion)&&Array.isArray(airports.airports);
 
 export function classifyDemandLabelSamples(samples:DemandLabelCalibrationSample[]):DemandLabelCalibrationReport['classification'] {
