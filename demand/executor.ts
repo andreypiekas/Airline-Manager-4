@@ -70,10 +70,11 @@ export class IndividualDepartureExecutor {
       const current=matches[0];
       const origin=resolveAircraftOrigin(current,collection,this.settings.aircraftOrigins,this.settings.airlineBases);
       if(!origin.origin){entry.reason='ORIGIN_UNAVAILABLE';continue;}
-      // Route comparison, remaining demand of new candidates and complete costs are not native verified providers yet.
-      // Never bypass the mandatory review at the aircraft's OWN base, even if route optimization is disabled.
-      if(current.from===origin.origin){entry.reason='BASE_ROUTE_REVIEW_INCOMPLETE';continue;}
-      if(current.to!==origin.origin){entry.reason='NOT_RETURNING_TO_OWN_BASE';continue;}
+      // A rota existente pode sair da propria base ou retornar para ela.
+      // Mantemos a aeronave em solo apenas se o trecho atual nao incluir a base operacional confirmada.
+      const departingOwnBase=current.from===origin.origin;
+      const returningOwnBase=current.to===origin.origin;
+      if(!departingOwnBase&&!returningOwnBase){entry.reason='ROUTE_DOES_NOT_INCLUDE_OWN_BASE';continue;}
       let fresh: AircraftSnapshot;
       try {fresh=await this.port.prepare(current);}catch{entry.reason='DEPARTURE_CONTROL_OR_FRESH_DETAILS_UNVERIFIED';continue;}
       if(fresh.state!=='ready'||!sameContext(current,fresh)){entry.reason='AIRCRAFT_CONTEXT_CHANGED';continue;}
