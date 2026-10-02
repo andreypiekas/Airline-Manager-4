@@ -3,12 +3,12 @@ on:
   workflow_dispatch:
     inputs:
       departure_mode:
-        description: 'Modo: repository usa EXECUTE_INDIVIDUAL; simulation impede decolagens reais'
+        description: 'Modo fixo de producao'
         type: choice
         default: production
         options: [production]
       execute_individual:
-        description: 'Solicitar producao; false usa departure_mode e politica do repositorio'
+        description: 'Compatibilidade: o runner executa sempre em producao'
         type: boolean
         required: false
         default: true
@@ -86,7 +86,7 @@ jobs:
         NODE_OPTIONS: "--max-old-space-size=4096"
       run: npx playwright install --with-deps chromium
 
-    - name: Testar calculos e interface simulada (sem credenciais)
+    - name: Validar calculos e interface em testes offline (sem credenciais)
       run: npm test
 
     - name: Limpar relatorios sinteticos antes da coleta real
