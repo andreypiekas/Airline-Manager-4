@@ -2,6 +2,7 @@ import type { AircraftOperationalObservation } from '../optimization/observation
 import type { FareObservation } from '../pricing/ticket-pricing';
 import type { FlightTimingObservation } from '../optimization/flight-timing';
 import type { CurrentRouteFieldDiagnostic } from '../optimization/current-route-diagnostics';
+import type { FlightHistoryEvidence } from '../optimization/flight-history';
 export const CLASSES = ['Y', 'J', 'F'] as const;
 export type Cabin = typeof CLASSES[number];
 export type Cabins = Record<Cabin, number>;
@@ -30,6 +31,8 @@ export interface AircraftSnapshot {
   departureControlShape?: string | null;
   /** Passive current-route field inventory; diagnostics only, never an economic authorization. */
   currentRouteFieldDiagnostics?: CurrentRouteFieldDiagnostic[];
+  /** Visible per-aircraft flight-history window; incomplete accounting evidence only. */
+  flightHistory?: FlightHistoryEvidence;
 }
 export interface DemandConfig {
   enabled: boolean;
