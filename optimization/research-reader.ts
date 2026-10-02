@@ -15,7 +15,7 @@ import { candidateCostScenarios, effectiveCostBudget } from './cost-budget';
 import { emptyFinanceHistory, readFinanceHistoryReference } from './finance-reader';
 import { screenCandidateEconomics } from './economic-screen';
 import { buildCandidateRoundTripScreen } from './round-trip-screen';
-import { airportRunwayEvidence, AirportCatalog, loadReference, RouteCatalog } from './reference-data';
+import { aircraftReferenceByModel, AircraftCatalog, airportRunwayEvidence, AirportCatalog, loadReference, RouteCatalog } from './reference-data';
 import { CandidateQuote } from './quote-reader';
 import { candidatePriorityReference, rankCandidatePriorities } from './candidate-priority';
 import { summarizeComparisonReadiness } from './route-readiness';
@@ -174,6 +174,12 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     if(loaded.schemaVersion!==1||!Array.isArray(loaded.airports)||!loaded.source||!loaded.license)throw new Error();
     airportCatalog=loaded;
   } catch {warnings.push('AIRPORT_REFERENCE_UNAVAILABLE');}
+  let aircraftCatalog:AircraftCatalog|null=null;
+  try {
+    const loaded=await loadReference<AircraftCatalog>('aircrafts.json');
+    if(loaded.schemaVersion!==1||!Array.isArray(loaded.models)||!loaded.source||!loaded.license)throw new Error();
+    aircraftCatalog=loaded;
+  } catch {warnings.push('AIRCRAFT_REFERENCE_UNAVAILABLE');}
   let uiRestored=research.uiRestored;
   let demandLabelCalibration:Awaited<ReturnType<typeof calibrateDemandLabelOnCurrentRoutes>>={
     status:'unavailable',observedAt:new Date().toISOString(),samples:[],classification:'mixed_or_unknown',
@@ -193,7 +199,18 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
       try {
         await openList(page,research.config.timeout);
         const read=await readModelCostReferenceResult(page,id,research.config.timeout);modelReads.push(read);
-        if(read.reference)models.push(read.reference);else warnings.push(`MODEL_REFERENCE_${read.status.toUpperCase()}:${id}`);
+        if(read.reference)models.push(read.reference);
+        else {
+          const fallback=aircraftReferenceByModel(id,aircraftCatalog);
+          if(fallback.status==='unique'&&fallback.reference){
+            models.push({
+              modelId:id,modelName:fallback.reference.modelName,observedAt:new Date().toISOString(),
+              aCheckPrice:fallback.reference.aCheckPrice,checkIntervalHours:fallback.reference.checkIntervalHours,
+              acquisitionCost:fallback.reference.acquisitionCost,source:'community-reference',effectiveAircraftMaintenanceCost:null
+            });
+            warnings.push(`MODEL_REFERENCE_COMMUNITY_FALLBACK:${id}`);
+          } else warnings.push(`MODEL_REFERENCE_${read.status.toUpperCase()}:${id}`);
+        }
       }catch{modelReads.push({modelId:id,status:'unavailable',reference:null});warnings.push(`MODEL_REFERENCE_UNAVAILABLE:${id}`);}
       finally{try{await openList(page,research.config.timeout);}catch{uiRestored=false;warnings.push('COST_REFERENCE_LIST_RESTORE_FAILED');}}
       if(!uiRestored)break;
