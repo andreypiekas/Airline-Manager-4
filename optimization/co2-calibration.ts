@@ -15,7 +15,7 @@ export interface Co2CalibrationSample {
 }
 export interface Co2CalibrationEvidence {
   aircraftId:string;
-  status:'verified_weighted_cabin_units'|'insufficient'|'inconsistent';
+  status:'verified_weighted_cabin_units'|'verified_single_cabin_equivalence'|'insufficient'|'inconsistent';
   observedAt:string;
   quoteFactor:number|null;
   fixedQuotasPerKm:number|null;
@@ -115,15 +115,20 @@ export function calibrateCo2FromFlightHistory(
 
   const stable=Number.isFinite(fixed)&&fixed>=0&&weightedSpread<=0.025&&weightedMae<=0.005;
   const distinguishes=premiumMix&&loadMix&&(physicalSpread>=weightedSpread+0.05||physicalMae>=Math.max(0.002,weightedMae*2));
-  const verified=stable&&distinguishes;
+  const economyOnly=aircraft.capacity.Y>0&&aircraft.capacity.J===0&&aircraft.capacity.F===0&&samples.every(s=>s.onboard.J===0&&s.onboard.F===0);
+  // For an economy-only layout, physical passengers and Y+2J+3F are mathematically identical.
+  // In that case a stable live-history fit with several load levels is sufficient to verify
+  // quota prediction for this aircraft without pretending we distinguished premium weights.
+  const singleCabinEquivalent=economyOnly&&loadMix;
+  const verified=stable&&(distinguishes||singleCabinEquivalent);
   return {
     ...base,
-    status:verified?'verified_weighted_cabin_units':stable?'insufficient':'inconsistent',
+    status:verified?(singleCabinEquivalent?'verified_single_cabin_equivalence':'verified_weighted_cabin_units'):stable?'insufficient':'inconsistent',
     quoteFactor:factor,fixedQuotasPerKm:round(fixed),samples,
     weightedResidualSpread:round(weightedSpread),physicalResidualSpread:round(physicalSpread),
     weightedMeanAbsoluteErrorRatio:round(weightedMae),physicalMeanAbsoluteErrorRatio:round(physicalMae),
     formulaVerified:verified,
-    reason:verified?'LIVE_HISTORY_SUPPORTS_WEIGHTED_CABIN_UNITS_WITH_STABLE_PER_KM_INTERCEPT':
+    reason:verified?(singleCabinEquivalent?'LIVE_HISTORY_SUPPORTS_ECONOMY_ONLY_EQUIVALENT_FORMULA_WITH_STABLE_PER_KM_INTERCEPT':'LIVE_HISTORY_SUPPORTS_WEIGHTED_CABIN_UNITS_WITH_STABLE_PER_KM_INTERCEPT'):
       !stable?'WEIGHTED_FORMULA_NOT_STABLE':'PREMIUM_CABIN_MIX_INSUFFICIENT_TO_DISTINGUISH_FORMULA'
   };
 }
@@ -133,7 +138,7 @@ export function estimateObservedCo2Quotas(
   distanceKm:number,
   onboard:{Y:number;J:number;F:number}
 ):number|null {
-  if(!evidence.formulaVerified||evidence.status!=='verified_weighted_cabin_units'||
+  if(!evidence.formulaVerified||!['verified_weighted_cabin_units','verified_single_cabin_equivalence'].includes(evidence.status)||
     evidence.quoteFactor===null||evidence.fixedQuotasPerKm===null||
     !Number.isFinite(distanceKm)||distanceKm<=0||
     ![onboard.Y,onboard.J,onboard.F].every(Number.isSafeInteger)||[onboard.Y,onboard.J,onboard.F].some(n=>n<0))
