@@ -17,6 +17,7 @@ O executor individual de retornos pela rota existente foi validado em simulacao 
 | Historico financeiro e pagamentos Fuel/Co2 | Leitura estruturada validada no Actions; lancamentos agregados nao comprovam custo por trecho ou custo medio do estoque |
 | MCDU | Recurso opcional; coleta normal nao depende de sua disponibilidade e nao abre fluxo de compra |
 | Custos e demanda completos de todas as candidatas | Pendentes; comparação econômica bloqueada |
+| Triagem conservadora de candidatas | Implementada: usa demanda diaria apenas como teto, elimina candidatas que nao conseguiriam atingir o limite minimo nem no melhor caso e calcula teto de receita sem autorizar mutacoes |
 | Revisão diária e por retorno | Motor testado; comparações incompletas permanecem pendentes |
 | Persistência do histórico | Transporte validado em dois runners com dados sintéticos; histórico operacional não inicializado |
 | Decolagens individuais de retorno | Piloto real autorizado aprovado; limite e confirmacao posterior validados |
@@ -73,6 +74,14 @@ finance-reader.ts consulta #financeAction #transactionContainer, validando linha
 candidate-data.json/MD apresenta evidências, historico financeiro estruturado, reservas limitadas, estado de manutenção e cenarios de combustível, CO2 e rateio de A-check. As formulas da planilha sao referencias explicitamente separadas dos custos efetivos. Taxa de criação fica separada das despesas recorrentes. Não se supõem custos efetivos zero. CO₂, manutenção efetiva e airportAndOther ficam null quando ausentes. costsComplete=false, netProfit=null e comparisonReady=false permanecem obrigatórios. Nenhum orçamento parcial alimenta RouteReview. Regras, fontes e configuracoes: [RESERVATIONS_AND_COSTS.md](RESERVATIONS_AND_COSTS.md).
 
 ENABLE_ROUTE_RESEARCH=false é o padrão. Quando habilitado, maxAircraft/maxSuggestions aceitam 1–10; a consulta limitada não garante a melhor rota ou revisão diária de toda a frota. O cron-job.org continua disparando workflow_dispatch; nenhum schedule ou configuração financeira foi alterado.
+
+## Triagem economica conservadora — 02/10/2026
+
+A pesquisa de candidatas agora produz uma triagem adicional antes da comparacao economica completa. A demanda diaria exibida no orcamento e usada somente como **teto**: nunca e convertida em demanda restante. Com a capacidade real da aeronave, o sistema calcula o maximo de passageiros que a candidata poderia atender em uma decolagem e o teto percentual de cobertura. Se nem esse teto atingir `ROUTE_MIN_OCCUPANCY_PERCENT`, a candidata pode ser descartada da pesquisa economica sem depender de suposicoes sobre reset ou reservas.
+
+Quando a referencia Auto da candidata e reconhecida como PAX normal, o relatorio tambem calcula as tarifas de referencia ajustadas Y1,10/J1,08/F1,06, o teto de receita bruta por decolagem e o teto apos a taxa inicial de criacao da rota. Esses valores continuam sendo limites de triagem, nao lucro previsto. Referencias VIP permanecem indisponiveis ate validacao especifica.
+
+Nenhuma candidata recebe `comparisonReady=true` ou `mutationAuthorized=true` por causa desta triagem. Demanda restante, ciclo de volta, reservas futuras e custos completos continuam obrigatorios para KEEP/HOLD/REROUTE.
 
 ## Pendencias para producao do otimizador de rotas
 
