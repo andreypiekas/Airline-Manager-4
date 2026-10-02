@@ -15,7 +15,7 @@ test('first return-leg timing uses matching fresh countdown but cannot invent la
  const r=candidateReservationScenario(quote,collection(aircraft(),b),now);
  expect(r.reservations[0]).toMatchObject({from:'BBB',to:'AAA',notBeforeEstimatedAt:'2026-10-01T12:18:37.000Z',availabilitySource:'flight-countdown-estimate'});
  expect(r.reservations[1]).toMatchObject({notBeforeEstimatedAt:null,availabilitySource:'unavailable'});
- expect(r.futureScheduleComplete).toBe(false);expect(r.comparisonReady).toBe(false);
+ expect(r.futureScheduleComplete).toBe(false);expect(r.futureCompetitionComplete).toBe(true);expect(r.comparisonReady).toBe(false);
 });
 for(const variant of ['identity','stale','inconsistent','elapsed'])test(`unverified countdown cannot schedule a reservation: ${variant}`,()=>{
  const b=aircraft('2','inflight');b.timing=flightCountdownObservation('2','2','00:18:37',now.toISOString())!;
@@ -27,7 +27,7 @@ test('reserves two future legs per other aircraft, excludes candidate, never con
  const data=collection(aircraft(),{...aircraft('2','inflight'),onboard:{Y:35,J:5,F:0}});
  const before=JSON.stringify(data);const r=candidateReservationScenario(quote,data,now);
  expect(r).toMatchObject({status:'scenario_only',forwardAfterReservations:{Y:120,J:30,F:0},comparisonReady:false,
-  futureScheduleComplete:false,demandNetOfOtherAircraft:false,currentFlightPassengersAlreadyDebited:true});
+  futureScheduleComplete:false,futureCompetitionComplete:true,demandNetOfOtherAircraft:true,currentFlightPassengersAlreadyDebited:true});
  expect(r.reservations.map(r=>[r.aircraftId,r.from,r.to])).toEqual([['2','BBB','AAA'],['2','AAA','BBB']]);
  expect(JSON.stringify(data)).toBe(before);expect(r.reservations.every(r=>r.aircraftId!=='1')).toBe(true);
 });
