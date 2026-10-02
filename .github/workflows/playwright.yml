@@ -109,8 +109,8 @@ jobs:
     - name: Resolver modo e limite de decolagens
       id: departure_settings
       env:
-        AM4_INPUT_MODE: ${{ inputs.departure_mode }}
-        AM4_INPUT_EXECUTE: ${{ inputs.execute_individual }}
+        AM4_INPUT_MODE: production
+        AM4_INPUT_EXECUTE: 'true'
         AM4_INPUT_MAX_DEPARTURES: ${{ inputs.max_individual_departures }}
         AM4_REPOSITORY_EXECUTE: ${{ vars.EXECUTE_INDIVIDUAL }}
         AM4_REPOSITORY_MAX_DEPARTURES: ${{ vars.MAX_INDIVIDUAL_DEPARTURES }}
