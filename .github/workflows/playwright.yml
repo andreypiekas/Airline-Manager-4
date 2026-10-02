@@ -122,6 +122,9 @@ jobs:
         ENABLE_RETURN_JOURNAL: 'true'
         RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
         ENABLE_TICKET_PRICING: ${{ vars.ENABLE_TICKET_PRICING || 'true' }}
+        ENABLE_TICKET_PRICING_EXECUTION: ${{ vars.ENABLE_TICKET_PRICING_EXECUTION || 'true' }}
+        TICKET_PRICING_EXECUTION_ACK: native-route-price-save-v1
+        TICKET_PRICING_MAX_ADJUSTMENTS_PER_RUN: ${{ vars.TICKET_PRICING_MAX_ADJUSTMENTS_PER_RUN || '5' }}
         ROUTE_REVIEW_TIMEZONE: ${{ vars.ROUTE_REVIEW_TIMEZONE }}
         AIRLINE_BASES_JSON: ${{ vars.AIRLINE_BASES_JSON }}
         AIRCRAFT_ORIGINS_JSON: ${{ vars.AIRCRAFT_ORIGINS_JSON || '[]' }}
@@ -186,6 +189,9 @@ jobs:
         fi
         if [ -f test-results/demand/candidate-data.md ]; then
           cat test-results/demand/candidate-data.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/pricing-execution.md ]; then
+          cat test-results/demand/pricing-execution.md >> "$GITHUB_STEP_SUMMARY"
         fi
         if [ -f test-results/demand/optimization-report.md ]; then
           cat test-results/demand/optimization-report.md >> "$GITHUB_STEP_SUMMARY"
