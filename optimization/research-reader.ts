@@ -21,6 +21,7 @@ import { candidatePriorityReference, rankCandidatePriorities } from './candidate
 import { summarizeComparisonReadiness } from './route-readiness';
 import { calibrateCo2FromFlightHistory } from './co2-calibration';
 import { calibrateDemandLabelOnCurrentRoutes } from './demand-label-calibration';
+import { crossCheckCommunityAircraftReference } from './model-reference-crosscheck';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -199,14 +200,24 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
       try {
         await openList(page,research.config.timeout);
         const read=await readModelCostReferenceResult(page,id,research.config.timeout);modelReads.push(read);
-        if(read.reference)models.push(read.reference);
-        else {
-          const fallback=aircraftReferenceByModel(id,aircraftCatalog);
-          if(fallback.status==='unique'&&fallback.reference){
+        const community=aircraftReferenceByModel(id,aircraftCatalog);
+        if(read.reference){
+          const cross=crossCheckCommunityAircraftReference(read.reference,community.status==='unique'?community.reference:null);
+          models.push({
+            ...read.reference,
+            acquisitionCost:cross.verified?cross.acquisitionCost??undefined:undefined,
+            communityCrossCheck:{
+              verified:cross.verified,fieldsMatched:cross.fieldsMatched,fieldsConflicted:cross.fieldsConflicted,
+              reason:cross.reason,acquisitionCost:cross.acquisitionCost
+            }
+          });
+          if(cross.verified)warnings.push(`MODEL_REFERENCE_COMMUNITY_CROSSCHECKED:${id}`);
+        } else {
+          if(community.status==='unique'&&community.reference){
             models.push({
-              modelId:id,modelName:fallback.reference.modelName,observedAt:new Date().toISOString(),
-              aCheckPrice:fallback.reference.aCheckPrice,checkIntervalHours:fallback.reference.checkIntervalHours,
-              acquisitionCost:fallback.reference.acquisitionCost,source:'community-reference',effectiveAircraftMaintenanceCost:null
+              modelId:id,modelName:community.reference.modelName,observedAt:new Date().toISOString(),
+              aCheckPrice:community.reference.aCheckPrice,checkIntervalHours:community.reference.checkIntervalHours,
+              acquisitionCost:community.reference.acquisitionCost,source:'community-reference',effectiveAircraftMaintenanceCost:null
             });
             warnings.push(`MODEL_REFERENCE_COMMUNITY_FALLBACK:${id}`);
           } else warnings.push(`MODEL_REFERENCE_${read.status.toUpperCase()}:${id}`);
