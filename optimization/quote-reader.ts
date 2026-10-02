@@ -85,7 +85,7 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
         routeHeader: (() => {
           const distanceNode=Array.from(el.querySelectorAll('.col-2 > span.s-text')).find(e=>e.getClientRects().length);
           const row=distanceNode?.closest('.row');
-          return row ? (row.textContent||'').replace(/\s+/g,' ').trim() : '';
+          return row ? ((row as HTMLElement).innerText||'').replace(/\s+/g,' ').trim() : '';
         })(),
         distance: one('.col-2 > span.s-text'), duration: one('#departFlightTimeInfo'), fuel: one('#departFuelInfo'),
         co2: one('#departCo2Info'), costIndex: one('#costIndexBar'), aircraft: labelledValue('A/C on route'),
