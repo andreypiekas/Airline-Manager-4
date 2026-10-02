@@ -84,8 +84,9 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
   const calibratedAtDemandCeiling=amount(calibratedCo2Cost(remaining));
   const co2AtDemandCeiling=calibrationVerified?calibratedAtDemandCeiling:amount(co2Value(passengersAtDemandCeiling));
   const aCheckCatalogProration=amount(aCheckValue);
-  const communityAcquisitionCost=model?.source==='community-reference'&&
-    typeof (model as any).acquisitionCost==='number'&&nonnegative((model as any).acquisitionCost)?(model as any).acquisitionCost:null;
+  const acquisitionVerified=model?.source==='community-reference'||model?.communityCrossCheck?.verified===true;
+  const communityAcquisitionCost=acquisitionVerified&&
+    typeof model?.acquisitionCost==='number'&&nonnegative(model.acquisitionCost)?model.acquisitionCost:null;
   const repairAtTraining0=communityAcquisitionCost!==null?amount(communityAcquisitionCost/1000*0.0075):null;
   const repairAtTraining5=communityAcquisitionCost!==null?amount(communityAcquisitionCost/1000*0.0075*0.9):null;
   const subtotal=fuel!==null&&co2AtDemandCeiling!==null&&aCheckCatalogProration!==null?
