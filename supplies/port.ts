@@ -29,6 +29,35 @@ export function parseSupplyText(text:string,kind:Commodity,balance:number):Suppl
 }
 export class SupplyPort {
  constructor(private page:Page,private timeout=10000){}
+ async diagnostic(kind:Commodity){
+  try{
+   const panel=this.page.locator('#fuelMain');
+   if(await panel.count()!==1||!await panel.isVisible())return null;
+   const rows=await panel.locator('div,span,b,label,input,button').evaluateAll(elements=>{
+    const clean=(s:string|null|undefined)=>String(s||'').replace(/\s+/g,' ').trim();
+    const relevant=/(current price|quota cost|price change|capacity|holding|total price|amount to purchase|lbs|quotas|fuel price|co2 quota)/i;
+    return elements.flatMap(e=>{
+      if(!e.getClientRects().length)return [];
+      const text=clean((e as HTMLElement).innerText||e.textContent);
+      const value=e instanceof HTMLInputElement?clean(e.value):'';
+      const id=clean(e.getAttribute('id'));
+      const hay=[text,value,id].filter(Boolean).join(' ');
+      if(!relevant.test(hay))return [];
+      return [{
+        tag:e.tagName.toLowerCase(),
+        id:id.slice(0,80)||null,
+        text:text.slice(0,180)||null,
+        value:value.slice(0,80)||null,
+        classShape:clean(e.getAttribute('class')).slice(0,120)||null
+      }];
+    }).slice(0,80);
+   });
+   const panelText=(await panel.innerText()).split(/\r?\n/).map(s=>s.trim()).filter(Boolean)
+     .filter(s=>/(current price|quota cost|price change|capacity|holding|total price|amount to purchase|lbs|quotas|fuel price|co2 quota|^\$?\s*[\d,.]+(?:\s*\/\s*[\d,.]+)?(?:\s+(?:lbs|quotas))?$)/i.test(s))
+     .slice(0,80);
+   return {kind,rows,panelText,mutationAuthorized:false as false};
+  }catch{return null;}
+ }
  async open(kind:Commodity){
   await closeReadOnlyPopup(this.page,this.timeout);
   const menu=this.page.locator('#smallMainMenu').getByText('Fuel',{exact:true}).locator('../..');
