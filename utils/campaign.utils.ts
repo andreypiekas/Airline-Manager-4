@@ -9,13 +9,16 @@ export class CampaignUtils {
     campaignDuration: number = 4;
 
     constructor(page: Page) {
-        if(process.env.INCREASE_AIRLINE_REPUTATION === 'true') {
-            this.increaseAirlineReputation = true;
-            this.campaignType = parseInt(process.env.CAMPAIGN_TYPE!);
-            this.campaignDuration = parseInt(process.env.CAMPAIGN_DURATION!);
-        }
-
         this.page = page;
+
+        this.increaseAirlineReputation =
+            (process.env.INCREASE_AIRLINE_REPUTATION || 'false').trim().toLowerCase() === 'true';
+
+        const configuredType = parseInt(process.env.CAMPAIGN_TYPE || '1', 10);
+        const configuredDuration = parseInt(process.env.CAMPAIGN_DURATION || '4', 10);
+
+        this.campaignType = Number.isFinite(configuredType) && configuredType > 0 ? configuredType : 1;
+        this.campaignDuration = Number.isFinite(configuredDuration) && configuredDuration > 0 ? configuredDuration : 4;
     }
 
     /**
