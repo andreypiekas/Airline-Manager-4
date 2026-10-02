@@ -71,7 +71,7 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
   };
   const amount=(n:number|null)=>n!==null&&nonnegative(n)?n:null;
   const model=references.model;
-  const aCheckValue=context&&model?.source==='inspected-catalog'&&model.modelId===quote.autopriceReference?.modelId&&
+  const aCheckValue=context&&!!model&&['inspected-catalog','community-reference'].includes(model.source)&&model.modelId===quote.autopriceReference?.modelId&&
     fresh(model.observedAt,now,maxAgeSeconds)&&nonnegative(model.aCheckPrice)&&model.aCheckPrice>0&&
     Number.isFinite(model.checkIntervalHours)&&model.checkIntervalHours>0?
     model.aCheckPrice/model.checkIntervalHours*quote.durationSeconds/3600:null;
@@ -84,6 +84,10 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
   const calibratedAtDemandCeiling=amount(calibratedCo2Cost(remaining));
   const co2AtDemandCeiling=calibrationVerified?calibratedAtDemandCeiling:amount(co2Value(passengersAtDemandCeiling));
   const aCheckCatalogProration=amount(aCheckValue);
+  const communityAcquisitionCost=model?.source==='community-reference'&&
+    typeof (model as any).acquisitionCost==='number'&&nonnegative((model as any).acquisitionCost)?(model as any).acquisitionCost:null;
+  const repairAtTraining0=communityAcquisitionCost!==null?amount(communityAcquisitionCost/1000*0.0075):null;
+  const repairAtTraining5=communityAcquisitionCost!==null?amount(communityAcquisitionCost/1000*0.0075*0.9):null;
   const subtotal=fuel!==null&&co2AtDemandCeiling!==null&&aCheckCatalogProration!==null?
     fuel+co2AtDemandCeiling+aCheckCatalogProration:null;
   return {kind:'reference_sensitivity_only',comparisonReady:false,mutationAuthorized:false,
@@ -94,9 +98,13 @@ export function candidateCostScenarios(quote:CandidateQuote,capacity:Cabins|null
       calibratedQuotasAtDemandCeiling:calibrationVerified?calibratedQuotas(remaining):null,
       formulaSource:calibrationVerified?'live flight history calibrated weighted-cabin formula':'AM4 calculator: Calculadoras (1)!G7 and Faturamento e Lucro!E14'},
     aCheck:{catalogProration:aCheckCatalogProration,effectiveAircraftCost:null,
+      source:model?.source??null,
       formulaSource:'AM4 calculator: Faturamento e Lucro!E15',includesWearRepair:false,
       hoursToCheck:sameAircraft?maintenance!.hoursToCheck:null,wearPercentage:sameAircraft?maintenance!.wearPercentage:null,
       checkBeforeProposedLeg:sameAircraft&&context?maintenance!.hoursToCheck<quote.durationSeconds/3600:null},
+    wearRepairReference:{expectedPerDepartureAtTraining0:repairAtTraining0,expectedPerDepartureAtTraining5:repairAtTraining5,
+      acquisitionCost:communityAcquisitionCost,formulaSource:communityAcquisitionCost!==null?'abc8747/am4 expected repair formula; training level unknown':null,
+      effectiveCostConfirmed:false},
     partialSubtotalAtDemandCeiling:amount(subtotal),totalOperatingCost:null,
     setupFee:context&&nonnegative(quote.routeFee)?quote.routeFee:null,
     missing:[...(!calibrationVerified?['CO2_QUOTA_CONVERSION']:[]),'EFFECTIVE_A_CHECK_PRICE','WEAR_REPAIR_COST','AIRPORT_COST',
