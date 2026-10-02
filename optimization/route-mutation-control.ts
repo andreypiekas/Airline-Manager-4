@@ -13,6 +13,9 @@ export interface RouteMutationControlEvidence {
   endCostIndexVerified:boolean;
   nonCharterBranchVerified:boolean;
   charterBranchObserved:boolean;
+  stopoverIds:number[];
+  ferryModes:number[];
+  directRouteVerified:boolean;
   nativeClickReady:boolean;
   shape:string|null;
   mutationAuthorized:false;
@@ -22,7 +25,7 @@ const empty=():RouteMutationControlEvidence=>({
   observed:false,source:'unavailable',endpointVerified:false,targetVerified:false,
   aircraftIdMatchesContext:false,airportIdMatchesContext:false,
   registrationInputVerified:false,seatInputsVerified:false,endCostIndexVerified:false,
-  nonCharterBranchVerified:false,charterBranchObserved:false,nativeClickReady:false,
+  nonCharterBranchVerified:false,charterBranchObserved:false,stopoverIds:[],ferryModes:[],directRouteVerified:false,nativeClickReady:false,
   shape:null,mutationAuthorized:false
 });
 
@@ -61,6 +64,9 @@ export function inspectRouteMutationHandlerSource(
   const endCostIndexVerified=active.includes("+'&endCostIndex='+endCostIndex");
   const nonCharterBranchVerified=calls.some(m=>m[6]===undefined);
   const charterBranchObserved=calls.some(m=>m[6]!==undefined);
+  const stopoverIds=[...new Set(calls.map(m=>Number(m[4])).filter(Number.isSafeInteger))];
+  const ferryModes=[...new Set(calls.map(m=>Number(m[5])).filter(Number.isSafeInteger))];
+  const directRouteVerified=stopoverIds.length===1&&stopoverIds[0]===0&&ferryModes.length===1&&ferryModes[0]===0;
   const contextGuards=active.includes('isItrouteClick=false;')&&active.includes('addAirpAndHubs();')&&active.includes('$(this).remove();');
 
   const nativeClickReady=[
@@ -73,7 +79,7 @@ export function inspectRouteMutationHandlerSource(
     observed:true,source:'jquery-direct-click',endpointVerified,targetVerified,
     aircraftIdMatchesContext,airportIdMatchesContext,registrationInputVerified,
     seatInputsVerified,endCostIndexVerified,nonCharterBranchVerified,charterBranchObserved,
-    nativeClickReady,shape:safeShape(source),mutationAuthorized:false
+    stopoverIds,ferryModes,directRouteVerified,nativeClickReady,shape:safeShape(source),mutationAuthorized:false
   };
 }
 
