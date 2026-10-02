@@ -72,6 +72,20 @@ test('all-economy history cannot distinguish physical from weighted cabin units'
   expect(r.reason).toBe('PREMIUM_CABIN_MIX_INSUFFICIENT_TO_DISTINGUISH_FORMULA');
 });
 
+test('economy-only aircraft verifies quota prediction by mathematical cabin equivalence',()=>{
+  const entries=[
+    history(12,0,0),history(11,0,0,'SCL','GRU'),history(10,0,0),history(8,0,0,'SCL','GRU')
+  ];
+  const a=aircraft(entries);
+  a.capacity={Y:12,J:0,F:0};
+  a.remaining={Y:12,J:0,F:0};
+  a.dailyTotal={Y:100,J:0,F:0};
+  const r=calibrateCo2FromFlightHistory(a,[quote()],catalog(),now);
+  expect(r.status).toBe('verified_single_cabin_equivalence');
+  expect(r.formulaVerified).toBe(true);
+  expect(r.reason).toBe('LIVE_HISTORY_SUPPORTS_ECONOMY_ONLY_EQUIVALENT_FORMULA_WITH_STABLE_PER_KM_INTERCEPT');
+  expect(estimateObservedCo2Quotas(r,1000,{Y:12,J:0,F:0})).not.toBeNull();
+});
 test('conflicting live quote factors fail closed',()=>{
   const r=calibrateCo2FromFlightHistory(aircraft(),[quote(.16),quote(.17,'BBB')],catalog(),now);
   expect(r.status).toBe('inconsistent');
