@@ -36,12 +36,46 @@ test('calibrates a reset boundary only when a whole history prefix exactly match
  expect(r.windows[0]).toMatchObject({pairKey:'AAA:BBB',includedMaxAgeMinutes:1200,excludedMinAgeMinutes:1380,consumed:{Y:80,J:5,F:3}});
 });
 
+test('full current demand creates a conservative reset-age upper bound',()=>{
+ const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[
+  ac('1',[e('2 hours ago','AAA','BBB',20,2,1),e('8 hours ago','BBB','AAA',10,1,0),e('1 day ago','AAA','BBB',30,2,1)])
+ ]};
+ const report=labels({aircraftId:'1',registration:'AC-1',routeId:'R1',from:'AAA',to:'BBB',airportId:2,observedAt:stamp,
+  quoteDemand:{Y:100,J:10,F:5},remaining:{Y:100,J:10,F:5},dailyTotal:{Y:100,J:10,F:5},currentRouteQuote:null,
+  matchesRemaining:true,matchesDailyTotal:true});
+ const r=calibrateDemandResetWindows(collection,report);
+ expect(r).toMatchObject({status:'upper_bound_only',resetAgeUpperBoundMinutes:120});
+ expect(r.upperBoundSources).toHaveLength(1);
+});
+
+test('unused candidate pair can be proven full inside a reset upper bound when fleet history covers it',()=>{
+ const collection:CollectionResult={complete:true,expectedRoutes:2,warnings:[],aircraft:[
+  ac('1',[e('30 minutes ago','AAA','BBB',20,2,1),e('3 hours ago','AAA','BBB',10,1,0)]),
+  ac('2',[e('4 hours ago','EEE','FFF',10,1,0)])
+ ]};
+ const calibration:any={status:'upper_bound_only',windows:[],resetAgeUpperBoundMinutes:120,upperBoundSources:[],warnings:[],comparisonReady:false,mutationAuthorized:false};
+ expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration)).toMatchObject({
+  status:'verified',remaining:{Y:100,J:20,F:10},consumedSinceReset:{Y:0,J:0,F:0},
+  reason:'NO_PAIR_FLIGHT_WITHIN_VERIFIED_RESET_UPPER_BOUND'
+ });
+});
+
+test('candidate pair flight inside reset upper bound prevents assuming full demand',()=>{
+ const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[
+  ac('1',[e('30 minutes ago','CCC','DDD',20,2,1),e('3 hours ago','AAA','BBB',10,1,0)])
+ ]};
+ const calibration:any={status:'upper_bound_only',windows:[],resetAgeUpperBoundMinutes:120,upperBoundSources:[],warnings:[],comparisonReady:false,mutationAuthorized:false};
+ expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration)).toMatchObject({
+  status:'unavailable',reason:'PAIR_FLIGHT_INSIDE_RESET_UPPER_BOUND'
+ });
+});
+
 test('candidate remaining is reconstructed only when every aircraft history covers the calibrated reset',()=>{
  const entries1=[e('2 hours ago','CCC','DDD',20,2,1),e('22 hours ago','AAA','BBB',1,0,0)];
  const entries2=[e('3 hours ago','DDD','CCC',10,1,0),e('23 hours ago','AAA','BBB',1,0,0)];
  const collection:CollectionResult={complete:true,expectedRoutes:2,warnings:[],aircraft:[ac('1',entries1),ac('2',entries2)]};
  const calibration={status:'verified' as const,windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:1200,excludedMinAgeMinutes:1260,
-  consumed:{Y:80,J:5,F:3},observedAt:stamp,sourceAircraftIds:['1']}],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
+  consumed:{Y:80,J:5,F:3},observedAt:stamp,sourceAircraftIds:['1']}],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
  const r=historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration);
  expect(r).toMatchObject({status:'verified',consumedSinceReset:{Y:30,J:3,F:1},remaining:{Y:70,J:17,F:9},historyCoverageVerified:true});
 });
@@ -49,7 +83,7 @@ test('candidate remaining is reconstructed only when every aircraft history cove
 test('history that does not extend beyond reset fails closed',()=>{
  const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[ac('1',[e('2 hours ago','CCC','DDD',20,2,1),e('10 hours ago')],100)]};
  const calibration={status:'verified' as const,windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:1200,excludedMinAgeMinutes:1260,
-  consumed:{Y:80,J:5,F:3},observedAt:stamp,sourceAircraftIds:['1']}],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
+  consumed:{Y:80,J:5,F:3},observedAt:stamp,sourceAircraftIds:['1']}],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
  expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration)).toMatchObject({
   status:'unavailable',reason:'FLEET_HISTORY_DOES_NOT_COVER_RESET'
  });
@@ -58,7 +92,7 @@ test('history that does not extend beyond reset fails closed',()=>{
 test('candidate flight inside ambiguous reset boundary gap fails closed',()=>{
  const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[ac('1',[e('20 hours ago','CCC','DDD',20,2,1),e('20 hours ago','AAA','BBB',1,0,0),e('21 hours ago','CCC','DDD',5,1,0),e('23 hours ago')])]};
  const calibration={status:'verified' as const,windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:1200,excludedMinAgeMinutes:1380,
-  consumed:{Y:80,J:5,F:3},observedAt:stamp,sourceAircraftIds:['1']}],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
+  consumed:{Y:80,J:5,F:3},observedAt:stamp,sourceAircraftIds:['1']}],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
  expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration)).toMatchObject({
   status:'unavailable',reason:'PAIR_FLIGHT_IN_RESET_BOUNDARY_GAP'
  });
