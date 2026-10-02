@@ -8,6 +8,7 @@ const candidate=(overrides:any={})=>({
   effectiveCosts:{complete:false,missing:['fuel','co2']},
   createControl:null,
   routeListenerDiagnostics:[],
+  routeMutationControl:null,
   ...overrides
 });
 
@@ -18,18 +19,38 @@ test('readiness gate stays closed with incomplete economics and no native contro
   expect(r.mutationAuthorized).toBe(false);
   expect(r.comparisonBlockers).toContain('CURRENT_ROUTE_FULL_ECONOMICS_MISSING');
   expect(r.comparisonBlockers).toContain('ROUND_TRIP:RETURN_LIVE_QUOTE_REQUIRED');
+  expect(r.mutationBlockers).toContain('NATIVE_ROUTE_ENDPOINT_UNVERIFIED');
   expect(r.mutationBlockers).toContain('NATIVE_ROUTE_MUTATION_CONTROL_UNVERIFIED');
   expect(r.mutationBlockers).toContain('ROUTE_MUTATION_EXECUTOR_NOT_IMPLEMENTED');
 });
 
-test('observed native endpoint alone never opens mutation gate',()=>{
+test('observed endpoint without contextual verification never opens mutation gate',()=>{
   const r=assessCandidateComparisonReadiness(candidate({
-    createControl:{observed:true,phpEndpoints:['route_create.php']},
-    routeListenerDiagnostics:[{phpEndpoints:['route_create.php']}]
+    createControl:{observed:true,phpEndpoints:['new_route_info.php']},
+    routeListenerDiagnostics:[{phpEndpoints:['new_route_info.php']}],
+    routeMutationControl:{
+      nativeClickReady:false,endpointVerified:true,targetVerified:true,
+      aircraftIdMatchesContext:false,airportIdMatchesContext:false
+    }
+  }));
+  expect(r.mutationReady).toBe(false);
+  expect(r.mutationAuthorized).toBe(false);
+  expect(r.mutationBlockers).toContain('NATIVE_ROUTE_AIRCRAFT_CONTEXT_UNVERIFIED');
+  expect(r.mutationBlockers).toContain('NATIVE_ROUTE_AIRPORT_CONTEXT_UNVERIFIED');
+  expect(r.mutationBlockers).toContain('NATIVE_ROUTE_MUTATION_CONTROL_UNVERIFIED');
+});
+
+test('fully verified native Create route still stays blocked until economics and executor are complete',()=>{
+  const r=assessCandidateComparisonReadiness(candidate({
+    routeMutationControl:{
+      nativeClickReady:true,endpointVerified:true,targetVerified:true,
+      aircraftIdMatchesContext:true,airportIdMatchesContext:true
+    }
   }));
   expect(r.mutationReady).toBe(false);
   expect(r.mutationAuthorized).toBe(false);
   expect(r.mutationBlockers).not.toContain('NATIVE_ROUTE_MUTATION_CONTROL_UNVERIFIED');
+  expect(r.mutationBlockers).toContain('COMPARISON_NOT_READY');
   expect(r.mutationBlockers).toContain('ROUTE_MUTATION_EXECUTOR_NOT_IMPLEMENTED');
 });
 
