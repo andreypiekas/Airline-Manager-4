@@ -83,7 +83,21 @@ export function candidateReservationScenario(quote: CandidateQuote, collection: 
   }
   result.forwardAfterReservations=evidence.remaining?{...pools.get(forwardKey)!}:null;
   result.reverseAfterReservations=evidence.reverseRemaining?{...pools.get(reverseKey)!}:null;
-  result.status=evidence.remaining?'scenario_only':'remaining_unavailable';
-  result.reason=evidence.remaining?'CAPACITY_RESERVED_BEFORE_CANDIDATE_WITHOUT_TIMETABLE_OR_RESET_FORECAST':evidence.reason;
+  if(evidence.remaining){
+    // For the candidate's single outbound+return cycle, every other aircraft has
+    // exactly two deterministic legs on its CURRENT route (ready: current leg then
+    // reverse; inflight: reverse after landing then current). Reserving matching
+    // capacity unconditionally is conservative: it assumes those flights consume
+    // demand before the candidate even when timing would place them later. No
+    // demand reset is credited. This closes only the bounded competition horizon;
+    // it is not a general timetable forecast and never authorizes mutation.
+    result.futureScheduleComplete=true;
+    result.demandNetOfOtherAircraft=true;
+    result.status='scenario_only';
+    result.reason='BOUNDED_TWO_LEG_COMPETITION_CONSERVATIVELY_RESERVED';
+  } else {
+    result.status='remaining_unavailable';
+    result.reason=evidence.reason;
+  }
   return result;
 }
