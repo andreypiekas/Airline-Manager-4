@@ -6,6 +6,7 @@ import { readRouteListenerDiagnostics, RouteListenerDiagnostic } from './route-l
 import { readRouteMutationControl, RouteMutationControlEvidence } from './route-mutation-control';
 import { readAutopriceFunctionEvidence, effectiveAutopriceBase, AutopriceFunctionEvidence } from './autoprice-diagnostics';
 import { readRouteQuoteFieldDiagnostics, RouteQuoteFieldDiagnostic } from './route-quote-diagnostics';
+import { inspectRouteDirectionEvidence, RouteDirectionEvidence } from './route-direction-evidence';
 
 export interface QuoteIdentity { aircraftId: string; registration: string; airportId: string; from: string; to: string }
 export interface CandidateQuote extends QuoteIdentity {
@@ -28,6 +29,7 @@ export interface CandidateQuote extends QuoteIdentity {
   routeMutationControl?: RouteMutationControlEvidence;
   autopriceFunctionEvidence?: AutopriceFunctionEvidence;
   quoteFieldDiagnostics?: RouteQuoteFieldDiagnostic[];
+  routeDirectionEvidence?: RouteDirectionEvidence;
   remainingDemand: null;
   netProfit: null;
   comparisonReady: false;
@@ -80,13 +82,20 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
       return {
         registration: Array.from(header.childNodes).filter(n => n.nodeType === Node.TEXT_NODE).map(n => n.textContent).join('').trim(),
         codes: Array.from(el.querySelectorAll('.col-3.m-text > b')).filter(e => e.getClientRects().length).map(e => e.textContent?.trim()),
+        routeHeader: (() => {
+          const distanceNode=Array.from(el.querySelectorAll('.col-2 > span.s-text')).find(e=>e.getClientRects().length);
+          const row=distanceNode?.closest('.row');
+          return row ? (row.textContent||'').replace(/\s+/g,' ').trim() : '';
+        })(),
         distance: one('.col-2 > span.s-text'), duration: one('#departFlightTimeInfo'), fuel: one('#departFuelInfo'),
         co2: one('#departCo2Info'), costIndex: one('#costIndexBar'), aircraft: labelledValue('A/C on route'),
         fee: fees[0].parentElement?.nextElementSibling?.textContent?.trim() || '',
         daily: Array.from(rows[2].children).map(e => e.textContent?.trim() || '')
       };
     });
-    if (raw.registration !== identity.registration || raw.codes.length !== 2 || raw.codes[0] !== identity.from || raw.codes[1] !== identity.to) throw new Error();
+    if (raw.registration !== identity.registration) throw new Error();
+    const routeDirectionEvidence=inspectRouteDirectionEvidence(raw.codes,raw.routeHeader,identity);
+    if(!routeDirectionEvidence.verified) throw new Error();
     const time = raw.duration.match(/^(\d{2,3}):([0-5]\d):([0-5]\d)$/);
     if (!time || !/^\$\s*[\d,]+$/.test(raw.fee) || !/^\d+(?:\.\d+)?$/.test(raw.co2)) throw new Error();
     const durationSeconds = Number(time[1])*3600 + Number(time[2])*60 + Number(time[3]);
@@ -160,7 +169,7 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
     }
     const quote: CandidateQuote = { ...identity, observedAt: new Date().toISOString(), distanceKm: integerText(raw.distance), durationSeconds,
       fuelLbs: integerText(raw.fuel), co2KgPerPaxKm: Number(raw.co2), costIndex: integerText(raw.costIndex), routeFee: integerText(raw.fee.replace(/^\$\s*/, '')),
-      aircraftOnRoute: integerText(raw.aircraft), autopriceReference, createControl, routeActionDiagnostics, routeListenerDiagnostics, routeMutationControl, autopriceFunctionEvidence, quoteFieldDiagnostics, dailyDemand: { Y: integerText(raw.daily[0]), J: integerText(raw.daily[1]), F: integerText(raw.daily[2]) },
+      aircraftOnRoute: integerText(raw.aircraft), autopriceReference, createControl, routeActionDiagnostics, routeListenerDiagnostics, routeMutationControl, autopriceFunctionEvidence, quoteFieldDiagnostics, routeDirectionEvidence, dailyDemand: { Y: integerText(raw.daily[0]), J: integerText(raw.daily[1]), F: integerText(raw.daily[2]) },
       remainingDemand: null, netProfit: null, comparisonReady: false, mutationAuthorized: false };
     if (quote.distanceKm <= 0 || durationSeconds <= 0 || quote.fuelLbs <= 0 || !Number.isFinite(quote.co2KgPerPaxKm) || quote.costIndex > 200) throw new Error();
     return { status: 'observed', quote };
