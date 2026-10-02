@@ -10,9 +10,18 @@ export class MaintenanceUtils {
 
     constructor(page: Page) {
         this.page = page;
-        // Mengambil konfigurasi dari .env dengan nilai fallback default jika tidak diisi
-        this.repairWear = process.env.REPAIR_WEAR || '30';
-        this.hoursCheck = parseInt(process.env.HOURS_CHECK || '30', 10); // Default ke 30 jam jika .env kosong
+
+        const configuredRepairWear = parseInt(process.env.REPAIR_WEAR || '30', 10);
+        const configuredHoursCheck = parseInt(process.env.HOURS_CHECK || '20', 10);
+
+        this.repairWear =
+            Number.isFinite(configuredRepairWear) && configuredRepairWear > 0
+                ? String(configuredRepairWear)
+                : '30';
+        this.hoursCheck =
+            Number.isFinite(configuredHoursCheck) && configuredHoursCheck >= 0
+                ? configuredHoursCheck
+                : 20;
     }
 
     /**
