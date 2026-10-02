@@ -46,18 +46,34 @@ export function parseQuoteAutoprice(callback: string): QuoteAutopriceReference |
 }
 export type QuoteReadResult = { status: 'observed'; quote: CandidateQuote } | { status: 'unavailable'; reason: string };
 
-/** Reads an already-open, inspected quote. Does not navigate, click, fill or issue HTTP requests. */
+/** Reads an already-open suggestion quote and verifies the native Next-suggestion callback. */
 export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity): Promise<QuoteReadResult> {
+  return readOpenCandidateQuoteInternal(page,identity,true);
+}
+
+/**
+ * Reads a quote opened by a caller that already verified and issued the exact
+ * read-only new_route_info.php Ajax request. It deliberately skips only the
+ * #introSuggestm linkage check; registration plus two independent rendered
+ * direction sources still have to match the supplied identity.
+ */
+export async function readOpenCandidateQuoteAfterVerifiedAjax(page: Page, identity: QuoteIdentity): Promise<QuoteReadResult> {
+  return readOpenCandidateQuoteInternal(page,identity,false);
+}
+
+async function readOpenCandidateQuoteInternal(page: Page, identity: QuoteIdentity, requireSuggestionControl:boolean): Promise<QuoteReadResult> {
   try {
     if (!/^\d+$/.test(identity.aircraftId) || !/^\d+$/.test(identity.airportId) || !identity.registration ||
         !/^[A-Z0-9]{3}$/.test(identity.from) || !/^[A-Z0-9]{3}$/.test(identity.to) || identity.from === identity.to) throw new Error();
     const panel = page.locator('#newRouteInfo');
     if (await panel.count() !== 1 || !(await panel.isVisible())) throw new Error();
-    const next = page.locator('#introSuggestm');
-    if (await next.count() !== 1 || !(await next.isVisible())) throw new Error();
-    const callback = await next.getAttribute('onclick') || '';
-    const match = callback.match(/^playSound\('neutral_click'\);Ajax\('new_route_info\.php\?id=(\d+)&airportId=(\d+)&ferry=0','newRouteInfo',this,false,true\);\s*$/);
-    if (!match || match[1] !== identity.aircraftId || match[2] !== identity.airportId) throw new Error();
+    if(requireSuggestionControl){
+      const next = page.locator('#introSuggestm');
+      if (await next.count() !== 1 || !(await next.isVisible())) throw new Error();
+      const callback = await next.getAttribute('onclick') || '';
+      const match = callback.match(/^playSound\('neutral_click'\);Ajax\('new_route_info\.php\?id=(\d+)&airportId=(\d+)&ferry=0','newRouteInfo',this,false,true\);\s*$/);
+      if (!match || match[1] !== identity.aircraftId || match[2] !== identity.airportId) throw new Error();
+    }
     const raw = await panel.evaluate(el => {
       const one = (selector: string) => {
         const matches = Array.from(el.querySelectorAll(selector)).filter(e => e.getClientRects().length);
