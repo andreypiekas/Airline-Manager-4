@@ -101,6 +101,9 @@ test('reads automatic fare reference without clicking Auto/Save or changing pric
     {id:'',label:'Auto',tag:'BUTTON',type:null,onclickShape:'ticketPriceSuggest(#,#,#,this,#);'},
     {id:'',label:'Save',tag:'BUTTON',type:null,onclickShape:'window.mutations++'}
   ]);
+  expect(result.aircraft[0].fares?.saveControl).toMatchObject({
+    endpointVerified:false,target:'unavailable',targetMatchesContext:false
+  });
   expect(await page.locator('#eTicket').inputValue()).toBe('9999');
   expect(await page.evaluate(() => (window as any).mutations)).toBe(0);
 });
