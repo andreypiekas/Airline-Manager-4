@@ -21,6 +21,9 @@ test('parses observed relative ages conservatively into minute buckets',()=>{
  expect(relativeAgeMinutes('4 hours ago')).toBe(240);
  expect(relativeAgeMinutes('1 day ago')).toBe(1440);
  expect(relativeAgeMinutes('23 minutes ago')).toBe(23);
+ expect(relativeAgeMinutes('28 mins ago')).toBe(28);
+ expect(relativeAgeMinutes('1 min ago')).toBe(1);
+ expect(relativeAgeMinutes('2 hrs ago')).toBe(120);
  expect(relativeAgeMinutes('unknown')).toBeNull();
 });
 
