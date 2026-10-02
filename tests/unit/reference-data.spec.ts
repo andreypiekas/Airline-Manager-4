@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { airportRunwayEvidence, AirportCatalog, calendarReference, FuelCalendar, shortlistRoutes, RouteCatalog } from '../../optimization/reference-data';
+import { aircraftReferenceByModel, AircraftCatalog, airportRunwayEvidence, AirportCatalog, calendarReference, FuelCalendar, shortlistRoutes, RouteCatalog } from '../../optimization/reference-data';
 import { AircraftSnapshot } from '../../demand/types';
 const a:AircraftSnapshot={aircraftId:'1',routeId:'2',registration:'TEST',routeLabel:'GRU-BSB',from:'GRU',to:'BSB',state:'ready',capacity:{Y:100,J:0,F:0},remaining:{Y:0,J:0,F:0},dailyTotal:{Y:1,J:1,F:1},observedAt:new Date().toISOString(),operational:{rangeKm:5000,minRunwayFt:5000,flightHours:1,cycles:1,homeBase:null,flightId:null}};
 const catalog:RouteCatalog={schemaVersion:1,source:'fixture',sha256:'test',routes:[{from:'GRU',to:'BSB',distanceKm:1000,referenceDemand:{Y:1000,J:0,F:0},sourceRow:2},{from:'GRU',to:'DTW',distanceKm:9000,referenceDemand:{Y:1000,J:0,F:0},sourceRow:3}]};
@@ -23,6 +23,18 @@ test('conflicting or missing runway reference fails closed',()=>{
  expect(airportRunwayEvidence('GRU','BSB',6000,airports)).toMatchObject({
   status:'unavailable',adequate:null,originObserved:false,destinationObserved:false
  });
+});
+test('community aircraft reference resolves only a unique primary variant',()=>{
+ const aircrafts:AircraftCatalog={schemaVersion:1,source:'fixture-aircrafts',upstreamCommit:'abc',license:'MIT',generatedAt:'2026-10-02',models:[
+  {modelId:383,variants:[
+   {modelId:383,shortname:'vip',manufacturer:'Bombardier',modelName:'Challenger 605-VIP',type:2,priority:0,engineId:0,engineName:'unspecified',speedKph:900,fuelLbsPerKm:4,co2KgPerPaxKm:.05,acquisitionCost:860590,capacityUnits:12,minRunwayFt:3780,aCheckPrice:12705,rangeKm:10701,checkIntervalHours:2000},
+   {modelId:383,shortname:'vip',manufacturer:'Bombardier',modelName:'Challenger 605-VIP',type:2,priority:1,engineId:166,engineName:'GE',speedKph:846,fuelLbsPerKm:3.68,co2KgPerPaxKm:.05,acquisitionCost:860590,capacityUnits:12,minRunwayFt:3780,aCheckPrice:12705,rangeKm:10701,checkIntervalHours:2000}
+  ]}
+ ]};
+ expect(aircraftReferenceByModel(383,aircrafts)).toMatchObject({status:'unique',reference:{modelId:383,priority:0,aCheckPrice:12705,acquisitionCost:860590}});
+ expect(aircraftReferenceByModel(999,aircrafts).status).toBe('unavailable');
+ const bad={...aircrafts,models:[{modelId:383,variants:[...aircrafts.models[0].variants.map(v=>({...v,priority:0}))]}]};
+ expect(aircraftReferenceByModel(383,bad as AircraftCatalog).status).toBe('ambiguous');
 });
 test('reverse source is disclosed and not silently treated as a live directional quote',()=>{
  const r=shortlistRoutes(a,'BSB',catalog);expect(r[0]).toMatchObject({from:'BSB',to:'GRU',sourceDirection:'GRU-BSB',remainingDemand:null});
