@@ -91,17 +91,36 @@ export class IndividualDepartureExecutor {
       entry.status='attempting';
       // A persistence failure throws BEFORE any click. A crash after this point must never be retried.
       await persist();
+      const code=(error:unknown)=>{
+        const message=error instanceof Error?error.message:'UNCLASSIFIED';
+        return /^[A-Z0-9_:-]{1,120}$/.test(message)?message:'UNCLASSIFIED';
+      };
       try {
         await this.port.depart(fresh);
+      } catch(error) {
+        entry.status='outcome_unknown';entry.reason='NO_RETRY_AFTER_CLICK_ATTEMPT:'+code(error);report.halted=true;
+        await persist();continue;
+      }
+      try {
         const after=await this.port.confirm(fresh);
-        const timing=after?.timing,age=timing?Date.now()-Date.parse(timing.observedAt):NaN;
-        if(!after||after.state!=='inflight'||after.issue||!sameContext(fresh,after)||!timing||!after.onboard||
-          timing.source!=='inspected-flight-countdown'||timing.aircraftId!==fresh.aircraftId||timing.routeId!==fresh.routeId||
-          !Number.isSafeInteger(timing.remainingSeconds)||timing.remainingSeconds<=0||!Number.isFinite(age)||age<0||age>this.demand.maxAgeSeconds*1000||
-          (['Y','J','F'] as const).some(k=>!Number.isSafeInteger(after.onboard![k])||after.onboard![k]<0||after.onboard![k]>after.capacity![k]))
-          throw new Error('UNCONFIRMED');
+        if(!after)throw new Error('CONFIRMATION_MISSING');
+        if(after.state!=='inflight')throw new Error('CONFIRM_STATE_NOT_INFLIGHT');
+        if(after.issue)throw new Error('CONFIRM_AIRCRAFT_ISSUE');
+        if(!sameContext(fresh,after))throw new Error('CONFIRM_CONTEXT_CHANGED');
+        const timing=after.timing;
+        if(!timing)throw new Error('CONFIRM_TIMING_MISSING');
+        if(!after.onboard)throw new Error('CONFIRM_ONBOARD_MISSING');
+        if(timing.source!=='inspected-flight-countdown')throw new Error('CONFIRM_TIMING_SOURCE_INVALID');
+        if(timing.aircraftId!==fresh.aircraftId||timing.routeId!==fresh.routeId)throw new Error('CONFIRM_TIMING_ID_MISMATCH');
+        if(!Number.isSafeInteger(timing.remainingSeconds)||timing.remainingSeconds<=0)throw new Error('CONFIRM_COUNTDOWN_INVALID');
+        const age=Date.now()-Date.parse(timing.observedAt);
+        if(!Number.isFinite(age)||age<0||age>this.demand.maxAgeSeconds*1000)throw new Error('CONFIRM_OBSERVATION_STALE');
+        if((['Y','J','F'] as const).some(k=>!Number.isSafeInteger(after.onboard![k])||after.onboard![k]<0||after.onboard![k]>after.capacity![k]))
+          throw new Error('CONFIRM_ONBOARD_INVALID');
         entry.status='departed';entry.actualOnboard=after.onboard;entry.reason='NATIVE_INFLIGHT_IDENTITY_COUNTDOWN_AND_ONBOARD_CONFIRMED';
-      } catch {entry.status='outcome_unknown';entry.reason='NO_RETRY_AFTER_CLICK_ATTEMPT';report.halted=true;}
+      } catch(error) {
+        entry.status='outcome_unknown';entry.reason='NO_RETRY_AFTER_CLICK_ATTEMPT:'+code(error);report.halted=true;
+      }
       await persist();
     }
     report.completedAt=new Date().toISOString();await persist();return report;
