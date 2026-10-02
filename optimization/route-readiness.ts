@@ -14,6 +14,7 @@ export interface CandidateComparisonReadinessInput {
   runwayEvidence?:null|{status:'reference_verified'|'insufficient_reference'|'unavailable';adequate:boolean|null;
     originObserved:boolean;destinationObserved:boolean;originRunwayFt:number|null;destinationRunwayFt:number|null;requiredRunwayFt:number};
   runwayCrossChecked?:boolean;
+  candidateLoadFactor?:null|{verified:boolean;expectedAggregate:number|null};
   routeMutationControl:null|{nativeClickReady:boolean;endpointVerified:boolean;targetVerified:boolean;
     aircraftIdMatchesContext:boolean;airportIdMatchesContext:boolean};
 }
@@ -53,10 +54,11 @@ export function assessCandidateComparisonReadiness(
     comparisonBlockers.push('RUNWAY_REFERENCE_INSUFFICIENT');
   else if(candidate.runwayCrossChecked!==true)
     comparisonBlockers.push('RUNWAY_REFERENCE_ONLY_NEEDS_LIVE_CORROBORATION');
-  comparisonBlockers.push(
-    'CURRENT_ROUTE_FULL_ECONOMICS_MISSING',
-    'EXPECTED_LOAD_FACTOR_EVIDENCE_MISSING'
-  );
+  if(!candidate.candidateLoadFactor?.verified||candidate.candidateLoadFactor.expectedAggregate===null||
+    !Number.isFinite(candidate.candidateLoadFactor.expectedAggregate)||candidate.candidateLoadFactor.expectedAggregate<=0||
+    candidate.candidateLoadFactor.expectedAggregate>1)
+    comparisonBlockers.push('EXPECTED_LOAD_FACTOR_EVIDENCE_MISSING');
+  comparisonBlockers.push('CURRENT_ROUTE_FULL_ECONOMICS_MISSING');
 
   const mutationBlockers:string[]=[];
   if(comparisonBlockers.length)mutationBlockers.push('COMPARISON_NOT_READY');
