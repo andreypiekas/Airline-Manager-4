@@ -3,7 +3,7 @@ import { integerText } from '../demand/parsing';
 
 export interface ModelCostReference {
   modelId:number;modelName:string;observedAt:string;aCheckPrice:number;checkIntervalHours:number;
-  catalogFields:Array<{label:string;value:string}>;
+  catalogFields?:Array<{label:string;value:string}>;
   source:'inspected-catalog';effectiveAircraftMaintenanceCost:null;
 }
 export interface MarketPriceReference {
