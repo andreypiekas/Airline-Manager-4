@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { CandidateQuote } from '../../optimization/quote-reader';
-import { RouteCatalog } from '../../optimization/reference-data';
+import { AirportCatalog, RouteCatalog } from '../../optimization/reference-data';
 import { buildCandidateRoundTripScreen } from '../../optimization/round-trip-screen';
 
 const now=new Date('2026-10-02T12:00:00Z');
@@ -56,6 +56,25 @@ test('catalogue alone is structural evidence and cannot create return demand',()
   expect(r.blockers).toContain('OUTBOUND_REMAINING_DEMAND_UNAVAILABLE');
 });
 
+test('cross-checked airport coordinates can replace a missing route spreadsheet distance only',()=>{
+  const q=quote();
+  q.from='AAA';q.to='BBB';q.airportId='99';q.distanceKm=111;
+  const airports:AirportCatalog={schemaVersion:2,source:'fixture-airports',license:'MIT',generatedAt:'2026-10-02',airports:[
+    {iata:'AAA',runwayFt:10000,lat:0,lng:0,sourceIds:[1]},
+    {iata:'BBB',runwayFt:9000,lat:0,lng:1,sourceIds:[99]}
+  ]};
+  const r=buildCandidateRoundTripScreen(
+    q,catalog([]),
+    {forwardAfterReservations:null,reverseAfterReservations:null,futureScheduleComplete:false},
+    now,300,airports
+  );
+  expect(r.status).toBe('structural_only');
+  expect(r.routeReference).toBeNull();
+  expect(r.distanceReference).toMatchObject({status:'cross_checked',distanceKm:111,destinationAirportIdMatches:true});
+  expect(r.returnLeg.routeDistanceReferenceKm).toBe(111);
+  expect(r.blockers).not.toContain('ROUTE_REFERENCE_UNAVAILABLE');
+  expect(r.blockers).toContain('RETURN_LIVE_QUOTE_REQUIRED');
+});
 test('ambiguous route references are rejected',()=>{
   const ref={distanceKm:7258,referenceDemand:{Y:494,J:662,F:130}};
   const r=buildCandidateRoundTripScreen(
