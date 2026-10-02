@@ -97,12 +97,12 @@ jobs:
       # Xvfb fornece uma tela virtual para o navegador
       run: sudo apt-get update && sudo apt-get install -y xvfb
 
-    - name: Restaurar registro de retornos (opcional)
+    - name: Restaurar registro persistente de retornos
       id: state_restore
-      if: vars.ENABLE_RETURN_JOURNAL == 'true' && vars.ENABLE_DEMAND_MANAGER != 'false'
+      if: (vars.ENABLE_RETURN_JOURNAL || 'true') == 'true' && vars.ENABLE_DEMAND_MANAGER != 'false'
       env:
         GITHUB_TOKEN: ${{ github.token }}
-        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE }}
+        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
       run: node .am4-tools/optimization/github-state.js restore
 
     # Secrets sao entregues diretamente ao processo, sem gravar senhas em .env.
@@ -119,13 +119,13 @@ jobs:
     - name: Executar bot Airline Manager 4
       id: bot
       env:
-        ENABLE_RETURN_JOURNAL: ${{ vars.ENABLE_RETURN_JOURNAL || 'false' }}
-        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE }}
+        ENABLE_RETURN_JOURNAL: ${{ vars.ENABLE_RETURN_JOURNAL || 'true' }}
+        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
         ENABLE_TICKET_PRICING: ${{ vars.ENABLE_TICKET_PRICING || 'true' }}
         ROUTE_REVIEW_TIMEZONE: ${{ vars.ROUTE_REVIEW_TIMEZONE }}
         AIRLINE_BASES_JSON: ${{ vars.AIRLINE_BASES_JSON }}
         AIRCRAFT_ORIGINS_JSON: ${{ vars.AIRCRAFT_ORIGINS_JSON || '[]' }}
-        ENABLE_ROUTE_RESEARCH: ${{ vars.ENABLE_ROUTE_RESEARCH || 'false' }}
+        ENABLE_ROUTE_RESEARCH: ${{ vars.ENABLE_ROUTE_RESEARCH || 'true' }}
         ROUTE_RESEARCH_MAX_AIRCRAFT: ${{ vars.ROUTE_RESEARCH_MAX_AIRCRAFT || '3' }}
         ROUTE_RESEARCH_MAX_SUGGESTIONS: ${{ vars.ROUTE_RESEARCH_MAX_SUGGESTIONS || '3' }}
         ROUTE_RESERVATION_NEXT_LEGS: ${{ vars.ROUTE_RESERVATION_NEXT_LEGS || '2' }}
@@ -168,11 +168,11 @@ jobs:
         mkdir -p test-results
         xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed 2>&1 | tee test-results/bot.log
       
-    - name: Persistir registro de retornos (opcional)
+    - name: Persistir registro de retornos
       if: success() && steps.state_restore.outcome == 'success' && steps.bot.outcome == 'success'
       env:
         GITHUB_TOKEN: ${{ github.token }}
-        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE }}
+        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
       run: node .am4-tools/optimization/github-state.js save
 
     - name: Resumo de demanda
