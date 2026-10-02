@@ -75,6 +75,16 @@ candidate-data.json/MD apresenta evidências, historico financeiro estruturado, 
 
 ENABLE_ROUTE_RESEARCH=false é o padrão. Quando habilitado, maxAircraft/maxSuggestions aceitam 1–10; a consulta limitada não garante a melhor rota ou revisão diária de toda a frota. O cron-job.org continua disparando workflow_dispatch; nenhum schedule ou configuração financeira foi alterado.
 
+## Evidencia de ciclo ida e volta — 02/10/2026
+
+A coleta de candidatas agora monta um envelope explicito de ciclo para cada rota pesquisada. O trecho de ida usa somente o orcamento live observado. O trecho de volta e criado apenas como estrutura `destino -> base`; tarifa, duracao, combustivel, CO2 e custos da volta permanecem nulos/bloqueados ate existir uma fonte live ou equivalente validada.
+
+O catalogo `data/reference/routes.json` pode corroborar a existencia da rota e a distancia, mesmo quando a linha estiver armazenada no sentido inverso. Essa referencia e identificada com fonte, linha e direcao original, mas sua demanda de referencia nao e tratada como demanda restante da volta. Quando a frota ja fornece uma observacao independente no sentido inverso, `reverseAfterReservations` e anexado ao ciclo; sem essa evidencia, a volta continua com `RETURN_REMAINING_DEMAND_UNAVAILABLE`.
+
+A triagem de teto de ocupacao agora tambem evita consultas de referencia por modelo para candidatas que matematicamente nao conseguem atingir `ROUTE_MIN_OCCUPANCY_PERCENT` nem usando toda a demanda diaria exibida. Isso reduz navegacao desnecessaria sem transformar a triagem em uma decisao de troca.
+
+O novo envelope continua com `comparisonReady=false` e `mutationAuthorized=false`. Os bloqueios de volta ficam expostos no `candidate-data.json`/Markdown para que cada lacuna seja fechada explicitamente antes de KEEP/HOLD/REROUTE.
+
 ## Triagem economica conservadora — 02/10/2026
 
 A pesquisa de candidatas agora produz uma triagem adicional antes da comparacao economica completa. A demanda diaria exibida no orcamento e usada somente como **teto**: nunca e convertida em demanda restante. Com a capacidade real da aeronave, o sistema calcula o maximo de passageiros que a candidata poderia atender em uma decolagem e o teto percentual de cobertura. Se nem esse teto atingir `ROUTE_MIN_OCCUPANCY_PERCENT`, a candidata pode ser descartada da pesquisa economica sem depender de suposicoes sobre reset ou reservas.
