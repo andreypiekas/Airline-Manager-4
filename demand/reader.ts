@@ -1,5 +1,6 @@
 import { readOperationalObservation } from '../optimization/observations';
 import { automaticFaresFromControl } from '../pricing/ticket-pricing';
+import { inspectPricingSaveControl } from '../pricing/control-evidence';
 import { expect, Page } from '@playwright/test';
 import { AircraftSnapshot, CollectionResult } from './types';
 import { CabinText, integerText, parseCapacity, parseDemand, parseOnboard } from './parsing';
@@ -165,19 +166,25 @@ export class DemandReader {
         current = { Y: integerText(await details.locator('#eTicket').inputValue()), J: integerText(await details.locator('#bTicket').inputValue()), F: integerText(await details.locator('#fTicket').inputValue()) };
       } catch { /* Unknown current fare does not invalidate the observed Auto reference. */ }
 
-      // Passive discovery only: record visible pricing-related controls without clicking
-      // or storing raw callback arguments. Numeric arguments are redacted from the shape.
-      const controls = await details.locator('button,input[type="button"],input[type="submit"]').evaluateAll(elements =>
+      // Passive discovery only. Raw callbacks stay in memory long enough to validate
+      // the native Save target, then only redacted evidence is persisted.
+      const rawControls = await details.locator('button,input[type="button"],input[type="submit"]').evaluateAll(elements =>
         elements.filter(e => !!e.getClientRects().length).flatMap(e => {
           const id = e.id || '';
           const label = ((e as HTMLElement).innerText || (e as HTMLInputElement).value || '').replace(/\s+/g,' ').trim();
           if (!/(?:auto|price|ticket|fare|save|update|set)/i.test(`${id} ${label}`)) return [];
-          const raw = e.getAttribute('onclick');
-          const onclickShape = raw ? raw.replace(/\d+/g,'#').replace(/\s+/g,' ').trim().slice(0,300) : null;
-          return [{ id:id.slice(0,100), label:label.slice(0,100), tag:e.tagName, type:e.getAttribute('type'), onclickShape }];
+          return [{ id:id.slice(0,100), label:label.slice(0,100), tag:e.tagName, type:e.getAttribute('type'), raw:e.getAttribute('onclick') }];
         })
       );
-      item.fares = { automatic, current, controls, source: 'inspected-auto-control' };
+      const controls = rawControls.map(({raw,...control}) => ({
+        ...control,
+        onclickShape: raw ? raw.replace(/\d+/g,'#').replace(/\s+/g,' ').trim().slice(0,300) : null
+      }));
+      const saves = rawControls.filter(control => /^save$/i.test(control.label));
+      const saveControl = saves.length === 1
+        ? inspectPricingSaveControl(saves[0].raw, item.aircraftId, item.routeId)
+        : inspectPricingSaveControl(null, item.aircraftId, item.routeId);
+      item.fares = { automatic, current, controls, saveControl, source: 'inspected-auto-control' };
     } catch {
       item.fares = { automatic: null, current: null, source: 'unavailable', issue: 'Referencia Auto nao confirmada.' };
     }
