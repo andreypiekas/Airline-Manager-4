@@ -21,6 +21,7 @@ import { candidatePriorityReference, rankCandidatePriorities } from './candidate
 import { summarizeComparisonReadiness } from './route-readiness';
 import { calibrateCo2FromFlightHistory } from './co2-calibration';
 import { calibrateDemandLabelOnCurrentRoutes } from './demand-label-calibration';
+import { calibrateDemandResetWindows } from './demand-reset-ledger';
 import { crossCheckCommunityAircraftReference } from './model-reference-crosscheck';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
@@ -186,6 +187,9 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     status:'unavailable',observedAt:new Date().toISOString(),samples:[],classification:'mixed_or_unknown',
     comparisonReady:false,mutationAuthorized:false,uiRestored:true,warnings:[]
   };
+  let demandResetCalibration:ReturnType<typeof calibrateDemandResetWindows>={
+    status:'unavailable',windows:[],warnings:[],comparisonReady:false,mutationAuthorized:false
+  };
   let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true,stage:'not_requested',warnings:[],unitLabels:[]};
   let maintenance:Awaited<ReturnType<typeof readAircraftMaintenanceReferences>>={status:'not_requested',stage:'not_requested',observedAt:new Date().toISOString(),complete:false,uiClosed:true,aircraft:[],warnings:[]};
   let financeHistory=emptyFinanceHistory();
@@ -194,6 +198,8 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     demandLabelCalibration=await calibrateDemandLabelOnCurrentRoutes(page,collection,airportCatalog,research.config.timeout,3);
     if(!demandLabelCalibration.uiRestored){uiRestored=false;warnings.push('DEMAND_LABEL_CALIBRATION_LIST_RESTORE_FAILED');}
     warnings.push(...demandLabelCalibration.warnings);
+    demandResetCalibration=calibrateDemandResetWindows(collection,demandLabelCalibration);
+    warnings.push(...demandResetCalibration.warnings);
     const ids=[...new Set(economicQuotes.flatMap(q=>q.autopriceReference?[q.autopriceReference.modelId]:[]))];
     if(ids.length>10)warnings.push('MODEL_REFERENCE_LIMIT');
     for(const id of ids.slice(0,10)){
@@ -245,9 +251,9 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   const now=new Date();
   const fresh=(stamp:string)=>freshAt(stamp,now);
   const candidates=quotes.map(quote=>{
-    const demand=candidateDemandEvidence(quote,collection,now,reservationsConfig.maxAgeSeconds);
+    const demand=candidateDemandEvidence(quote,collection,now,reservationsConfig.maxAgeSeconds,demandResetCalibration);
     const model=models.find(m=>m.modelId===quote.autopriceReference?.modelId)||null;
-    const reservations=candidateReservationScenario(quote,collection,now,reservationsConfig);
+    const reservations=candidateReservationScenario(quote,collection,now,reservationsConfig,demandResetCalibration);
     const aircraft=collection.aircraft.find(a=>a.aircraftId===quote.aircraftId);
     const capacity=capacityFor(quote,now);
     const screening=screeningByQuote.get(quote)!;
@@ -275,8 +281,8 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   });
   const priorityRanking=rankCandidatePriorities(candidates);
   const routeReadiness=summarizeComparisonReadiness(candidates);
-  return {schemaVersion:9,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
-    uiRestored,screenedOutBeforeModelReference,demandLabelCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
+  return {schemaVersion:10,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
+    uiRestored,screenedOutBeforeModelReference,demandLabelCalibration,demandResetCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
     warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
@@ -288,6 +294,10 @@ export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof 
     `- Status: ${report.demandLabelCalibration.status}; classificacao: ${report.demandLabelCalibration.classification}; amostras: ${report.demandLabelCalibration.samples.length}.`,
     ...report.demandLabelCalibration.samples.map(s=>`- ${s.aircraftId} ${s.from}–${s.to}: quote ${JSON.stringify(s.quoteDemand)}; remaining ${JSON.stringify(s.remaining)}; dailyTotal ${JSON.stringify(s.dailyTotal)}; match remaining ${s.matchesRemaining}; match daily ${s.matchesDailyTotal}.`),
     'O rotulo somente pode ser promovido a demanda restante se varias observacoes atuais e independentes o confirmarem; igualdade remaining=dailyTotal fica inconclusiva.','',
+    '## Ledger historico do reset de demanda','',
+    `- Status: ${report.demandResetCalibration.status}; janelas verificadas: ${report.demandResetCalibration.windows.length}.`,
+    ...report.demandResetCalibration.windows.map(w=>`- ${w.pairKey}: consumo confirmado ${JSON.stringify(w.consumed)}; bucket incluido ate ${w.includedMaxAgeMinutes} min; proximo bucket excluido em ${w.excludedMinAgeMinutes} min.`),
+    'A reconstrucao candidata so e usada quando todo o historico da frota cobre a janela calibrada e nenhum voo do par cai na faixa ambigua do reset.','',
     ...(report.priorityRanking.length?[
       '## Ranking de referencia entre candidatas observadas','',
       ...report.priorityRanking.map(r=>`- #${r.rank} ${r.from}–${r.to}: teto de contribuicao conhecida/h ${r.recurringKnownContributionCeilingPerHour.toFixed(2)}; teto do primeiro ciclo apos taxa ${r.firstCycleKnownContributionCeiling.toFixed(2)}.`),
