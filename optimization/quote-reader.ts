@@ -3,6 +3,7 @@ import { Cabins } from '../demand/types';
 import { integerText } from '../demand/parsing';
 import { inspectRouteCreateControl, RouteCreateControlEvidence } from './route-create-control';
 import { readRouteListenerDiagnostics, RouteListenerDiagnostic } from './route-listener-diagnostics';
+import { readRouteMutationControl, RouteMutationControlEvidence } from './route-mutation-control';
 
 export interface QuoteIdentity { aircraftId: string; registration: string; airportId: string; from: string; to: string }
 export interface CandidateQuote extends QuoteIdentity {
@@ -22,6 +23,7 @@ export interface CandidateQuote extends QuoteIdentity {
     callbackShape:string|null;hrefShape:string|null;phpEndpoints:string[];attributeNames:string[];
   }>;
   routeListenerDiagnostics?: RouteListenerDiagnostic[];
+  routeMutationControl?: RouteMutationControlEvidence;
   remainingDemand: null;
   netProfit: null;
   comparisonReady: false;
@@ -146,9 +148,10 @@ export async function readOpenCandidateQuote(page: Page, identity: QuoteIdentity
       }).slice(0,20);
     });
     const routeListenerDiagnostics=await readRouteListenerDiagnostics(page);
+    const routeMutationControl=await readRouteMutationControl(page,identity);
     const quote: CandidateQuote = { ...identity, observedAt: new Date().toISOString(), distanceKm: integerText(raw.distance), durationSeconds,
       fuelLbs: integerText(raw.fuel), co2KgPerPaxKm: Number(raw.co2), costIndex: integerText(raw.costIndex), routeFee: integerText(raw.fee.replace(/^\$\s*/, '')),
-      aircraftOnRoute: integerText(raw.aircraft), autopriceReference, createControl, routeActionDiagnostics, routeListenerDiagnostics, dailyDemand: { Y: integerText(raw.daily[0]), J: integerText(raw.daily[1]), F: integerText(raw.daily[2]) },
+      aircraftOnRoute: integerText(raw.aircraft), autopriceReference, createControl, routeActionDiagnostics, routeListenerDiagnostics, routeMutationControl, dailyDemand: { Y: integerText(raw.daily[0]), J: integerText(raw.daily[1]), F: integerText(raw.daily[2]) },
       remainingDemand: null, netProfit: null, comparisonReady: false, mutationAuthorized: false };
     if (quote.distanceKm <= 0 || durationSeconds <= 0 || quote.fuelLbs <= 0 || !Number.isFinite(quote.co2KgPerPaxKm) || quote.costIndex > 200) throw new Error();
     return { status: 'observed', quote };
