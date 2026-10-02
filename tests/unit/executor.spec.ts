@@ -22,6 +22,15 @@ test('persist intent before exactly one native click and confirm onboard separat
  await expect(s.executor.run()).rejects.toThrow('EXECUTION_ALREADY_USED');expect(s.clicks()).toBe(1);
 });
 test('simulation uses same checks and never calls depart',async()=>{const s=setup({dryRun:true});expect((await s.executor.run()).summary.simulated).toBe(1);expect(s.clicks()).toBe(0);});
+test('aircraft at its own base departs on the existing route when demand is sufficient',async()=>{
+ const atBase=snapshot({from:'GRU',to:'AAA',routeLabel:'GRU - AAA'});
+ const s=setup({initial:collection([atBase]),fresh:collection([atBase]),prepared:atBase});
+ const r=await s.executor.run();
+ expect(s.clicks()).toBe(1);
+ expect(r.summary).toMatchObject({departed:1,held:0});
+ expect(r.entries[0].from).toBe('GRU');
+ expect(r.entries[0].to).toBe('AAA');
+});
 for(const [name,options] of Object.entries({
  'zero demand':{prepared:snapshot({remaining:{Y:0,J:0,F:0}})},
  'partial demand':{prepared:snapshot({remaining:{Y:79,J:0,F:0}})},
@@ -29,7 +38,6 @@ for(const [name,options] of Object.entries({
  'invalid demand':{prepared:snapshot({remaining:{Y:2000,J:0,F:0}})},
  'layout changed':{prepared:snapshot({capacity:{Y:101,J:0,F:0}})},
  'identity changed':{prepared:snapshot({aircraftId:'2'})},
- 'landed at own base':{initial:collection([snapshot({from:'GRU',to:'AAA'})]),fresh:collection([snapshot({from:'GRU',to:'AAA'})])},
  'unknown origin':{initial:collection([snapshot({to:'BBB'})]),fresh:collection([snapshot({to:'BBB'})])},
  'incomplete initial collection':{initial:collection([snapshot()],false)},
  'incomplete fresh collection':{fresh:collection([snapshot()],false)},
