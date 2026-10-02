@@ -3,6 +3,7 @@ import { integerText } from '../demand/parsing';
 
 export interface ModelCostReference {
   modelId:number;modelName:string;observedAt:string;aCheckPrice:number;checkIntervalHours:number;
+  catalogFields:Array<{label:string;value:string}>;
   source:'inspected-catalog';effectiveAircraftMaintenanceCost:null;
 }
 export interface MarketPriceReference {
@@ -57,9 +58,14 @@ export async function readModelCostReferenceResult(page:Page,modelId:number,time
     };
     const price=(await value('A-Check')).match(/^\$\s*([\d,]+)$/),hours=(await value('Maint check')).match(/^([\d,]+) Hours$/);
     if(!price||!hours)throw new Error();
+    const catalogFields=await page.locator('#acModel table tr').evaluateAll(rows=>rows.flatMap(row=>{
+      const cells=Array.from(row.querySelectorAll('td')).filter(e=>e.getClientRects().length).map(e=>(e.textContent||'').replace(/\s+/g,' ').trim());
+      if(cells.length!==2||!cells[0]||!cells[1])return [];
+      return [{label:cells[0].slice(0,80),value:cells[1].slice(0,120)}];
+    }).slice(0,40));
     const aCheckPrice=integerText(price[1]),checkIntervalHours=integerText(hours[1]);
     if(aCheckPrice<=0||checkIntervalHours<=0)throw new Error();
-    return {modelId,status:'observed',reference:{modelId,modelName:selected.name,observedAt:new Date().toISOString(),aCheckPrice,checkIntervalHours,source:'inspected-catalog',effectiveAircraftMaintenanceCost:null}};
+    return {modelId,status:'observed',reference:{modelId,modelName:selected.name,observedAt:new Date().toISOString(),aCheckPrice,checkIntervalHours,catalogFields,source:'inspected-catalog',effectiveAircraftMaintenanceCost:null}};
   }catch{return {modelId,status:'unavailable',reference:null};}
 }
 export async function readModelCostReference(page:Page,modelId:number,timeout=10000):Promise<ModelCostReference|null>{
