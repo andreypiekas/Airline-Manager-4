@@ -164,13 +164,28 @@ export async function researchFleetCandidates(page: Page, collection: Collection
       break;
     }
   }
-).test(await reroute.getAttribute('onclick')||''))
+  if(config.enabled&&optimization.routesEnabled&&report.uiRestored&&attempted===0){
+    const probeEntry=aircraft.find(a=>a.status==='pending_base_return');
+    const expected=probeEntry?collection.aircraft.find(a=>a.aircraftId===probeEntry.aircraftId):null;
+    if(probeEntry&&expected){
+      try{
+        await openList(page,config.timeout);
+        await findRoute(page,expected,config.timeout);
+        const fresh=await new DemandReader(page,config.timeout).readReadyAircraftDetails(expected);
+        if(fresh.state!=='ready'||fresh.issue||fresh.aircraftId!==expected.aircraftId||fresh.registration!==expected.registration||
+          fresh.routeId!==expected.routeId||fresh.from!==expected.from||!fresh.operational||!expected.operational||
+          fresh.operational.rangeKm!==expected.operational.rangeKm||fresh.operational.minRunwayFt!==expected.operational.minRunwayFt)
+          throw new Error('DIAGNOSTIC_CONTEXT_CHANGED');
+        const reroute=page.locator('#detailsAction').getByRole('button',{name:/Reroute$/});
+        const callback=await reroute.getAttribute('onclick')||'';
+        const match=callback.match(/^showFlightInfo\(this,(\d+),(\d+),false,true\);closePop\(\);$/);
+        if(await reroute.count()!==1||!await reroute.isVisible()||!await reroute.isEnabled()||!match||match[1]!==fresh.aircraftId)
           throw new Error('DIAGNOSTIC_PLANNER_CONTROL_UNVERIFIED');
         await reroute.click({timeout:config.timeout});
         await page.locator('#flightInfoContainer #introSuggest').waitFor({state:'visible',timeout:config.timeout});
         report.diagnosticProbe=await probeOpenRouteControl(page,fresh,fresh.from,config.timeout);
       }catch{
-        report.warnings.push(`DIAGNOSTIC_ROUTE_CONTROL_UNAVAILABLE:${probeEntry.aircraftId}`);
+        report.warnings.push('DIAGNOSTIC_ROUTE_CONTROL_UNAVAILABLE:'+probeEntry.aircraftId);
       }finally{
         try{await openList(page,config.timeout);}
         catch{report.uiRestored=false;report.warnings.push('DIAGNOSTIC_LIST_RESTORE_FAILED');}
