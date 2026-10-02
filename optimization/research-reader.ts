@@ -60,7 +60,7 @@ export async function researchFleetCandidates(page: Page, collection: Collection
         !new RegExp(`^showFlightInfo\\(this,${fresh.aircraftId},\\d+,false,true\\);closePop\\(\\);$`).test(await reroute.getAttribute('onclick') || '')) throw new Error('RESEARCH_PLANNER_CONTROL_UNVERIFIED');
       await reroute.click({timeout:config.timeout});
       await page.locator('#flightInfoContainer #introSuggest').waitFor({state:'visible',timeout:config.timeout});
-      entry.result = await collectOpenRouteSuggestions(page,fresh,entry.origin,config.maxSuggestions,config.timeout);
+      entry.result = await collectOpenRouteSuggestions(page,fresh,entry.origin,config.maxSuggestions,config.timeout,optimization.minOccupancy);
       entry.status = entry.result.status;
     } catch {entry.status='unavailable';report.warnings.push(`RESEARCH_UNAVAILABLE:${entry.aircraftId}`);}
     finally {
@@ -78,7 +78,7 @@ export async function researchFleetCandidates(page: Page, collection: Collection
 export async function writeRouteResearchReport(report: Awaited<ReturnType<typeof researchFleetCandidates>>, directory='test-results/demand') {
   await mkdir(directory,{recursive:true});
   await writeFile(join(directory,'route-research.json'),JSON.stringify(report,null,2)+'\n');
-  const rows = report.aircraft.map(a => `- ${a.aircraftId}: ${a.status}; origem ${a.origin ?? 'indisponivel'}; orcamentos ${a.result?.quotes.length ?? 0}.`);
+  const rows = report.aircraft.map(a => `- ${a.aircraftId}: ${a.status}; origem ${a.origin ?? 'indisponivel'}; orcamentos mantidos ${a.result?.quotes.length ?? 0}; sugestoes examinadas ${a.result?.scanned ?? 0}; descartadas por teto de ocupacao ${a.result?.screenedOut.length ?? 0}.`);
   await writeFile(join(directory,'route-research.md'),['# Consulta de rotas — somente leitura','',...rows,'',
     'Sugestoes limitadas nao demonstram a melhor rota. Demanda restante, custos completos e tarifas efetivas ainda precisam ser confirmados.',
     ...report.warnings.map(w => '- '+w),''].join('\n'));
