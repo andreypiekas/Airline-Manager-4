@@ -18,6 +18,31 @@ test('reference calculation uses physical passengers and catalog hourly check ra
   aCheck:{catalogProration:400,checkBeforeProposedLeg:true,effectiveAircraftCost:null,includesWearRepair:false},
   partialSubtotalAtDemandCeiling:6500,totalOperatingCost:null,setupFee:2000,comparisonReady:false});
 });
+test('verified game mode uses upstream ceil and multiplier for A-check reference',()=>{
+ const ref=references();
+ ref.gameModeEvidence={
+  status:'verified',mode:'realism',variantPriority:0,engineId:1,speedMultiplier:1,aCheckCostMultiplier:2,
+  fuelTraining:null,observedSpeedKph:500,expectedSpeedKph:500,fareBaseMatches:true,speedMatches:true,fuelMatches:false,
+  source:'live-quote-crosschecked-community-formula',reason:'FARE_AND_SPEED_CROSSCHECKED',
+  comparisonReady:false,mutationAuthorized:false
+ };
+ const r=candidateCostScenarios(quote,capacity,remaining,ref,now);
+ expect(r.aCheck).toMatchObject({catalogProration:800,modeVerified:true});
+ expect(r.aCheck.formulaSource).toContain('metrics::acheck_cost');
+ expect(r.comparisonReady).toBe(false);
+});
+test('unverified mode keeps A-check reference conservative and non-actionable',()=>{
+ const ref=references();
+ ref.gameModeEvidence={
+  status:'unavailable',mode:null,variantPriority:null,engineId:null,speedMultiplier:null,aCheckCostMultiplier:null,
+  fuelTraining:null,observedSpeedKph:null,expectedSpeedKph:null,fareBaseMatches:false,speedMatches:false,fuelMatches:false,
+  source:'live-quote-crosschecked-community-formula',reason:'EVIDENCE_INCOMPLETE',
+  comparisonReady:false,mutationAuthorized:false
+ };
+ const r=candidateCostScenarios(quote,capacity,remaining,ref,now);
+ expect(r.aCheck).toMatchObject({catalogProration:400,modeVerified:false});
+ expect(r.mutationAuthorized).toBe(false);
+});
 test('verified live-history CO2 calibration replaces the one-quota-per-kg sensitivity assumption',()=>{
  const ref=references();
  ref.co2Calibration={
