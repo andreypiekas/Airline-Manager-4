@@ -23,22 +23,99 @@ test('All Operations', async ({ page }) => {
   const demandConfig = readDemandConfig();
   if (demandConfig.enabled) {
     executionEnvironment(demandConfig);
-    supplyConfig(); // Validate purchase policy before login.
-    optimizationConfig(); // Reject invalid optimization settings before login.
+    supplyConfig(); // Valida a politica de compras antes do login.
+    optimizationConfig(); // Rejeita configuracoes invalidas antes do login.
     researchConfig();
     test.setTimeout(demandConfig.dryRun ? 600000 : 900000);
-    await loginForReadOnlyCollection(page,process.env,90000);
-    await runSupplies(page,demandConfig.dryRun);
-    const fleetMenu=page.locator('#mapRoutes');
-    if(await fleetMenu.count()!==1||!await fleetMenu.isVisible()||
-      (await fleetMenu.getAttribute('onclick')||'').replace(/\s/g,'')!=="hideAllWhenClick();menuFleet('Routes');")
+
+    const moduleEnabled = (name: string, defaultValue = true) => {
+      const raw = (process.env[name] || '').trim().toLowerCase();
+      if (!raw) return defaultValue;
+      return !['false', '0', 'off', 'no'].includes(raw);
+    };
+
+    const closeOpenPanel = async () => {
+      const x = Math.floor(Math.random() * 401) + 200;
+      const y = Math.floor(Math.random() * 16) + 15;
+      await GeneralUtils.humanMouseMove(page, x, y);
+      await GeneralUtils.randomSleep(120, 300);
+      await page.mouse.down();
+      await GeneralUtils.randomSleep(70, 160);
+      await page.mouse.up();
+      await GeneralUtils.randomSleep(700, 1200);
+    };
+
+    const runDemandMaintenance = async () => {
+      if (!moduleEnabled('ENABLE_MAINTENANCE')) {
+        console.log('[Configuracao] Manutencao automatica desativada.');
+        return;
+      }
+      if (demandConfig.dryRun) {
+        console.log('[Demand] Simulacao ativa: manutencao nao sera executada.');
+        return;
+      }
+
+      console.log('[Operacao] Iniciando manutencao preventiva, A-checks e reparos...');
+      const maintenanceUtils = new MaintenanceUtils(page);
+      const maintenanceMenu = page.locator('div:nth-child(4) > #mapMaint > img');
+
+      await closeOpenPanel();
+      await GeneralUtils.moveAndClick(page, maintenanceMenu, 20000);
+      await page.getByRole('button', { name: ' Plan' })
+        .waitFor({ state: 'visible', timeout: 15000 });
+
+      await maintenanceUtils.checkPlanes();
+      await GeneralUtils.randomSleep(1500, 3000);
+      await maintenanceUtils.repairPlanes();
+      await GeneralUtils.randomSleep(1500, 3000);
+      await closeOpenPanel();
+      console.log('[Operacao] Manutencao automatica finalizada.');
+    };
+
+    const runDemandCampaign = async () => {
+      if (!moduleEnabled('ENABLE_CAMPAIGN')) {
+        console.log('[Configuracao] Campanhas automaticas desativadas.');
+        return;
+      }
+      if (demandConfig.dryRun) {
+        console.log('[Demand] Simulacao ativa: campanhas nao serao contratadas.');
+        return;
+      }
+
+      console.log('[Operacao] Verificando e contratando campanhas...');
+      const campaignUtils = new CampaignUtils(page);
+      const campaignMenu = page.locator('div:nth-child(5) > #mapMaint > img');
+
+      await closeOpenPanel();
+      await GeneralUtils.moveAndClick(page, campaignMenu, 20000);
+      await page.getByRole('button', { name: ' Marketing' })
+        .waitFor({ state: 'visible', timeout: 15000 });
+
+      await campaignUtils.createCampaign();
+      await GeneralUtils.randomSleep(1500, 3000);
+      await closeOpenPanel();
+      console.log('[Operacao] Campanhas automaticas finalizadas.');
+    };
+
+    await loginForReadOnlyCollection(page, process.env, 90000);
+
+    // Mantem o modulo novo de abastecimento e reincorpora as funcoes da fork original.
+    await runSupplies(page, demandConfig.dryRun);
+    await test.step('Manutencao e reparos', runDemandMaintenance);
+    await test.step('Campanhas de marketing', runDemandCampaign);
+
+    const fleetMenu = page.locator('#mapRoutes');
+    if (await fleetMenu.count() !== 1 || !await fleetMenu.isVisible() ||
+      (await fleetMenu.getAttribute('onclick') || '').replace(/\s/g, '') !== "hideAllWhenClick();menuFleet('Routes');") {
       throw new Error('[Demand] Menu Fleet nao confirmado; nenhuma operacao autorizada.');
+    }
+
     await fleetMenu.click();
     await runDemandSimulation(page, demandConfig);
-    if (!demandConfig.dryRun && (process.env.ENABLE_DEPART || 'true').trim().toLowerCase() === 'true') {
-      await runDemandExecution(page,demandConfig);
+    if (!demandConfig.dryRun && moduleEnabled('ENABLE_DEPART')) {
+      await runDemandExecution(page, demandConfig);
     }
-    return; // Supplies use the bounded module above; legacy maintenance/campaign/bulk operations remain bypassed.
+    return;
   }
   // Timeout 3 menit karena simulasi gerakan kursor dan delay manusia butuh waktu lebih lama
   test.setTimeout(600000);
