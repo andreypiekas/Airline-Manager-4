@@ -25,12 +25,12 @@ test('unknown target remains verified endpoint but cannot authorize a mutation',
   });
 });
 
-for(const raw of [
+[
   "window.mutations++",
   "playSound('neutral_click');Ajax('set_ticket_prices.php?e=1&b=2&f=3&id=33272938','runme',this);",
   "playSound('neutral_click');Ajax('other.php?e='+$('#eTicket').val()+'&b='+$('#bTicket').val()+'&f='+$('#fTicket').val()+'&id=33272938','runme',this);"
-]) test('rejects non-native Save callback',()=>{
+].forEach((raw,index)=>test(`rejects non-native Save callback ${index}`,()=>{
   expect(inspectPricingSaveControl(raw,'22316469','33272938')).toMatchObject({
     endpointVerified:false,target:'unavailable',targetMatchesContext:false
   });
-});
+}));
