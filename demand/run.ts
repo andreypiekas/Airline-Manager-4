@@ -23,7 +23,7 @@ export async function runDemandSimulation(page: Page, config: DemandConfig = rea
   await writeOptimizationReport(await analyzeOptimizationWithJournal(collection, optimization, reviews));
   const researchReport=await researchFleetCandidates(page, collection, optimization, research);
   await writeRouteResearchReport(researchReport);
-  const candidateData=await collectCandidateData(page,collection,researchReport);
+  const candidateData=await collectCandidateData(page,collection,researchReport,optimization.minOccupancy);
   await writeCandidateDataReport(candidateData);
   if(!candidateData.uiRestored)throw new Error('[Demand] Painel nao restaurado apos consulta; nenhuma operacao autorizada.');
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');
