@@ -184,6 +184,9 @@ jobs:
         if [ -f test-results/demand/route-research.md ]; then
           cat test-results/demand/route-research.md >> "$GITHUB_STEP_SUMMARY"
         fi
+        if [ -f test-results/demand/candidate-data.md ]; then
+          cat test-results/demand/candidate-data.md >> "$GITHUB_STEP_SUMMARY"
+        fi
         if [ -f test-results/demand/optimization-report.md ]; then
           cat test-results/demand/optimization-report.md >> "$GITHUB_STEP_SUMMARY"
         fi
