@@ -28,7 +28,11 @@ export class SupplyPort {
   await this.page.locator('#fuelMain').getByText('Current price',{exact:true}).waitFor({timeout:this.timeout});
   if(kind==='co2'){
    const tab=this.page.locator('#popBtn2');
-   if(await tab.count()!==1||normalize(await tab.getAttribute('onclick')||'')!=="$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('co2.php','fuelMain',this,false,false);")throw Error('SUPPLY_TAB_UNVERIFIED');
+   const expected="$('.popMenuBtn').removeClass('active');$(this).addClass('active');$('#detailsAction').hide();Ajax('co2.php','fuelMain',this,false,false);";
+   await expect.poll(async()=>{
+    if(await tab.count()!==1||!await tab.isVisible())return false;
+    return normalize(await tab.getAttribute('onclick')||'')===normalize(expected);
+   },{timeout:this.timeout}).toBe(true);
    await tab.click({timeout:this.timeout});
    await this.page.locator('#fuelMain').getByText('Quota cost',{exact:true}).waitFor({timeout:this.timeout});
   }
