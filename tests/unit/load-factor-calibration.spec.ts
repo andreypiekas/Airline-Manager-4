@@ -1,5 +1,5 @@
 import { test,expect } from '@playwright/test';
-import { calibrateCurrentFareLoadFactor } from '../../optimization/load-factor-calibration';
+import { calibrateCurrentFareLoadFactor, transferCurrentFareLoadFactor } from '../../optimization/load-factor-calibration';
 import type { AircraftSnapshot } from '../../demand/types';
 import type { CandidateQuote } from '../../optimization/quote-reader';
 import type { GameModeEvidence } from '../../optimization/game-mode-evidence';
@@ -65,4 +65,18 @@ test('unverified direct route or weak demand headroom fails closed',()=>{
  expect(calibrateCurrentFareLoadFactor(aircraft,quote,badMode,distance)).toMatchObject({status:'inconsistent',reason:'CURRENT_ROUTE_DIRECT_MODEL_NOT_VERIFIED'});
  const a=structuredClone(aircraft);a.dailyTotal={Y:100,J:10,F:10};
  expect(calibrateCurrentFareLoadFactor(a,quote,mode,distance)).toMatchObject({status:'insufficient',reason:'CURRENT_ROUTE_DEMAND_HEADROOM_TOO_LOW'});
+});
+
+
+test('verified empirical load transfers only to direct candidate priced above Auto',()=>{
+ const calibration=calibrateCurrentFareLoadFactor(aircraft,quote,mode,distance);
+ const candidate={...quote,to:'TTG',airportId:'200',autopriceReference:{...quote.autopriceReference!,base:{Y:900,J:1900,F:3200},effectiveFares:{Y:900,J:1900,F:3200}}};
+ const ok=transferCurrentFareLoadFactor(calibration,candidate,aircraft.capacity,{Y:990,J:2050,F:3390},true);
+ expect(ok.verified).toBe(true);
+ expect(ok.expectedByCabin).toEqual({Y:calibration.expectedLoadFactor,J:calibration.expectedLoadFactor,F:calibration.expectedLoadFactor});
+ expect(ok.mutationAuthorized).toBe(false);
+ const stopover=transferCurrentFareLoadFactor(calibration,candidate,aircraft.capacity,{Y:990,J:2050,F:3390},false);
+ expect(stopover.verified).toBe(false);
+ const autoOrBelow=transferCurrentFareLoadFactor(calibration,candidate,aircraft.capacity,{Y:900,J:2050,F:3390},true);
+ expect(autoOrBelow).toMatchObject({verified:false,reason:'CANDIDATE_FARE_NOT_STRICTLY_ABOVE_AUTO'});
 });
