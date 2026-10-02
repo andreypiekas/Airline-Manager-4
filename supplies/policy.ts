@@ -21,9 +21,14 @@ export function supplyConfig(env:NodeJS.ProcessEnv=process.env):SupplyConfig {
 export function planPurchase(s:SupplySnapshot,kind:Commodity,c:SupplyConfig):PurchasePlan {
   const hold=(reason:string):PurchasePlan=>({quantity:0,estimatedCost:0,budget:0,reason});
   if(!c.enabled)return hold('DISABLED');
-  if(Object.values(s).some(n=>!Number.isSafeInteger(n)||n<0)||s.pricePer1000===0||
-    !Number.isSafeInteger(s.holding+s.remainingCapacity))return hold('INVALID_DATA');
+  if(!Number.isSafeInteger(s.pricePer1000)||s.pricePer1000<=0||
+    !Number.isSafeInteger(s.remainingCapacity)||s.remainingCapacity<0||
+    !Number.isSafeInteger(s.balance)||s.balance<0||
+    !Number.isSafeInteger(s.holding)||
+    (kind==='fuel'&&s.holding<0)||
+    !Number.isSafeInteger(Math.max(0,s.holding)+s.remainingCapacity))return hold('INVALID_DATA');
   if(s.pricePer1000>=c.maxPrice[kind])return hold('PRICE_NOT_BELOW_LIMIT');
+  if(kind==='co2'&&s.holding<0)return hold('CO2_DEFICIT_PURCHASE_POLICY_UNVERIFIED');
   if(s.remainingCapacity===0)return hold('STORAGE_FULL');
   const available=Math.max(0,s.balance-c.minCashReserve);
   const target=Math.min(s.remainingCapacity,c.maxQuantity[kind]||s.remainingCapacity);
