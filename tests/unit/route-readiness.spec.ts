@@ -24,6 +24,16 @@ test('readiness gate stays closed with incomplete economics and no native contro
   expect(r.mutationBlockers).toContain('ROUTE_MUTATION_EXECUTOR_NOT_IMPLEMENTED');
 });
 
+test('independent route direction evidence is required by the comparison gate',()=>{
+  const missing=assessCandidateComparisonReadiness(candidate());
+  expect(missing.comparisonBlockers).toContain('ROUTE_DIRECTION_INDEPENDENT_EVIDENCE_MISSING');
+  const verified=assessCandidateComparisonReadiness(candidate({
+    routeDirectionEvidence:{verified:true,primaryCodesVerified:true,headerVerified:true,independentSources:2}
+  }));
+  expect(verified.comparisonBlockers).not.toContain('ROUTE_DIRECTION_INDEPENDENT_EVIDENCE_MISSING');
+  expect(verified.mutationAuthorized).toBe(false);
+});
+
 test('observed endpoint without contextual verification never opens mutation gate',()=>{
   const r=assessCandidateComparisonReadiness(candidate({
     createControl:{observed:true,phpEndpoints:['new_route_info.php']},
