@@ -5,13 +5,13 @@ on:
       departure_mode:
         description: 'Modo: repository usa EXECUTE_INDIVIDUAL; simulation impede decolagens reais'
         type: choice
-        default: repository
-        options: [repository, simulation, production]
+        default: production
+        options: [production]
       execute_individual:
         description: 'Solicitar producao; false usa departure_mode e politica do repositorio'
         type: boolean
         required: false
-        default: false
+        default: true
       max_individual_departures:
         description: 'Limite 1 a 20; 0 usa MAX_INDIVIDUAL_DEPARTURES (padrao 1)'
         type: number
