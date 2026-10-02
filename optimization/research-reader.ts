@@ -20,6 +20,7 @@ import { CandidateQuote } from './quote-reader';
 import { candidatePriorityReference, rankCandidatePriorities } from './candidate-priority';
 import { summarizeComparisonReadiness } from './route-readiness';
 import { calibrateCo2FromFlightHistory } from './co2-calibration';
+import { calibrateDemandLabelOnCurrentRoutes } from './demand-label-calibration';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -174,11 +175,18 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     airportCatalog=loaded;
   } catch {warnings.push('AIRPORT_REFERENCE_UNAVAILABLE');}
   let uiRestored=research.uiRestored;
+  let demandLabelCalibration:Awaited<ReturnType<typeof calibrateDemandLabelOnCurrentRoutes>>={
+    status:'unavailable',observedAt:new Date().toISOString(),samples:[],classification:'mixed_or_unknown',
+    comparisonReady:false,mutationAuthorized:false,uiRestored:true,warnings:[]
+  };
   let market:Awaited<ReturnType<typeof readMarketPriceReferences>>={fuel:null,co2:null,uiClosed:true,stage:'not_requested',warnings:[],unitLabels:[]};
   let maintenance:Awaited<ReturnType<typeof readAircraftMaintenanceReferences>>={status:'not_requested',stage:'not_requested',observedAt:new Date().toISOString(),complete:false,uiClosed:true,aircraft:[],warnings:[]};
   let financeHistory=emptyFinanceHistory();
   // Market and maintenance sources must be validated even when no aircraft is eligible for research.
   if(research.config.enabled&&uiRestored){
+    demandLabelCalibration=await calibrateDemandLabelOnCurrentRoutes(page,collection,airportCatalog,research.config.timeout,3);
+    if(!demandLabelCalibration.uiRestored){uiRestored=false;warnings.push('DEMAND_LABEL_CALIBRATION_LIST_RESTORE_FAILED');}
+    warnings.push(...demandLabelCalibration.warnings);
     const ids=[...new Set(economicQuotes.flatMap(q=>q.autopriceReference?[q.autopriceReference.modelId]:[]))];
     if(ids.length>10)warnings.push('MODEL_REFERENCE_LIMIT');
     for(const id of ids.slice(0,10)){
@@ -235,8 +243,8 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   });
   const priorityRanking=rankCandidatePriorities(candidates);
   const routeReadiness=summarizeComparisonReadiness(candidates);
-  return {schemaVersion:8,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
-    uiRestored,screenedOutBeforeModelReference,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
+  return {schemaVersion:9,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
+    uiRestored,screenedOutBeforeModelReference,demandLabelCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
     warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
@@ -244,6 +252,10 @@ export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof 
   await writeFile(join(directory,'candidate-data.json'),JSON.stringify(report,null,2)+'\n');
   await writeFile(join(directory,'finance-history.json'),JSON.stringify(report.financeHistory,null,2)+'\n');
   await writeFile(join(directory,'candidate-data.md'),['# Evidencias das candidatas — simulacao','',
+    '## Calibracao do rotulo Daily pax demand','',
+    `- Status: ${report.demandLabelCalibration.status}; classificacao: ${report.demandLabelCalibration.classification}; amostras: ${report.demandLabelCalibration.samples.length}.`,
+    ...report.demandLabelCalibration.samples.map(s=>`- ${s.aircraftId} ${s.from}–${s.to}: quote ${JSON.stringify(s.quoteDemand)}; remaining ${JSON.stringify(s.remaining)}; dailyTotal ${JSON.stringify(s.dailyTotal)}; match remaining ${s.matchesRemaining}; match daily ${s.matchesDailyTotal}.`),
+    'O rotulo somente pode ser promovido a demanda restante se varias observacoes atuais e independentes o confirmarem; igualdade remaining=dailyTotal fica inconclusiva.','',
     ...(report.priorityRanking.length?[
       '## Ranking de referencia entre candidatas observadas','',
       ...report.priorityRanking.map(r=>`- #${r.rank} ${r.from}–${r.to}: teto de contribuicao conhecida/h ${r.recurringKnownContributionCeilingPerHour.toFixed(2)}; teto do primeiro ciclo apos taxa ${r.firstCycleKnownContributionCeiling.toFixed(2)}.`),
