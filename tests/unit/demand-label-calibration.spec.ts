@@ -1,5 +1,5 @@
 import { test,expect } from '@playwright/test';
-import { classifyDemandLabelSamples, DemandLabelCalibrationSample } from '../../optimization/demand-label-calibration';
+import { classifyDemandLabelSamples, DemandLabelCalibrationSample, demandCalibrationAirportCatalogSupported } from '../../optimization/demand-label-calibration';
 
 const sample=(quoteDemand={Y:80,J:10,F:0},remaining={Y:80,J:10,F:0},dailyTotal={Y:200,J:40,F:0}):DemandLabelCalibrationSample=>({
   aircraftId:'1',registration:'TEST',routeId:'10',from:'AAA',to:'BBB',airportId:99,
@@ -25,4 +25,12 @@ test('mixed observations remain unknown',()=>{
   sample(),
   sample({Y:200,J:40,F:0},{Y:70,J:8,F:0},{Y:200,J:40,F:0})
  ])).toBe('mixed_or_unknown');
+});
+
+test('demand calibration accepts both supported airport catalogue schemas and rejects unknown schema',()=>{
+ const base:any={source:'fixture',license:'MIT',generatedAt:'2026-10-02',airports:[]};
+ expect(demandCalibrationAirportCatalogSupported({...base,schemaVersion:1})).toBe(true);
+ expect(demandCalibrationAirportCatalogSupported({...base,schemaVersion:2})).toBe(true);
+ expect(demandCalibrationAirportCatalogSupported({...base,schemaVersion:3})).toBe(false);
+ expect(demandCalibrationAirportCatalogSupported(null)).toBe(false);
 });
