@@ -18,6 +18,7 @@ export interface FlightHistoryEvidence {
   source:'inspected-aircraft-flight-history';
   complete:false;
   entries:FlightHistoryEntry[];
+  navigationDiagnostics:Array<{tag:string;id:string|null;text:string|null;title:string|null;onclick:string|null;href:string|null;classShape:string|null}>;
   comparisonReady:false;
   mutationAuthorized:false;
 }
@@ -44,17 +45,20 @@ export function parseFlightHistoryRow(text:string):FlightHistoryEntry|null{
 export async function readFlightHistoryEvidence(details:Locator):Promise<FlightHistoryEvidence>{
   const base:FlightHistoryEvidence={
     status:'unavailable',observedAt:new Date().toISOString(),source:'inspected-aircraft-flight-history',
-    complete:false,entries:[],comparisonReady:false,mutationAuthorized:false
+    complete:false,entries:[],navigationDiagnostics:[],comparisonReady:false,mutationAuthorized:false
   };
   try{
     const history=details.locator('#flight-history');
     if(await history.count()!==1||!await history.isVisible())return base;
+    const controls=history.locator('xpath=..').locator('button,a');
+    const controlCount=Math.min(await controls.count(),30);const navigationDiagnostics:FlightHistoryEvidence['navigationDiagnostics']=[];
+    for(let i=0;i<controlCount;i++){const x=controls.nth(i);navigationDiagnostics.push({tag:await x.evaluate(el=>el.tagName.toLowerCase()),id:await x.getAttribute('id'),text:(await x.innerText().catch(()=>'' )).replace(/\s+/g,' ').trim().slice(0,120)||null,title:await x.getAttribute('title'),onclick:(await x.getAttribute('onclick'))?.slice(0,300)||null,href:(await x.getAttribute('href'))?.slice(0,300)||null,classShape:(await x.getAttribute('class'))?.replace(/\s+/g,' ').trim().slice(0,200)||null});}
     const rows=history.locator('.row.bg-light.m-text.p-1.border');
     const count=await rows.count();
     if(count<1||count>100)return base;
     const texts=(await rows.allInnerTexts()).map(s=>s.replace(/\s+/g,' ').trim());
     const entries=texts.map(parseFlightHistoryRow);
     if(entries.some(e=>!e))return base;
-    return {...base,status:'observed',observedAt:new Date().toISOString(),entries:entries as FlightHistoryEntry[]};
+    return {...base,status:'observed',observedAt:new Date().toISOString(),entries:entries as FlightHistoryEntry[],navigationDiagnostics};
   }catch{return base;}
 }

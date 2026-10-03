@@ -34,6 +34,7 @@ test('reads visible flight-history window without clicks',async({page})=>{
   expect(r.complete).toBe(false);
   expect(r.entries).toHaveLength(2);
   expect(r.entries[0].revenue).toBe(1284400);
+  expect(r.navigationDiagnostics).toEqual([expect.objectContaining({tag:'button',text:'History',onclick:expect.stringContaining('window.mutations')})]);
   expect(r.comparisonReady).toBe(false);
   expect(r.mutationAuthorized).toBe(false);
   expect(await page.evaluate(()=>(window as any).mutations||0)).toBe(0);
