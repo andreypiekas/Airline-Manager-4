@@ -25,6 +25,16 @@ const baseFares=(distance:number,mode:'easy'|'realism')=>mode==='easy'
   ? {Y:.4*distance+170,J:.8*distance+560,F:1.2*distance+1200}
   : {Y:.3*distance+150,J:.6*distance+500,F:.9*distance+1000};
 const near=(a:number,b:number,tolerance:number)=>Number.isFinite(a)&&Number.isFinite(b)&&Math.abs(a-b)<=tolerance;
+const matchingFuelTraining=(quote:CandidateQuote,variant:AircraftReferenceVariant)=>{
+  const ciFuel=quote.costIndex/500+.6;
+  const roundedDistance=Math.ceil(quote.distanceKm*100)/100;
+  return [0,1,2,3].filter(t=>{
+    const expected=variant.fuelLbsPerKm*roundedDistance*ciFuel*(1-t/100);
+    // Training levels differ by 1%; keep the allowance tight so a fuel
+    // observation can disambiguate equal-speed engine variants without guessing.
+    return Math.abs(expected-quote.fuelLbs)<=Math.max(2,quote.fuelLbs*.001);
+  });
+};
 
 export function inferGameModeEvidence(
   quote:CandidateQuote,
@@ -49,20 +59,25 @@ export function inferGameModeEvidence(
   const mode=fareModes[0],speedMultiplier=mode==='easy'?1.5:1,aCheckCostMultiplier=mode==='easy'?1:2;
   const ciSpeed=.0035*quote.costIndex+.3;
   const observedSpeed=quote.distanceKm/(quote.durationSeconds/3600);
-  const matches=variants.filter(v=>v.modelId===quote.autopriceReference!.modelId&&Number.isFinite(v.speedKph)&&v.speedKph>0&&
+  const speedMatches=variants.filter(v=>v.modelId===quote.autopriceReference!.modelId&&Number.isFinite(v.speedKph)&&v.speedKph>0&&
     Math.abs(observedSpeed-v.speedKph*speedMultiplier*ciSpeed)/Math.max(1,observedSpeed)<=.015);
-  if(matches.length!==1)return {...base,status:matches.length>1?'conflict':'unavailable',mode,speedMultiplier,aCheckCostMultiplier,
-    observedSpeedKph:observedSpeed,fareBaseMatches:true,reason:matches.length?'AIRCRAFT_VARIANT_SPEED_AMBIGUOUS':'AIRCRAFT_VARIANT_SPEED_MISMATCH'};
-  const variant=matches[0],expectedSpeed=variant.speedKph*speedMultiplier*ciSpeed;
-  const ciFuel=quote.costIndex/500+.6;
-  const fuelCandidates=[0,1,2,3].filter(t=>{
-    const roundedDistance=Math.ceil(quote.distanceKm*100)/100;
-    const expected=variant.fuelLbsPerKm*roundedDistance*ciFuel*(1-t/100);
-    // Training levels differ by 1%; use a tight rounding allowance so adjacent
-    // levels cannot all qualify. If a modified engine breaks the reference
-    // formula, fuelTraining remains unknown rather than guessed.
-    return Math.abs(expected-quote.fuelLbs)<=Math.max(2,quote.fuelLbs*.001);
-  });
+  if(!speedMatches.length)return {...base,status:'unavailable',mode,speedMultiplier,aCheckCostMultiplier,
+    observedSpeedKph:observedSpeed,fareBaseMatches:true,reason:'AIRCRAFT_VARIANT_SPEED_MISMATCH'};
+
+  // Some AM4 engine variants share the same cruise speed. A live quote also
+  // exposes fuel consumption, so use the independently observed fuel formula
+  // only to disambiguate those speed matches. If it is still not unique, fail closed.
+  const fuelMatched=speedMatches.map(variant=>({variant,training:matchingFuelTraining(quote,variant)}))
+    .filter(x=>x.training.length>0);
+  const selected=speedMatches.length===1
+    ? {variant:speedMatches[0],training:matchingFuelTraining(quote,speedMatches[0])}
+    : fuelMatched.length===1 ? fuelMatched[0] : null;
+  if(!selected)return {...base,status:'conflict',mode,speedMultiplier,aCheckCostMultiplier,
+    observedSpeedKph:observedSpeed,fareBaseMatches:true,speedMatches:true,
+    reason:fuelMatched.length?'AIRCRAFT_VARIANT_SPEED_FUEL_AMBIGUOUS':'AIRCRAFT_VARIANT_SPEED_AMBIGUOUS'};
+
+  const variant=selected.variant,expectedSpeed=variant.speedKph*speedMultiplier*ciSpeed;
+  const fuelCandidates=selected.training;
   const co2FactorMatches=near(quote.co2KgPerPaxKm,variant.co2KgPerPaxKm,1e-9);
   return {
     ...base,status:'verified',mode,variantPriority:variant.priority,engineId:variant.engineId,
