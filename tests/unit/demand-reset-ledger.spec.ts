@@ -88,6 +88,36 @@ test('candidate pair flight inside reset upper bound prevents assuming full dema
  });
 });
 
+test('different route flight spacing can still produce one conservative global reset intersection',()=>{
+ const collection:CollectionResult={complete:true,expectedRoutes:2,warnings:[],aircraft:[
+  ac('1',[e('2 hours ago','CCC','DDD',20,2,1),e('7 hours ago','AAA','BBB',1,0,0)]),
+  ac('2',[e('5 hours ago','DDD','CCC',10,1,0),e('8 hours ago','EEE','FFF',1,0,0)])
+ ]};
+ const calibration={status:'verified' as const,windows:[
+  {pairKey:'AAA:BBB',includedMaxAgeMinutes:180,excludedMinAgeMinutes:360,consumed:{Y:1,J:0,F:0},observedAt:stamp,sourceAircraftIds:['1']},
+  {pairKey:'EEE:FFF',includedMaxAgeMinutes:180,excludedMinAgeMinutes:480,consumed:{Y:1,J:0,F:0},observedAt:stamp,sourceAircraftIds:['2']}
+ ],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
+ const r=historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration);
+ expect(r).toMatchObject({
+  status:'verified',consumedSinceReset:{Y:20,J:2,F:1},remaining:{Y:80,J:18,F:9},
+  resetWindow:{pairKey:'GLOBAL',includedMaxAgeMinutes:180,excludedMinAgeMinutes:360},
+  reason:'FLEET_HISTORY_COVERS_GLOBAL_RESET_WINDOW_INTERSECTION'
+ });
+});
+
+test('candidate flight inside global reset intersection gap remains ambiguous',()=>{
+ const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[
+  ac('1',[e('4 hours ago','CCC','DDD',20,2,1),e('7 hours ago','AAA','BBB',1,0,0)])
+ ]};
+ const calibration={status:'verified' as const,windows:[
+  {pairKey:'AAA:BBB',includedMaxAgeMinutes:180,excludedMinAgeMinutes:360,consumed:{Y:1,J:0,F:0},observedAt:stamp,sourceAircraftIds:['1']},
+  {pairKey:'EEE:FFF',includedMaxAgeMinutes:120,excludedMinAgeMinutes:480,consumed:{Y:1,J:0,F:0},observedAt:stamp,sourceAircraftIds:['1']}
+ ],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
+ expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration)).toMatchObject({
+  status:'unavailable',reason:'PAIR_FLIGHT_IN_RESET_BOUNDARY_GAP'
+ });
+});
+
 test('candidate remaining is reconstructed only when every aircraft history covers the calibrated reset',()=>{
  const entries1=[e('2 hours ago','CCC','DDD',20,2,1),e('22 hours ago','AAA','BBB',1,0,0)];
  const entries2=[e('3 hours ago','DDD','CCC',10,1,0),e('23 hours ago','AAA','BBB',1,0,0)];
