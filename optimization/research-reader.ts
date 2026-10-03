@@ -30,6 +30,7 @@ import { reverseLegEquivalentEvidence } from './reverse-leg-equivalence';
 import { calibrateCurrentFareLoadFactor, transferCurrentFareLoadFactor } from './load-factor-calibration';
 import { candidateLoadEnvelope, currentRouteLoadEnvelope } from './route-variable-profit';
 import { compareRouteVariableCycles, conservativeSharedPairRemaining, routeVariableRoundTripInterval } from './route-variable-cycle';
+import { routeProfitModelEvidence } from './route-profit-model';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -257,6 +258,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     }
   }
   const now=new Date();
+  const routeProfitModel=routeProfitModelEvidence();
   const fresh=(stamp:string)=>freshAt(stamp,now);
   const candidates=quotes.map(quote=>{
     const demand=candidateDemandEvidence(quote,collection,now,reservationsConfig.maxAgeSeconds,demandResetCalibration);
@@ -343,8 +345,8 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   });
   const priorityRanking=rankCandidatePriorities(candidates);
   const routeReadiness=summarizeComparisonReadiness(candidates);
-  return {schemaVersion:13,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
-    uiRestored,screenedOutBeforeModelReference,reputation,demandLabelCalibration,demandResetCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
+  return {schemaVersion:14,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
+    uiRestored,screenedOutBeforeModelReference,routeProfitModel,reputation,demandLabelCalibration,demandResetCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
     warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
@@ -352,6 +354,10 @@ export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof 
   await writeFile(join(directory,'candidate-data.json'),JSON.stringify(report,null,2)+'\n');
   await writeFile(join(directory,'finance-history.json'),JSON.stringify(report.financeHistory,null,2)+'\n');
   await writeFile(join(directory,'candidate-data.md'),['# Evidencias das candidatas — simulacao','',
+    '## Modelo de lucro por rota','',
+    `- Status: ${report.routeProfitModel.status}; componentes ${report.routeProfitModel.componentSet.join(', ')}; fonte ${report.routeProfitModel.sourceRepository}@${report.routeProfitModel.sourceCommit} ${report.routeProfitModel.sourcePath}.`,
+    `- Fluxos de companhia excluidos do lucro por rota: ${report.routeProfitModel.excludedCompanyLevel.join(', ')}.`,
+    'Cada entrada variavel ainda precisa ser validada pela conta live; este modelo nao autoriza mutacao.','',
     '## Diagnostico de reputacao — somente leitura','',
     `- Status: ${report.reputation.status}; percentuais observados sem classificacao: ${report.reputation.parsedPercentages.join(', ')||'nenhum'}.`,
     ...report.reputation.entries.map(e=>`- ${e.tag}${e.id?'#'+e.id:''}: ${e.text||e.title||e.ariaLabel||'sem texto'}.`),
