@@ -3,9 +3,10 @@ import { supplyConfig } from '../supplies/policy';
 import { researchConfig } from '../optimization/research-reader';
 import { optimizationConfig } from '../optimization/report';
 import { readDemandConfig } from '../demand/config';
-import { runDemandSimulation } from '../demand/run';
+import { runDemandSimulationDetailed } from '../demand/run';
 import { executionEnvironment, runDemandExecution } from '../demand/execute-run';
 import { pricingExecutionSettings, runTicketPricingExecution } from '../pricing/run';
+import { routeExecutionSettings, runRouteExecution } from '../optimization/route-execution-run';
 import { withRunLock } from '../utils/run-lock';
 import { loginForReadOnlyCollection } from '../utils/read-only-login';
 import { test } from '@playwright/test';
@@ -28,6 +29,7 @@ test('All Operations', async ({ page }) => {
     optimizationConfig(); // Rejeita configuracoes invalidas antes do login.
     researchConfig();
     pricingExecutionSettings(); // Valida o contexto do ajuste real de tarifas antes do login.
+    routeExecutionSettings(); // Valida o contexto de reroute real antes do login.
     test.setTimeout(demandConfig.dryRun ? 600000 : 900000);
 
     const moduleEnabled = (name: string, defaultValue = true) => {
@@ -208,7 +210,10 @@ test('All Operations', async ({ page }) => {
     if (!fleetOpened) {
       throw new Error('[Demand] Fleet/Routes nao abriu apos recuperacao da interface.');
     }
-    await runDemandSimulation(page, demandConfig);
+    const simulation = await runDemandSimulationDetailed(page, demandConfig);
+    if (!demandConfig.dryRun && moduleEnabled('ENABLE_ROUTE_EXECUTION', false)) {
+      await test.step('Reroute conservador por aeronave', async () => await runRouteExecution(page, simulation));
+    }
     if (!demandConfig.dryRun && moduleEnabled('ENABLE_TICKET_PRICING_EXECUTION', false)) {
       await test.step('Ajustar tarifas por rota', async () => await runTicketPricingExecution(page));
     }
