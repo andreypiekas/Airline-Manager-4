@@ -63,6 +63,8 @@ const sameCurrentContext=(a:AircraftSnapshot,b:AircraftSnapshot)=>
   a.from===b.from&&a.to===b.to&&a.state==='ready'&&b.state==='ready'&&!a.issue&&!b.issue;
 
 const sameCabins=(a:Cabins,b:Cabins)=>['Y','J','F'].every(k=>a[k as keyof Cabins]===b[k as keyof Cabins]);
+const validCabins=(a:Cabins)=>['Y','J','F'].every(k=>Number.isSafeInteger(a[k as keyof Cabins])&&a[k as keyof Cabins]>=0)&&
+  a.Y+a.J+a.F>0;
 const finite=(n:number)=>Number.isFinite(n)&&n>=0&&n<=Number.MAX_SAFE_INTEGER;
 const sameTargetEvidence=(a:RouteExecutionCandidate,b:RouteExecutionCandidate)=>
   a.aircraftId===b.aircraftId&&a.from===b.from&&a.to===b.to&&a.airportId===b.airportId&&
@@ -148,8 +150,8 @@ export class RouteMutationExecutor {
         !Number.isSafeInteger(target.fuelLbs)||target.fuelLbs<=0||
         !finite(target.co2KgPerPaxKm)||target.co2KgPerPaxKm<=0||
         !Number.isSafeInteger(target.routeFee)||target.routeFee<0||
-        !sameCabins(target.capacity,target.capacity)||!sameCabins(target.autoFares,target.autoFares)||
-        ['Y','J','F'].some(k=>!Number.isSafeInteger(target.autoFares[k as keyof Cabins])||target.autoFares[k as keyof Cabins]<=0)||
+        !validCabins(target.capacity)||!validCabins(target.autoFares)||
+        ['Y','J','F'].some(k=>target.autoFares[k as keyof Cabins]<=0)||
         !mutationControlReady(target)){
         entry.reason='ROUTE_EXECUTION_GUARD_REJECTED';continue;
       }
