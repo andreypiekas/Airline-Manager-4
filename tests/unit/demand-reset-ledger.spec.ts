@@ -63,6 +63,21 @@ test('unused candidate pair can be proven full inside a reset upper bound when f
  });
 });
 
+test('verified global upper bound can prove an untouched pair even when exact pair windows disagree',()=>{
+ const collection:CollectionResult={complete:true,expectedRoutes:2,warnings:[],aircraft:[
+  ac('1',[e('3 hours ago','AAA','BBB',20,2,1),e('5 hours ago','AAA','BBB',10,1,0)]),
+  ac('2',[e('4 hours ago','EEE','FFF',10,1,0),e('6 hours ago','EEE','FFF',5,0,0)])
+ ]};
+ const calibration:any={status:'verified',windows:[
+  {pairKey:'AAA:BBB',includedMaxAgeMinutes:60,excludedMinAgeMinutes:180,consumed:{Y:20,J:2,F:1},observedAt:stamp,sourceAircraftIds:['1']},
+  {pairKey:'EEE:FFF',includedMaxAgeMinutes:120,excludedMinAgeMinutes:240,consumed:{Y:10,J:1,F:0},observedAt:stamp,sourceAircraftIds:['2']}
+ ],resetAgeUpperBoundMinutes:120,upperBoundSources:[],warnings:[],comparisonReady:false,mutationAuthorized:false};
+ expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration)).toMatchObject({
+  status:'verified',remaining:{Y:100,J:20,F:10},consumedSinceReset:{Y:0,J:0,F:0},
+  reason:'NO_PAIR_FLIGHT_WITHIN_VERIFIED_RESET_UPPER_BOUND'
+ });
+});
+
 test('candidate pair flight inside reset upper bound prevents assuming full demand',()=>{
  const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[
   ac('1',[e('30 minutes ago','CCC','DDD',20,2,1),e('3 hours ago','AAA','BBB',10,1,0)])
