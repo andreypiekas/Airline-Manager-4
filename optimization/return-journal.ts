@@ -51,9 +51,12 @@ export function compareFlightHistoryAnchors(previous:FlightHistoryAnchorEvent,cu
  if(!previous||!current||previous.type!=='flight-history-anchor'||current.type!=='flight-history-anchor'||previous.aircraftId!==current.aircraftId||previous.registration!==current.registration)return {...base,reason:'ANCHOR_IDENTITY_MISMATCH'};
  const pTime=Date.parse(previous.observedAt),cTime=Date.parse(current.observedAt);if(!Number.isFinite(pTime)||!Number.isFinite(cTime)||cTime<=pTime)return {...base,reason:'ANCHOR_TIME_NOT_MONOTONIC'};
  if(!Number.isSafeInteger(previous.cycles)||!Number.isSafeInteger(current.cycles)||current.cycles<previous.cycles)return {...base,reason:'ANCHOR_CYCLES_NOT_MONOTONIC'};
- const p=previous.rows.map(flightHistoryRowIdentity),c=current.rows.map(flightHistoryRowIdentity);if(new Set(p).size!==p.length||new Set(c).size!==c.length)return {...base,cycleDelta:current.cycles-previous.cycles,reason:'ANCHOR_ROWS_AMBIGUOUS'};
- let overlap=0;for(let i=0;i<p.length;i++)for(let j=0;j<c.length;j++){let n=0;while(i+n<p.length&&j+n<c.length&&p[i+n]===c[j+n])n++;if(n>overlap)overlap=n;}
- const cycleDelta=current.cycles-previous.cycles;if(overlap<2)return {...base,cycleDelta,overlapRows:overlap,reason:'ANCHOR_OVERLAP_INSUFFICIENT'};
+ const p=previous.rows.map(flightHistoryRowIdentity),c=current.rows.map(flightHistoryRowIdentity);
+ const alignments:Array<{i:number;j:number;length:number}>=[];for(let i=0;i<p.length;i++)for(let j=0;j<c.length;j++){let n=0;while(i+n<p.length&&j+n<c.length&&p[i+n]===c[j+n])n++;if(n>0)alignments.push({i,j,length:n});}
+ const cycleDelta=current.cycles-previous.cycles,overlap=alignments.reduce((m,x)=>Math.max(m,x.length),0);
+ if(overlap<2)return {...base,cycleDelta,overlapRows:overlap,reason:'ANCHOR_OVERLAP_INSUFFICIENT'};
+ const best=alignments.filter(x=>x.length===overlap);
+ if(best.length!==1)return {...base,cycleDelta,overlapRows:overlap,reason:'ANCHOR_OVERLAP_ALIGNMENT_AMBIGUOUS'};
  return {...base,status:'verified_overlap',cycleDelta,overlapRows:overlap,reason:'PERSISTED_FLIGHT_ROWS_OVERLAP_VERIFIED'};
 }
 export function flightHistoryContinuityDiagnostics(journal:Journal):FlightHistoryContinuityDiagnostic[]{
