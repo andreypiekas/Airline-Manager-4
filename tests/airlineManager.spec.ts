@@ -31,7 +31,10 @@ test('All Operations', async ({ page }) => {
     researchConfig();
     pricingExecutionSettings(); // Valida o contexto do ajuste real de tarifas antes do login.
     routeExecutionSettings(); // Valida o contexto de reroute real antes do login.
-    test.setTimeout(demandConfig.dryRun ? 600000 : 900000);
+    const runTimeoutMs=demandConfig.dryRun ? 600000 : 900000;
+    test.setTimeout(runTimeoutMs);
+    // Keep enough time after the last possible click for native response + fresh Fleet confirmation.
+    const departureMutationDeadlineEpochMs=Date.now()+runTimeoutMs-120000;
 
     const moduleEnabled = (name: string, defaultValue = true) => {
       const raw = (process.env[name] || '').trim().toLowerCase();
@@ -231,7 +234,7 @@ test('All Operations', async ({ page }) => {
       await test.step('Ajustar tarifas por rota', async () => await runTicketPricingExecution(page));
     }
     if (!demandConfig.dryRun && moduleEnabled('ENABLE_DEPART')) {
-      await runDemandExecution(page, demandConfig);
+      await runDemandExecution(page, demandConfig,{...process.env,DEMAND_EXECUTION_MUTATION_DEADLINE_EPOCH_MS:String(departureMutationDeadlineEpochMs)});
     }
     return;
   }

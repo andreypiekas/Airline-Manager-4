@@ -16,7 +16,10 @@ export function executionEnvironment(config:DemandConfig,env:NodeJS.ProcessEnv=p
   if(!config.dryRun&&(config.poolScope!=='airport-pair'||env.DEMAND_EXECUTION_ACK!=='individual-return-legs-v1'||env.GITHUB_ACTIONS!=='true'||
     env.GITHUB_REPOSITORY!=='andreypiekas/Airline-Manager-4'||!/^[1-9]\d*$/.test(env.GITHUB_RUN_ID||'')||
     env.GITHUB_RUN_ATTEMPT!=='1'))throw Error('DEMAND_REAL_EXECUTION_CONTEXT_INVALID_OR_RERUN');
-  return {dryRun:config.dryRun,maxDepartures};
+  const rawDeadline=(env.DEMAND_EXECUTION_MUTATION_DEADLINE_EPOCH_MS||'').trim();
+  const mutationDeadlineEpochMs=rawDeadline?Number(rawDeadline):undefined;
+  if(mutationDeadlineEpochMs!==undefined&&(!Number.isSafeInteger(mutationDeadlineEpochMs)||mutationDeadlineEpochMs<=0))throw Error('DEMAND_EXECUTION_DEADLINE_INVALID');
+  return {dryRun:config.dryRun,maxDepartures,mutationDeadlineEpochMs};
 }
 export async function runDemandExecution(page:Page,config=readDemandConfig(),env:NodeJS.ProcessEnv=process.env,directory='test-results/demand'){
   const settings=executionEnvironment(config,env),optimization=optimizationConfig(env);

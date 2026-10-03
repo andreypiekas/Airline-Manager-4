@@ -15,6 +15,8 @@ export interface ExecutionSettings {
   maxDepartures: number;
   aircraftOrigins: ReadonlyMap<string,string>;
   airlineBases: readonly string[];
+  /** Absolute deadline after which no new departure mutation may start. */
+  mutationDeadlineEpochMs?: number;
 }
 export interface ExecutionEntry {
   aircraftId: string; registration: string; routeId: string; from: string; to: string;
@@ -88,6 +90,9 @@ export class IndividualDepartureExecutor {
       if(this.settings.dryRun){
         this.attemptedAircraft.add(fresh.aircraftId);this.attemptedRoutes.add(fresh.routeId);
         entry.status='would_depart';await persist();continue;
+      }
+      if(this.settings.mutationDeadlineEpochMs!==undefined&&Date.now()>=this.settings.mutationDeadlineEpochMs){
+        entry.reason='RUN_TIME_BUDGET_EXHAUSTED_BEFORE_MUTATION';continue;
       }
       this.attemptedAircraft.add(fresh.aircraftId);this.attemptedRoutes.add(fresh.routeId);
       entry.status='attempting';
