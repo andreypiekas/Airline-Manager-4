@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { appendFlightHistoryAnchors, reviewWithReturnJournal } from '../../optimization/return-journal';
+import { appendFlightHistoryAnchors, compareFlightHistoryAnchors, reviewWithReturnJournal } from '../../optimization/return-journal';
 import { RouteReview } from '../../optimization/route-optimizer';
 const now = new Date('2026-09-30T11:00:00Z');
 function input(flightId='flight-1'): RouteReview {
@@ -149,4 +149,14 @@ test('modern daily KEEP does not duplicate a completed return review from the sa
 
 test('compact flight-history anchor persists only uncovered observed aircraft',async()=>{
  const dir=await mkdtemp(join(tmpdir(),'am4-anchor-'));try{await writeFile(join(dir,'return-journal.json'),JSON.stringify({schemaVersion:1,scope:'company-test',entries:[]}));const now=new Date();const row={relativeTime:'21 hours ago',from:'AAA',to:'BBB',registrationLabel:'FAST',co2Quotas:1,onboard:{Y:1,J:0,F:0},fuelLbs:2,revenue:3};const collection:any={aircraft:[{aircraftId:'1',registration:'FAST',operational:{cycles:190},flightHistory:{status:'observed',observedAt:now.toISOString(),entries:[row,row,row,row]}}]};const coverage:any[]=[{aircraftId:'1',historyStatus:'observed',visibleEntries:4,coversReset:false}];expect(await appendFlightHistoryAnchors(dir,'company-test','123',collection,coverage,now)).toBe(1);const saved=JSON.parse(await readFile(join(dir,'return-journal.json'),'utf8'));expect(saved.events).toHaveLength(1);expect(saved.events[0]).toMatchObject({eventId:'hist_123_1',type:'flight-history-anchor',aircraftId:'1',cycles:190});expect(saved.events[0].rows).toHaveLength(4);}finally{await rm(dir,{recursive:true,force:true});}
+});
+
+
+test('persisted flight-history anchors prove overlap only as read-only evidence',()=>{
+ const row=(age:string,from:string,to:string,revenue:number)=>({relativeTime:age,from,to,co2Quotas:10,onboard:{Y:5,J:0,F:0},fuelLbs:100,revenue});
+ const previous:any={eventId:'hist_1_1',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-03T19:00:00Z',cycles:190,rows:[row('18 hours ago','AAA','BBB',1000),row('19 hours ago','BBB','AAA',900),row('20 hours ago','AAA','BBB',800)]};
+ const current:any={eventId:'hist_2_1',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-03T20:00:00Z',cycles:191,rows:[row('20 hours ago','BBB','AAA',900),row('21 hours ago','AAA','BBB',800),row('22 hours ago','BBB','AAA',700)]};
+ expect(compareFlightHistoryAnchors(previous,current)).toMatchObject({status:'verified_overlap',cycleDelta:1,overlapRows:2,reason:'PERSISTED_FLIGHT_ROWS_OVERLAP_VERIFIED',comparisonReady:false,mutationAuthorized:false});
+ current.rows=[row('20 hours ago','AAA','BBB',800),row('21 hours ago','AAA','BBB',800)];
+ expect(compareFlightHistoryAnchors(previous,current)).toMatchObject({status:'unavailable',reason:'ANCHOR_ROWS_AMBIGUOUS',comparisonReady:false,mutationAuthorized:false});
 });
