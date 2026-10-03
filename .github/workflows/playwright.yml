@@ -236,6 +236,7 @@ jobs:
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         BOT_RESULT: ${{ steps.bot.outcome }}
+        DEMAND_PROLONGED_HOLD_MINUTES: ${{ vars.DEMAND_PROLONGED_HOLD_MINUTES || '180' }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: node scripts/telegram-demand.cjs
 
