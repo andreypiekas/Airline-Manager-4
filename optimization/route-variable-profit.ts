@@ -99,15 +99,14 @@ export function routeVariableProfitInterval(
     source:'live-demand-fares-market-plus-crosschecked-community-variable-model',
     reason:'VARIABLE_ECONOMICS_INCOMPLETE',comparisonReady:false,mutationAuthorized:false
   };
+  const lowLoad=load.confidence95Low,expectedLoad=load.expectedAggregate,highLoad=load.confidence95High;
   if(!Number.isSafeInteger(maxAgeSeconds)||maxAgeSeconds<1||!fresh(quote.observedAt,now,maxAgeSeconds)||
     !validCabins(capacity)||!validCabins(remaining)||!validCabins(fares)||!load.verified||
-    !finite(load.confidence95Low)||!finite(load.expectedAggregate)||!finite(load.confidence95High)||
-    load.confidence95Low<=0||load.confidence95High>1||load.confidence95Low>load.expectedAggregate||
-    load.expectedAggregate>load.confidence95High||!Number.isFinite(quote.durationSeconds)||quote.durationSeconds<=0||
+    !finite(lowLoad)||!finite(expectedLoad)||!finite(highLoad)||
+    lowLoad<=0||highLoad>1||lowLoad>expectedLoad||expectedLoad>highLoad||
+    !Number.isFinite(quote.durationSeconds)||quote.durationSeconds<=0||
     !Number.isFinite(quote.distanceKm)||quote.distanceKm<=0||!finite(setupFee)||!co2Calibration||!co2Market||
     !fresh(co2Market.observedAt,now,maxAgeSeconds)||!repairReferenceVerified)return base;
-
-  const lowLoad=load.confidence95Low,expectedLoad=load.expectedAggregate,highLoad=load.confidence95High;
   const active=CLASSES.filter(k=>capacity[k]>0);
   if(!active.length||!active.every(k=>fares[k]>0&&remaining[k]>=capacity[k]*highLoad))
     return {...base,demandSupportsInterval:false,reason:'REMAINING_DEMAND_DOES_NOT_SUPPORT_LOAD_INTERVAL'};
