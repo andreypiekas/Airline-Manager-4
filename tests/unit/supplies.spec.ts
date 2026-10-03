@@ -22,3 +22,16 @@ test('zero price rejected; disabled flow holds',()=>{
  expect(planPurchase(s,'fuel',supplyConfig({ENABLE_FUEL:'false'})).reason).toBe('DISABLED');
 });
 for(const env of [{MAX_FUEL_PRICE:'550oops'},{MAX_CO2_PRICE:'0'},{MAX_FUEL_PURCHASE_PER_RUN:'-1'},{MIN_CASH_RESERVE:'NaN'},{ENABLE_FUEL:'maybe'}])test(`bad config ${JSON.stringify(env)}`,()=>expect(()=>supplyConfig(env)).toThrow());
+
+test('verified supply history can only tighten the configured cap',async()=>{
+ const {adaptiveSupplyCap}=await import('../../supplies/adaptive-policy');
+ const obs=[300,320,340,360,500].map((pricePer1000,i)=>({eventId:'s'+i,type:'supply-observation' as const,kind:'fuel' as const,observedAt:'2026-09-29T15:00:00Z',pricePer1000,holding:1,remainingCapacity:1,balance:1}));
+ expect(adaptiveSupplyCap({schemaVersion:1,scope:'x',entries:[],supplyObservations:obs.slice(0,4)},'fuel',550)).toMatchObject({effectiveMax:550,source:'configured-cap',samples:4});
+ expect(adaptiveSupplyCap({schemaVersion:1,scope:'x',entries:[],supplyObservations:obs},'fuel',550)).toEqual({configuredMax:550,effectiveMax:341,source:'verified-live-history',samples:5,historicalReference:340});
+});
+test('adaptive supply cap is bounded and never raises configured ceiling',async()=>{
+ const {adaptiveSupplyCap}=await import('../../supplies/adaptive-policy');
+ const mk=(p:number,i:number)=>({eventId:'h'+i,type:'supply-observation' as const,kind:'fuel' as const,observedAt:'2026-09-29T15:00:00Z',pricePer1000:p,holding:1,remainingCapacity:1,balance:1});
+ expect(adaptiveSupplyCap({schemaVersion:1,scope:'x',entries:[],supplyObservations:[100,110,120,130,140].map(mk)},'fuel',550).effectiveMax).toBe(330);
+ expect(adaptiveSupplyCap({schemaVersion:1,scope:'x',entries:[],supplyObservations:[700,710,720,730,740].map(mk)},'fuel',550).effectiveMax).toBe(550);
+});
