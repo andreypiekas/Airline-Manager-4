@@ -46,7 +46,7 @@ test('unverified mode keeps A-check reference conservative and non-actionable',(
 test('verified live-history CO2 calibration replaces the one-quota-per-kg sensitivity assumption',()=>{
  const ref=references();
  ref.co2Calibration={
-  aircraftId:'1',status:'verified_weighted_cabin_units',observedAt:stamp,quoteFactor:.2,fixedQuotasPerKm:.05,samples:[],
+  aircraftId:'1',status:'verified_weighted_cabin_units',observedAt:stamp,quoteFactor:.2,calibratedFactorPerUnit:.2,fixedQuotasPerKm:.05,samples:[],
   weightedResidualSpread:0,physicalResidualSpread:.1,weightedMeanAbsoluteErrorRatio:0,physicalMeanAbsoluteErrorRatio:.1,
   formulaVerified:true,reason:'verified',comparisonReady:false,mutationAuthorized:false
  };
@@ -64,7 +64,7 @@ test('verified live-history CO2 calibration replaces the one-quota-per-kg sensit
 test('calibrated CO2 demand ceiling is capped by cabin capacity, not raw remaining demand',()=>{
  const ref=references();
  ref.co2Calibration={
-  aircraftId:'1',status:'verified_weighted_cabin_units',observedAt:stamp,quoteFactor:.2,fixedQuotasPerKm:.05,samples:[],
+  aircraftId:'1',status:'verified_weighted_cabin_units',observedAt:stamp,quoteFactor:.2,calibratedFactorPerUnit:.2,fixedQuotasPerKm:.05,samples:[],
   weightedResidualSpread:0,physicalResidualSpread:.1,weightedMeanAbsoluteErrorRatio:0,physicalMeanAbsoluteErrorRatio:.1,
   formulaVerified:true,reason:'verified',comparisonReady:false,mutationAuthorized:false
  };

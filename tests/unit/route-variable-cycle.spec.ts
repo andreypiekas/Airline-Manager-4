@@ -20,7 +20,7 @@ const reverse:ReverseLegEquivalentEvidence={
   reason:'verified',comparisonReady:false,mutationAuthorized:false
 };
 const co2:Co2CalibrationEvidence={
-  aircraftId:'1',status:'verified_weighted_cabin_units',observedAt:stamp,quoteFactor:.2,fixedQuotasPerKm:.05,samples:[],
+  aircraftId:'1',status:'verified_weighted_cabin_units',observedAt:stamp,quoteFactor:.2,calibratedFactorPerUnit:.2,fixedQuotasPerKm:.05,samples:[],
   weightedResidualSpread:0,physicalResidualSpread:.1,weightedMeanAbsoluteErrorRatio:0,physicalMeanAbsoluteErrorRatio:.1,
   formulaVerified:true,reason:'verified',comparisonReady:false,mutationAuthorized:false
 };
