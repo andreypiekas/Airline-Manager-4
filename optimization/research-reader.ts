@@ -22,7 +22,7 @@ import { compareKnownContribution, knownContributionLeg } from './route-known-co
 import { summarizeComparisonReadiness } from './route-readiness';
 import { calibrateCo2FromFlightHistory } from './co2-calibration';
 import { calibrateDemandLabelOnCurrentRoutes } from './demand-label-calibration';
-import { calibrateDemandResetWindows } from './demand-reset-ledger';
+import { calibrateDemandResetWindows, fleetHistoryCoverageDiagnostics } from './demand-reset-ledger';
 import { crossCheckCommunityAircraftReference } from './model-reference-crosscheck';
 import { readReputationDiagnostics } from './reputation-diagnostics';
 import { inferGameModeEvidence } from './game-mode-evidence';
@@ -259,6 +259,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     }
   }
   const now=new Date();
+  const flightHistoryCoverage=fleetHistoryCoverageDiagnostics(collection,demandResetCalibration);
   const routeProfitModel=routeProfitModelEvidence();
   const fresh=(stamp:string)=>freshAt(stamp,now);
   const candidates=quotes.map(quote=>{
@@ -364,7 +365,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   ));
   return {schemaVersion:15,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,
     comparisonReady:routeDecisions.some(d=>d.decision!=='unavailable'),
-    uiRestored,screenedOutBeforeModelReference,routeProfitModel,reputation,demandLabelCalibration,demandResetCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,routeDecisions,
+    uiRestored,screenedOutBeforeModelReference,routeProfitModel,reputation,demandLabelCalibration,demandResetCalibration,flightHistoryCoverage,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,routeDecisions,
     warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
@@ -389,6 +390,9 @@ export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof 
     ...report.demandResetCalibration.windows.map(w=>`- ${w.pairKey}: consumo confirmado ${JSON.stringify(w.consumed)}; bucket incluido ate ${w.includedMaxAgeMinutes} min; proximo bucket excluido em ${w.excludedMinAgeMinutes} min.`),
     ...report.demandResetCalibration.upperBoundSources.map(s=>`- Limite superior por ${s.aircraftId} ${s.from}–${s.to}: ultima decolagem no mesmo sentido ha ${s.newestSameDirectionFlightAgeMinutes} min, enquanto remaining=dailyTotal.`),
     'A reconstrucao candidata so e usada quando todo o historico da frota cobre a janela calibrada e nenhum voo do par cai na faixa ambigua do reset.','',
+    '### Cobertura visivel do Flight History','',
+    ...report.flightHistoryCoverage.map(x=>`- ${x.aircraftId} ${x.registration}: ${x.visibleEntries} entradas; mais antiga ${x.oldestAgeMinutes??'indisponivel'} min; ciclos ${x.cycles??'indisponivel'}; limite necessario ${x.requiredExcludedMin??'indisponivel'} min; cobre reset ${x.coversReset?'sim':'nao'}${x.lifetimeCovered?' (historico de vida completo)':''}.`),
+    'Este diagnostico nao estende o historico nem autoriza comparacao; apenas identifica a lacuna observada.','',
     ...(report.priorityRanking.length?[
       '## Ranking de referencia entre candidatas observadas','',
       ...report.priorityRanking.map(r=>`- #${r.rank} ${r.from}–${r.to}: teto de contribuicao conhecida/h ${r.recurringKnownContributionCeilingPerHour.toFixed(2)}; teto do primeiro ciclo apos taxa ${r.firstCycleKnownContributionCeiling.toFixed(2)}.`),

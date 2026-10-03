@@ -110,6 +110,17 @@ export function calibrateDemandResetWindows(
   return base;
 }
 
+export function fleetHistoryCoverageDiagnostics(collection:CollectionResult,calibration:DemandResetCalibration){
+  const requiredExcludedMin=calibration.windows.length?Math.min(...calibration.windows.map(w=>w.excludedMinAgeMinutes)):calibration.resetAgeUpperBoundMinutes;
+  return collection.aircraft.map(a=>{
+    const h=a.flightHistory,ages=h?.status==='observed'?h.entries.map(e=>relativeAgeMinutes(e.relativeTime)):[];
+    const parsed=ages.filter((x):x is number=>x!==null),oldestAgeMinutes=parsed.length?Math.max(...parsed):null;
+    const lifetimeCovered=requiredExcludedMin!==null&&h?.status==='observed'?lifetimeHistoryCovered(a,h.entries.length,requiredExcludedMin):false;
+    const coversReset=requiredExcludedMin!==null&&h?.status==='observed'&&ages.every(x=>x!==null)&&(lifetimeCovered||(oldestAgeMinutes!==null&&oldestAgeMinutes>=requiredExcludedMin));
+    return {aircraftId:a.aircraftId,registration:a.registration,state:a.state,cycles:a.operational?.cycles??null,historyStatus:h?.status??'unavailable',visibleEntries:h?.entries.length??0,oldestAgeMinutes,requiredExcludedMin,lifetimeCovered,coversReset};
+  });
+}
+
 export interface HistoricalRemainingEvidence {
   status:'verified'|'unavailable';
   pairKey:string;

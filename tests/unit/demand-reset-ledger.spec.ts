@@ -163,3 +163,11 @@ test('candidate flight inside ambiguous reset boundary gap fails closed',()=>{
   status:'unavailable',reason:'PAIR_FLIGHT_IN_RESET_BOUNDARY_GAP'
  });
 });
+
+
+test('flight history coverage diagnostics exposes the exact reset blocker without authorizing anything',()=>{
+ const aircraft:any={aircraftId:'1',registration:'FAST',routeId:'1',routeLabel:'AAA-BBB',from:'AAA',to:'BBB',state:'ready',capacity:{Y:1,J:0,F:0},remaining:{Y:1,J:0,F:0},dailyTotal:{Y:1,J:0,F:0},observedAt:'2026-01-02T00:00:00Z',operational:{cycles:100},flightHistory:{status:'observed',observedAt:'2026-01-02T00:00:00Z',source:'inspected-aircraft-flight-history',complete:false,entries:[{relativeTime:'21 hours ago',from:'AAA',to:'BBB',registrationLabel:'FAST',co2Quotas:1,onboard:{Y:1,J:0,F:0},fuelLbs:1,revenue:1}],comparisonReady:false,mutationAuthorized:false}};
+ const calibration:any={status:'verified',windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:1260,excludedMinAgeMinutes:1440,consumed:{Y:1,J:0,F:0},observedAt:'2026-01-02T00:00:00Z',sourceAircraftIds:['1']}],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false,mutationAuthorized:false};
+ const rows=fleetHistoryCoverageDiagnostics({aircraft:[aircraft],complete:true,expectedRoutes:1,warnings:[]},calibration);
+ expect(rows).toEqual([{aircraftId:'1',registration:'FAST',state:'ready',cycles:100,historyStatus:'observed',visibleEntries:1,oldestAgeMinutes:1260,requiredExcludedMin:1440,lifetimeCovered:false,coversReset:false}]);
+});
