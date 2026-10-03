@@ -45,6 +45,8 @@ export interface RouteExecutionEntry {
   targetTo:string;
   targetAirportId:string;
   status:'held'|'attempting'|'rerouted'|'outcome_unknown';
+  /** Ephemeral authorization: true only after the fresh pre-mutation context is revalidated. */
+  mutationAuthorized:boolean;
   reason:string;
 }
 
@@ -130,7 +132,7 @@ export class RouteMutationExecutor {
         aircraftId:decision.aircraftId,registration:expected?.registration||'unknown',
         previousRouteId:expected?.routeId||'unknown',previousFrom:expected?.from||'unknown',previousTo:expected?.to||'unknown',
         targetFrom:selected.from,targetTo:selected.to,targetAirportId:selected.airportId,
-        status:'held',reason:'ROUTE_EXECUTION_EVIDENCE_INCOMPLETE'
+        status:'held',mutationAuthorized:false,reason:'ROUTE_EXECUTION_EVIDENCE_INCOMPLETE'
       };
       report.entries.push(entry);
 
@@ -167,8 +169,12 @@ export class RouteMutationExecutor {
       }
 
       this.attemptedAircraft.add(expected.aircraftId);
+      // Authorization is deliberately local to this already-fresh fingerprint.
+      // It is persisted before the single mutation attempt for auditability and
+      // never feeds back into candidate/readiness evidence.
       entry.status='attempting';
-      entry.reason='NATIVE_REROUTE_PREPARED';
+      entry.mutationAuthorized=true;
+      entry.reason='FRESH_CONTEXT_VERIFIED_NATIVE_REROUTE_AUTHORIZED';
       await persist();
 
       try{
@@ -177,9 +183,9 @@ export class RouteMutationExecutor {
         if(!after||after.aircraftId!==expected.aircraftId||after.registration!==expected.registration||
           after.from!==target.from||after.to!==target.to||after.routeId===expected.routeId)
           throw new Error('ROUTE_EXECUTION_UNCONFIRMED');
-        entry.status='rerouted';entry.reason='NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED';
+        entry.status='rerouted';entry.mutationAuthorized=false;entry.reason='NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED';
       }catch{
-        entry.status='outcome_unknown';entry.reason='NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT';report.halted=true;
+        entry.status='outcome_unknown';entry.mutationAuthorized=false;entry.reason='NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT';report.halted=true;
       }
       await persist();
     }

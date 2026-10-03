@@ -41,7 +41,8 @@ test('persists intent, mutates once and confirms a changed route',async()=>{
  expect(port.reroutes).toBe(1);
  expect(r.summary).toEqual({evaluated:1,rerouted:1,held:0,unknown:0});
  expect(r.entries[0]).toMatchObject({status:'rerouted',reason:'NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED'});
- expect(reports.some(x=>x.entries[0]?.status==='attempting')).toBe(true);
+ expect(reports.some(x=>x.entries[0]?.status==='attempting'&&x.entries[0]?.mutationAuthorized===true&&x.entries[0]?.reason==='FRESH_CONTEXT_VERIFIED_NATIVE_REROUTE_AUTHORIZED')).toBe(true);
+ expect(r.entries[0].mutationAuthorized).toBe(false);
 });
 
 test('disabled executor never prepares or mutates',async()=>{
@@ -55,7 +56,7 @@ test('unverified candidate stays held without mutation',async()=>{
  const bad=candidate({comparisonReady:false});
  const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async()=>{}).run([aircraft()],[decision],[bad]);
  expect(port.reroutes).toBe(0);
- expect(r.entries[0]).toMatchObject({status:'held',reason:'ROUTE_EXECUTION_GUARD_REJECTED'});
+ expect(r.entries[0]).toMatchObject({status:'held',mutationAuthorized:false,reason:'ROUTE_EXECUTION_GUARD_REJECTED'});
 });
 
 test('stale or changed target fingerprint stays held before mutation',async()=>{
@@ -67,7 +68,7 @@ test('stale or changed target fingerprint stays held before mutation',async()=>{
  const changedPort=new FakePort();
  changedPort.prepare=async(expected,target)=>({aircraft:{...expected},target:{...target,routeFee:target.routeFee+1}});
  const changed=await new RouteMutationExecutor(changedPort,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async()=>{}).run([aircraft()],[decision],[candidate()]);
- expect(changed.entries[0]).toMatchObject({status:'held',reason:'ROUTE_EXECUTION_CONTEXT_CHANGED'});
+ expect(changed.entries[0]).toMatchObject({status:'held',mutationAuthorized:false,reason:'ROUTE_EXECUTION_CONTEXT_CHANGED'});
  expect(changedPort.reroutes).toBe(0);
 });
 
@@ -75,7 +76,7 @@ test('context change before mutation fails closed',async()=>{
  const port=new FakePort();port.prepareChange=true;
  const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async()=>{}).run([aircraft()],[decision],[candidate()]);
  expect(port.reroutes).toBe(0);
- expect(r.entries[0]).toMatchObject({status:'held',reason:'ROUTE_EXECUTION_CONTEXT_CHANGED'});
+ expect(r.entries[0]).toMatchObject({status:'held',mutationAuthorized:false,reason:'ROUTE_EXECUTION_CONTEXT_CHANGED'});
 });
 
 test('unconfirmed mutation halts without retry',async()=>{
@@ -88,6 +89,6 @@ test('unconfirmed mutation halts without retry',async()=>{
    .run([aircraft(),a2],[decision,d2],[candidate(),c2]);
  expect(port.reroutes).toBe(1);
  expect(r.halted).toBe(true);
- expect(r.entries[0]).toMatchObject({status:'outcome_unknown',reason:'NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT'});
+ expect(r.entries[0]).toMatchObject({status:'outcome_unknown',mutationAuthorized:false,reason:'NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT'});
  expect(r.entries[1]).toMatchObject({status:'held',reason:'PREVIOUS_ROUTE_OUTCOME_UNKNOWN'});
 });
