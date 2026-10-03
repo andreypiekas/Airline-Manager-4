@@ -6,7 +6,7 @@ import { DemandConfig } from './types';
 import { IndividualDepartureExecutor, ExecutionReport } from './executor';
 import { PlaywrightDeparturePort } from './departure-port';
 import { optimizationConfig } from '../optimization/report';
-import { appendConfirmedDepartures,appendDemandHoldObservations } from '../optimization/return-journal';
+import { appendConfirmedDepartures,appendDemandHoldObservations,appendUncertainDepartures,readUnresolvedDepartureKeys } from '../optimization/return-journal';
 import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
 
 export function executionEnvironment(config:DemandConfig,env:NodeJS.ProcessEnv=process.env){
@@ -23,8 +23,7 @@ export function executionEnvironment(config:DemandConfig,env:NodeJS.ProcessEnv=p
 }
 export async function runDemandExecution(page:Page,config=readDemandConfig(),env:NodeJS.ProcessEnv=process.env,directory='test-results/demand'){
   const settings=executionEnvironment(config,env),optimization=optimizationConfig(env);
-  // Verified unknown outcome from production #126. Never retry this aircraft/route pair.
-  const blockedDepartureKeys=new Set<string>(['21114720:31876446']);
+  const blockedDepartureKeys=optimization.returnJournal?await readUnresolvedDepartureKeys(optimization.returnJournal.directory,optimization.returnJournal.scope):new Set<string>();
   await mkdir(directory,{recursive:true});
   // Exclusive marker survives repeated calls in this runner; Actions rejects every real rerun attempt.
   const marker=await open(join(directory,'individual-execution.started'),'wx');await marker.close();
@@ -45,11 +44,13 @@ export async function runDemandExecution(page:Page,config=readDemandConfig(),env
   const report=await new IndividualDepartureExecutor(new PlaywrightDeparturePort(page),config,{...settings,
     aircraftOrigins:optimization.aircraftOrigins,airlineBases:optimization.airlineBases,blockedDepartureKeys},save,adaptive).run();
   console.log('[IndividualDepartures] '+JSON.stringify(report.summary));
-  if(!settings.dryRun&&optimization.returnJournal&&!report.halted){
+  if(!settings.dryRun&&optimization.returnJournal){
     const held=await appendDemandHoldObservations(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);
     console.log('[History] Holds de demanda observados acrescentados: '+held+'.');
     const added=await appendConfirmedDepartures(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);
     console.log('[History] Decolagens confirmadas acrescentadas: '+added+'.');
+    const uncertain=await appendUncertainDepartures(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);
+    console.log('[History] Tentativas incertas bloqueadas acrescentadas: '+uncertain+'.');
   }
   if(report.halted)throw Error('DEMAND_EXECUTION_HALTED_UNKNOWN_RESULT_NO_RETRY');
   return report;
