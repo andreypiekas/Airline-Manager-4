@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { reviewWithReturnJournal } from '../../optimization/return-journal';
+import { appendFlightHistoryAnchors, reviewWithReturnJournal } from '../../optimization/return-journal';
 import { RouteReview } from '../../optimization/route-optimizer';
 const now = new Date('2026-09-30T11:00:00Z');
 function input(flightId='flight-1'): RouteReview {
@@ -144,4 +144,9 @@ test('reroute review is persisted only after a fresh confirmed route id',async()
 
 test('modern daily KEEP does not duplicate a completed return review from the same day',async()=>{
  const {appendVerifiedKeepRouteDecisions}=await import('../../optimization/return-journal');const when=new Date('2026-10-06T20:00:00Z');await mkdir(directory,{recursive:true});await writeFile(join(directory,'return-journal.json'),JSON.stringify({schemaVersion:1,scope:'company-test',entries:[{aircraftId:'1',origin:'GRU',flightId:'flight_123',reviewedAt:'2026-10-06T15:00:00Z',decision:'keep_route'}]})+'\n');const fleet=[{aircraftId:'1',routeId:'10',from:'GRU',to:'SCL',state:'ready',issue:null}],cycle={aircraftId:'1',from:'GRU',to:'SCL',comparisonReady:true,recurringCycleProfit:{expected:1000},recurringCycleProfitPerHour:{expected:500}},candidates=[{aircraftId:'1',comparisonReady:true,variableCycleComparison:{status:'keep_current',comparisonReady:true,current:cycle}}],decisions=[{aircraftId:'1',decision:'keep_route',selected:null,compared:1,reason:'NO_INSPECTED_CANDIDATE_PROVES_CONSERVATIVE_DOMINANCE'}];expect(await appendVerifiedKeepRouteDecisions(directory,'company-test',decisions,candidates,fleet,new Map([['1','GRU']]),'America/Sao_Paulo',when)).toBe(0);
+});
+
+
+test('compact flight-history anchor persists only uncovered observed aircraft',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'am4-anchor-'));try{await writeFile(join(dir,'return-journal.json'),JSON.stringify({schemaVersion:1,scope:'company-test',entries:[]}));const now=new Date();const row={relativeTime:'21 hours ago',from:'AAA',to:'BBB',registrationLabel:'FAST',co2Quotas:1,onboard:{Y:1,J:0,F:0},fuelLbs:2,revenue:3};const collection:any={aircraft:[{aircraftId:'1',registration:'FAST',operational:{cycles:190},flightHistory:{status:'observed',observedAt:now.toISOString(),entries:[row,row,row,row]}}]};const coverage:any[]=[{aircraftId:'1',historyStatus:'observed',visibleEntries:4,coversReset:false}];expect(await appendFlightHistoryAnchors(dir,'company-test','123',collection,coverage,now)).toBe(1);const saved=JSON.parse(await readFile(join(dir,'return-journal.json'),'utf8'));expect(saved.events).toHaveLength(1);expect(saved.events[0]).toMatchObject({eventId:'hist_123_1',type:'flight-history-anchor',aircraftId:'1',cycles:190});expect(saved.events[0].rows).toHaveLength(3);}finally{await rm(dir,{recursive:true,force:true});}
 });

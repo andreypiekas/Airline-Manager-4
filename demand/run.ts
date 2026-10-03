@@ -11,6 +11,7 @@ import { DemandReader } from './reader';
 import { writeDemandReport } from './report';
 import { DemandConfig, DemandReport } from './types';
 import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
+import { appendFlightHistoryAnchors } from '../optimization/return-journal';
 
 export async function runDemandSimulationDetailed(page: Page, config: DemandConfig = readDemandConfig(), reviews: Record<string, RouteReview> = {}) {
   const optimization = optimizationConfig();
@@ -27,6 +28,10 @@ export async function runDemandSimulationDetailed(page: Page, config: DemandConf
   await writeRouteResearchReport(researchReport);
   const candidateData=await collectCandidateData(page,collection,researchReport,optimization.minOccupancy);
   await writeCandidateDataReport(candidateData);
+  if(optimization.returnJournal&&/^[1-9]\d*$/.test(process.env.GITHUB_RUN_ID||'')){
+    const anchors=await appendFlightHistoryAnchors(optimization.returnJournal.directory,optimization.returnJournal.scope,process.env.GITHUB_RUN_ID!,collection,candidateData.flightHistoryCoverage);
+    console.log('[History] Ancoras compactas de Flight History acrescentadas: '+anchors+'.');
+  }
   if(!candidateData.uiRestored)throw new Error('[Demand] Painel nao restaurado apos consulta; nenhuma operacao autorizada.');
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');
   return {report,collection,researchReport,candidateData};
