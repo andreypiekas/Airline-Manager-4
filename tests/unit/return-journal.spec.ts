@@ -101,3 +101,19 @@ test('legacy entry remains valid while new entries append enriched evidence',asy
   expect(saved.entries[0]).toEqual({aircraftId:'1',origin:'AAA',flightId:'legacy',reviewedAt:'2026-09-29T11:00:00.000Z',decision:'keep_route'});
   expect(saved.entries[1].reviewEvidence).toMatchObject({trigger:'return',reviewedRouteId:'current',result:'keep_route'});
 });
+
+test('confirmed departure history is append-only and deduplicated by run aircraft route',async()=>{
+  await reviewWithReturnJournal(input(),options(),now);
+  const {appendConfirmedDepartures}=await import('../../optimization/return-journal');
+  const report:any={entries:[{aircraftId:'1',registration:'TEST-1',routeId:'current',from:'AAA',to:'BBB',status:'departed',reason:'NATIVE_INFLIGHT_IDENTITY_COUNTDOWN_AND_ONBOARD_CONFIRMED',
+    actualOnboard:{Y:88,J:0,F:0},demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:100,J:0,F:0},occupancyPercentage:100}}]};
+  expect(await appendConfirmedDepartures(directory,'company-test','123',report,now)).toBe(1);
+  expect(await appendConfirmedDepartures(directory,'company-test','123',report,now)).toBe(0);
+  const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
+  expect(saved.events).toEqual([{eventId:'dep_123_1_current',type:'departure',aircraftId:'1',registration:'TEST-1',routeId:'current',from:'AAA',to:'BBB',observedAt:now.toISOString(),result:'departed',demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:100,J:0,F:0},occupancyPercentage:100},actualOnboard:{Y:88,J:0,F:0}}]);
+});
+test('hold and uncertain departure never become confirmed history',async()=>{
+  await reviewWithReturnJournal(input(),options(),now);const {appendConfirmedDepartures}=await import('../../optimization/return-journal');
+  expect(await appendConfirmedDepartures(directory,'company-test','124',{entries:[{status:'held'},{status:'outcome_unknown'}]} as any,now)).toBe(0);
+  const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));expect(saved.events).toBeUndefined();
+});

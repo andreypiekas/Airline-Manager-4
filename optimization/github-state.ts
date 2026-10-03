@@ -57,6 +57,8 @@ export class GitHubReturnState {
     const original = this.parse(canonical(baseline.original));
     const current = this.parse(await readFile(join(this.options.directory, 'return-journal.json'), 'utf8'));
     if (current.entries.length < original.entries.length || original.entries.some((e, i) => canonical(e) !== canonical(current.entries[i]))) throw new Error('STATE_NOT_APPEND_ONLY');
+    const originalEvents=original.events||[],currentEvents=current.events||[];
+    if(currentEvents.length<originalEvents.length||originalEvents.some((e,i)=>canonical(e)!==canonical(currentEvents[i])))throw new Error('STATE_NOT_APPEND_ONLY');
     if (canonical(original) === canonical(current)) return 'unchanged';
     const content = JSON.stringify(current) + '\n';
     if (Buffer.byteLength(content) > MAX_BYTES) throw new Error('STATE_TOO_LARGE');

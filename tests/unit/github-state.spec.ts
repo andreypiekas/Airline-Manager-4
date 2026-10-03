@@ -127,3 +127,12 @@ for (const base of ['XAP','GRU','DTW']) test(`multi-run daily lifecycle at ${bas
   await mkdir(testInfo.outputDir,{recursive:true});
   await writeFile(testInfo.outputPath('simulation-report.json'),JSON.stringify({schemaVersion:1,synthetic:true,transport:'mock-github-api',gameRequests:0,dryRun:true,timeline},null,2));
 });
+
+test('operational events are append-only across remote state saves',async()=>{
+ const remote=server(),client=new GitHubReturnState(options(),remote.request);await client.restore();
+ const p=join(options().directory,'return-journal.json'),d=JSON.parse(await readFile(p,'utf8'));
+ d.events=[{eventId:'dep_123_1_current',type:'departure',aircraftId:'1',registration:'TEST',routeId:'current',from:'AAA',to:'BBB',observedAt:'2026-01-01T00:00:00.000Z',result:'departed',demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:90,J:0,F:0},occupancyPercentage:90},actualOnboard:{Y:88,J:0,F:0}}];
+ await writeFile(p,JSON.stringify(d));expect(await client.save()).toBe('saved');
+ const second=new GitHubReturnState(options('runner-2'),remote.request);await second.restore();const p2=join(options('runner-2').directory,'return-journal.json'),d2=JSON.parse(await readFile(p2,'utf8'));d2.events=[];await writeFile(p2,JSON.stringify(d2));
+ await expect(second.save()).rejects.toThrow('STATE_NOT_APPEND_ONLY');
+});
