@@ -118,6 +118,8 @@ export interface CandidateLoadFactorEvidence {
   verified:boolean;
   expectedByCabin:Cabins|null;
   expectedAggregate:number|null;
+  confidence95Low:number|null;
+  confidence95High:number|null;
   source:'current-fare-history-transferred-to-direct-alpha-above-one';
   reason:string;
   comparisonReady:false;
@@ -139,12 +141,16 @@ export function transferCurrentFareLoadFactor(
 ):CandidateLoadFactorEvidence {
   const base:CandidateLoadFactorEvidence={
     aircraftId:quote.aircraftId,from:quote.from,to:quote.to,verified:false,expectedByCabin:null,expectedAggregate:null,
+    confidence95Low:null,confidence95High:null,
     source:'current-fare-history-transferred-to-direct-alpha-above-one',reason:'TRANSFER_EVIDENCE_INCOMPLETE',
     comparisonReady:false,mutationAuthorized:false
   };
   if(calibration.aircraftId!==quote.aircraftId||calibration.status!=='verified_current_fare_empirical'||
-    calibration.expectedLoadFactor===null||!Number.isFinite(calibration.expectedLoadFactor)||
-    calibration.expectedLoadFactor<=0||calibration.expectedLoadFactor>1||!validCabins(capacity)||!validCabins(adjustedFares)||
+    calibration.expectedLoadFactor===null||calibration.confidence95Low===null||calibration.confidence95High===null||
+    ![calibration.expectedLoadFactor,calibration.confidence95Low,calibration.confidence95High].every(Number.isFinite)||
+    calibration.expectedLoadFactor<=0||calibration.expectedLoadFactor>1||calibration.confidence95Low<=0||
+    calibration.confidence95High>1||calibration.confidence95Low>calibration.expectedLoadFactor||
+    calibration.confidence95High<calibration.expectedLoadFactor||!validCabins(capacity)||!validCabins(adjustedFares)||
     !directCandidateVerified||!quote.autopriceReference)return base;
   const automatic=quote.autopriceReference.effectiveFares||quote.autopriceReference.base;
   if(!validCabins(automatic))return base;
@@ -153,5 +159,6 @@ export function transferCurrentFareLoadFactor(
   if(!aboveAuto)return {...base,reason:'CANDIDATE_FARE_NOT_STRICTLY_ABOVE_AUTO'};
   const f=calibration.expectedLoadFactor;
   return {...base,verified:true,expectedAggregate:f,expectedByCabin:{Y:f,J:f,F:f},
+    confidence95Low:calibration.confidence95Low,confidence95High:calibration.confidence95High,
     reason:'EMPIRICAL_CURRENT_FARE_LOAD_TRANSFERRED_TO_VERIFIED_DIRECT_ABOVE_AUTO_ROUTE'};
 }
