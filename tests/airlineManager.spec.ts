@@ -39,10 +39,10 @@ test('All Operations', async ({ page }) => {
       return !['false', '0', 'off', 'no'].includes(raw);
     };
 
-    const recordOperationalModule = (module:'maintenance'|'campaign',status:'started_observed'|'completed_observed') => {
+    const recordOperationalModule = (module:'maintenance'|'campaign',status:'started_observed'|'completed_observed',evidence?:Record<string,unknown>) => {
       const dir='test-results/demand',file=path.join(dir,'operational-modules.json');fs.mkdirSync(dir,{recursive:true});
       let current:any={schemaVersion:1};try{current=JSON.parse(fs.readFileSync(file,'utf8'));}catch{}
-      current.schemaVersion=1;current[module]={status,observedAt:new Date().toISOString()};
+      current.schemaVersion=1;current[module]={status,observedAt:new Date().toISOString(),...(evidence?{evidence}: {})};
       fs.writeFileSync(file,JSON.stringify(current,null,2)+'\n');
     };
 
@@ -154,13 +154,13 @@ test('All Operations', async ({ page }) => {
       await page.getByRole('button', { name: ' Plan' })
         .waitFor({ state: 'visible', timeout: 15000 });
 
-      await maintenanceUtils.checkPlanes();
+      const checkEvidence=await maintenanceUtils.checkPlanes();
       await GeneralUtils.randomSleep(1500, 3000);
-      await maintenanceUtils.repairPlanes();
+      const repairEvidence=await maintenanceUtils.repairPlanes();
       await GeneralUtils.randomSleep(1500, 3000);
       await closeOpenPanel('finalizar manutencao');
       console.log('[Operacao] Manutencao automatica finalizada.');
-      recordOperationalModule('maintenance','completed_observed');
+      recordOperationalModule('maintenance','completed_observed',{...checkEvidence,...repairEvidence});
     };
 
     const runDemandCampaign = async () => {

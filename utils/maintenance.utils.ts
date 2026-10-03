@@ -100,7 +100,7 @@ export class MaintenanceUtils {
         await GeneralUtils.randomSleep(800, 1500); 
     }
 
-    public async repairPlanes() {
+    public async repairPlanes():Promise<{repairEligible:boolean}> {
         await this.openPlanPanel();
         await GeneralUtils.randomSleep(1000, 2000);
         
@@ -121,9 +121,10 @@ export class MaintenanceUtils {
             const planBulkRepairButton = this.page.getByRole('button', { name: 'Plan bulk repair' });
             await GeneralUtils.moveAndClick(this.page, planBulkRepairButton);
         }
+        return {repairEligible:!noPlaneExists};
     }
 
-    public async checkPlanes() {
+    public async checkPlanes():Promise<{evaluated:number;selected:number;bulkCheckExecuted:boolean}> {
         await this.openPlanPanel();
         await GeneralUtils.randomSleep(1000, 2000);
         
@@ -134,6 +135,7 @@ export class MaintenanceUtils {
         await GeneralUtils.randomSleep(3000, 4500);
         
         let clicked = false;
+        let selected = 0;
         let didScroll = false; 
 
         // 🚀 STRATEGI UTAMA 1: Pre-Scroll ke bawah panel agar seluruh kartu pesawat (.bg-white) termuat penuh di layar
@@ -223,6 +225,7 @@ export class MaintenanceUtils {
                 // Gerakkan kursor ke kartu pesawat secara halus dan klik secara acak di area aman kartu
                 await GeneralUtils.moveAndClick(this.page, cardElement);
                 clicked = true;
+                selected++;
 
                 // Jeda ketukan jari manusia antar klik pesawat agar aman dari Anti-Cheat game dan menunggu DOM stabil
                 await GeneralUtils.randomSleep(1500, 2500);
@@ -243,6 +246,7 @@ export class MaintenanceUtils {
         } else {
             console.log("[Preventivo] Finalizado. Aeronaves acima do limite de horas para revisao.");
         }
+        return {evaluated:cardsCount,selected,bulkCheckExecuted:clicked};
     }
 }
 
