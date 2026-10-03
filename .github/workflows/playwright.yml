@@ -125,6 +125,9 @@ jobs:
         ENABLE_TICKET_PRICING_EXECUTION: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_TICKET_PRICING_EXECUTION || 'true') }}
         TICKET_PRICING_EXECUTION_ACK: native-route-price-save-v1
         TICKET_PRICING_MAX_ADJUSTMENTS_PER_RUN: ${{ vars.TICKET_PRICING_MAX_ADJUSTMENTS_PER_RUN || '5' }}
+        ENABLE_ROUTE_EXECUTION: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_ROUTE_EXECUTION || 'false') }}
+        ROUTE_EXECUTION_ACK: native-direct-reroute-v1
+        ROUTE_MAX_REROUTES_PER_RUN: ${{ vars.ROUTE_MAX_REROUTES_PER_RUN || '1' }}
         ROUTE_REVIEW_TIMEZONE: ${{ vars.ROUTE_REVIEW_TIMEZONE }}
         AIRLINE_BASES_JSON: ${{ vars.AIRLINE_BASES_JSON }}
         AIRCRAFT_ORIGINS_JSON: ${{ vars.AIRCRAFT_ORIGINS_JSON || '[]' }}
@@ -189,6 +192,9 @@ jobs:
         fi
         if [ -f test-results/demand/candidate-data.md ]; then
           cat test-results/demand/candidate-data.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/route-execution.md ]; then
+          cat test-results/demand/route-execution.md >> "$GITHUB_STEP_SUMMARY"
         fi
         if [ -f test-results/demand/pricing-execution.md ]; then
           cat test-results/demand/pricing-execution.md >> "$GITHUB_STEP_SUMMARY"
