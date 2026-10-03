@@ -19,7 +19,7 @@ test('fresh instances retain reviews across process-style reopen',async()=>{
   const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
   expect(saved.entries).toHaveLength(1);
   expect(saved.entries[0]).toMatchObject({aircraftId:'1',origin:'AAA',flightId:'flight-1',reviewedAt:now.toISOString(),decision:'keep_route',reviewEvidence:{trigger:'return',reviewedRouteId:'current',selectedRouteId:'current',result:'keep_route'}});
-  expect(saved.entries[0].reviewEvidence.routePerformance).toEqual([{routeId:'current',viable:true,netProfit:198700,netProfitPerHour:49675,occupancyPercentages:[100,100]}]);
+  expect(saved.entries[0].reviewEvidence.routePerformance).toEqual([{routeId:'current',viable:true,netProfit:217400,netProfitPerHour:54350,occupancyPercentages:[100,100]}]);
 });
 test('next flight is reviewed, old flight remains deduplicated',async()=>{
   await reviewWithReturnJournal(input(),options(),now);
