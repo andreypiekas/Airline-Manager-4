@@ -5,7 +5,7 @@ const safe=s=>String(s??'').replace(/[|\r\n<>]/g,' ');
 
 function build(dir='test-results/demand',logPath='test-results/bot.log'){
   const demand=read(dir,'demand-report.json'),fleet=read(dir,'fleet-observations.json'),execution=read(dir,'execution-report.json'),
-    routeExecution=read(dir,'route-execution.json'),supplies=read(dir,'supply-report.json'),pricing=read(dir,'pricing-execution.json');
+    routeExecution=read(dir,'route-execution.json'),supplies=read(dir,'supply-report.json'),pricing=read(dir,'pricing-execution.json'),modules=read(dir,'operational-modules.json');
   const log=(()=>{try{return fs.readFileSync(logPath,'utf8')}catch{return ''}})();
   const aircraft=Array.isArray(fleet?.aircraft)?fleet.aircraft:[];
   const execBy=new Map((execution?.entries||[]).map(x=>[x.aircraftId,x]));
@@ -35,10 +35,10 @@ function build(dir='test-results/demand',logPath='test-results/bot.log'){
       unchanged:pricing?.summary?.unchanged??null,unknown:pricing?.summary?.unknown??null},
     operationalStates:{NORMAL:count('NORMAL'),AGUARDANDO_DEMANDA:count('AGUARDANDO_DEMANDA'),
       PRECISA_REVISAR_ROTA:count('PRECISA_REVISAR_ROTA'),MANUTENCAO:count('MANUTENCAO'),PRONTA_PARA_DECOLAR:count('PRONTA_PARA_DECOLAR')},
-    maintenance:{preventiveACheckRepairs:log.includes('[Operacao] Manutencao automatica finalizada.')?'completed_observed':
-      log.includes('[Operacao] Iniciando manutencao preventiva, A-checks e reparos...')?'started_observed':'not_observed'},
-    campaign:{status:log.includes('[Operacao] Campanhas automaticas finalizadas.')?'completed_observed':
-      log.includes('[Operacao] Verificando e contratando campanhas...')?'started_observed':'not_observed'},
+    maintenance:{preventiveACheckRepairs:modules?.maintenance?.status??(log.includes('[Operacao] Manutencao automatica finalizada.')?'completed_observed':
+      log.includes('[Operacao] Iniciando manutencao preventiva, A-checks e reparos...')?'started_observed':'not_observed')},
+    campaign:{status:modules?.campaign?.status??(log.includes('[Operacao] Campanhas automaticas finalizadas.')?'completed_observed':
+      log.includes('[Operacao] Verificando e contratando campanhas...')?'started_observed':'not_observed')},
     supplies:supply
   };
   return {dashboard,states};
@@ -66,8 +66,10 @@ function selfTest(){
  fs.writeFileSync(path.join(dir,'execution-report.json'),JSON.stringify({summary:{departed:0,held:1,unknown:0},entries:[
   {aircraftId:'1',status:'held',reason:'low demand'}]}));
  fs.writeFileSync(path.join(dir,'route-execution.json'),JSON.stringify({summary:{evaluated:0,rerouted:0,held:0,unknown:0},entries:[]}));
+ fs.writeFileSync(path.join(dir,'operational-modules.json'),JSON.stringify({schemaVersion:1,maintenance:{status:'completed_observed',observedAt:'2026-01-01T00:00:00.000Z'},campaign:{status:'completed_observed',observedAt:'2026-01-01T00:00:00.000Z'}}));
  const {dashboard,states}=build(dir,path.join(dir,'missing.log'));
  assert.equal(dashboard.fleet.seen,2);assert.equal(dashboard.operationalStates.AGUARDANDO_DEMANDA,1);
+ assert.equal(dashboard.maintenance.preventiveACheckRepairs,'completed_observed');assert.equal(dashboard.campaign.status,'completed_observed');
  assert.equal(states.find(x=>x.aircraftId==='2').state,'NORMAL');
  fs.rmSync(dir,{recursive:true,force:true});console.log('company-dashboard self-test ok');
 }

@@ -38,6 +38,13 @@ test('All Operations', async ({ page }) => {
       return !['false', '0', 'off', 'no'].includes(raw);
     };
 
+    const recordOperationalModule = (module:'maintenance'|'campaign',status:'started_observed'|'completed_observed') => {
+      const dir='test-results/demand',file=path.join(dir,'operational-modules.json');fs.mkdirSync(dir,{recursive:true});
+      let current:any={schemaVersion:1};try{current=JSON.parse(fs.readFileSync(file,'utf8'));}catch{}
+      current.schemaVersion=1;current[module]={status,observedAt:new Date().toISOString()};
+      fs.writeFileSync(file,JSON.stringify(current,null,2)+'\n');
+    };
+
     const closeOpenPanel = async (context = 'painel') => {
       const popup = page.locator('#popup.modal.show').first();
 
@@ -137,6 +144,7 @@ test('All Operations', async ({ page }) => {
       }
 
       console.log('[Operacao] Iniciando manutencao preventiva, A-checks e reparos...');
+      recordOperationalModule('maintenance','started_observed');
       const maintenanceUtils = new MaintenanceUtils(page);
       const maintenanceMenu = page.locator('div:nth-child(4) > #mapMaint > img');
 
@@ -151,6 +159,7 @@ test('All Operations', async ({ page }) => {
       await GeneralUtils.randomSleep(1500, 3000);
       await closeOpenPanel('finalizar manutencao');
       console.log('[Operacao] Manutencao automatica finalizada.');
+      recordOperationalModule('maintenance','completed_observed');
     };
 
     const runDemandCampaign = async () => {
@@ -164,6 +173,7 @@ test('All Operations', async ({ page }) => {
       }
 
       console.log('[Operacao] Verificando e contratando campanhas...');
+      recordOperationalModule('campaign','started_observed');
       const campaignUtils = new CampaignUtils(page);
       const campaignMenu = page.locator('div:nth-child(5) > #mapMaint > img');
 
@@ -176,6 +186,7 @@ test('All Operations', async ({ page }) => {
       await GeneralUtils.randomSleep(1500, 3000);
       await closeOpenPanel('finalizar campanhas');
       console.log('[Operacao] Campanhas automaticas finalizadas.');
+      recordOperationalModule('campaign','completed_observed');
     };
 
     await loginForReadOnlyCollection(page, process.env, 90000);
