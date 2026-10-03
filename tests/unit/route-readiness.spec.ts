@@ -59,6 +59,43 @@ test('runway blocker clears only after reference, airportId and distance are cro
  expect(checked.mutationAuthorized).toBe(false);
 });
 
+test('verified variable-cycle comparison replaces legacy full-cost blockers without authorizing mutation',()=>{
+  const r=assessCandidateComparisonReadiness(candidate({
+    routeProfitModel:{verified:true},
+    variableCycleComparison:{comparisonReady:true,status:'candidate_dominates'},
+    routeDirectionEvidence:{verified:true,primaryMatchesContext:true,headerMatchesContext:true,independentSourcesAgree:true},
+    demand:{remaining:{Y:300,J:100,F:50}},
+    runwayEvidence:{status:'reference_verified',adequate:true,originObserved:true,destinationObserved:true,
+      originRunwayFt:10000,destinationRunwayFt:9000,requiredRunwayFt:6000},
+    runwayCrossChecked:true,
+    candidateLoadFactor:{verified:true,expectedAggregate:.8},
+    routeMutationControl:{
+      nativeClickReady:true,endpointVerified:true,targetVerified:true,
+      aircraftIdMatchesContext:true,airportIdMatchesContext:true
+    }
+  }));
+  expect(r.comparisonReady).toBe(true);
+  expect(r.comparisonBlockers).toEqual([]);
+  expect(r.mutationReady).toBe(false);
+  expect(r.mutationAuthorized).toBe(false);
+  expect(r.mutationBlockers).toEqual(['ROUTE_MUTATION_EXECUTOR_NOT_IMPLEMENTED']);
+});
+
+test('variable-cycle comparison remains blocked without pinned route-profit provenance',()=>{
+  const r=assessCandidateComparisonReadiness(candidate({
+    variableCycleComparison:{comparisonReady:true,status:'keep_current'},
+    routeDirectionEvidence:{verified:true,primaryMatchesContext:true,headerMatchesContext:true,independentSourcesAgree:true},
+    demand:{remaining:{Y:300,J:100,F:50}},
+    runwayEvidence:{status:'reference_verified',adequate:true,originObserved:true,destinationObserved:true,
+      originRunwayFt:10000,destinationRunwayFt:9000,requiredRunwayFt:6000},
+    runwayCrossChecked:true,
+    candidateLoadFactor:{verified:true,expectedAggregate:.8}
+  }));
+  expect(r.comparisonReady).toBe(false);
+  expect(r.comparisonBlockers).toContain('ROUTE_PROFIT_MODEL_UNVERIFIED');
+  expect(r.comparisonBlockers).toContain('VARIABLE_CYCLE_COMPARISON_UNAVAILABLE');
+});
+
 test('observed endpoint without contextual verification never opens mutation gate',()=>{
   const r=assessCandidateComparisonReadiness(candidate({
     createControl:{observed:true,phpEndpoints:['new_route_info.php']},
