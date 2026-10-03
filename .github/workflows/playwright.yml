@@ -203,6 +203,9 @@ jobs:
         if [ -f test-results/demand/candidate-data.md ]; then
           cat test-results/demand/candidate-data.md >> "$GITHUB_STEP_SUMMARY"
         fi
+        if [ -f test-results/demand/flight-history-continuity.md ]; then
+          cat test-results/demand/flight-history-continuity.md >> "$GITHUB_STEP_SUMMARY"
+        fi
         if [ -f test-results/demand/route-execution.md ]; then
           cat test-results/demand/route-execution.md >> "$GITHUB_STEP_SUMMARY"
         fi
