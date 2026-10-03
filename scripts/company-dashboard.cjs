@@ -36,7 +36,8 @@ function build(dir='test-results/demand',logPath='test-results/bot.log'){
     operationalStates:{NORMAL:count('NORMAL'),AGUARDANDO_DEMANDA:count('AGUARDANDO_DEMANDA'),
       PRECISA_REVISAR_ROTA:count('PRECISA_REVISAR_ROTA'),MANUTENCAO:count('MANUTENCAO'),PRONTA_PARA_DECOLAR:count('PRONTA_PARA_DECOLAR')},
     maintenance:{preventiveACheckRepairs:modules?.maintenance?.status??(log.includes('[Operacao] Manutencao automatica finalizada.')?'completed_observed':
-      log.includes('[Operacao] Iniciando manutencao preventiva, A-checks e reparos...')?'started_observed':'not_observed')},
+      log.includes('[Operacao] Iniciando manutencao preventiva, A-checks e reparos...')?'started_observed':'not_observed'),
+      evidence:modules?.maintenance?.evidence??null},
     campaign:{status:modules?.campaign?.status??(log.includes('[Operacao] Campanhas automaticas finalizadas.')?'completed_observed':
       log.includes('[Operacao] Verificando e contratando campanhas...')?'started_observed':'not_observed')},
     supplies:supply
@@ -50,7 +51,7 @@ function markdown(d,states){
   `| Frota vista | ${d.fleet.seen} |`,`| Em voo | ${d.fleet.inflight} |`,`| Prontas | ${d.fleet.ready} |`,
   `| Decoladas neste run | ${d.departures.departed??'n/d'} |`,`| Retidas | ${d.departures.held??'n/d'} |`,
   `| Reroutes confirmados | ${d.routes.rerouted??'n/d'} |`,`| Pricing ajustado | ${d.pricing.adjusted??'n/d'} |`,'',
-  `Manutencao preventiva/A-check/reparos: **${d.maintenance.preventiveACheckRepairs}**. Campanhas: **${d.campaign.status}**.`,'',
+  `Manutencao preventiva/A-check/reparos: **${d.maintenance.preventiveACheckRepairs}**${d.maintenance.evidence ? ` — avaliadas ${d.maintenance.evidence.evaluated??'n/d'}, A-check selecionadas ${d.maintenance.evidence.selected??'n/d'}, bulk check ${d.maintenance.evidence.bulkCheckExecuted===true?'executado':d.maintenance.evidence.bulkCheckExecuted===false?'nao necessario':'n/d'}, reparo elegivel ${d.maintenance.evidence.repairEligible===true?'sim':d.maintenance.evidence.repairEligible===false?'nao':'n/d'}` : ''}. Campanhas: **${d.campaign.status}**.`,'',
   `Combustivel: **${d.supplies.fuel?.status??'n/d'}** (${d.supplies.fuel?.reason??'sem evidencia'}). CO2: **${d.supplies.co2?.status??'n/d'}** (${d.supplies.co2?.reason??'sem evidencia'}).`,'',
   '## Estados operacionais','',
   `NORMAL ${s.NORMAL}; AGUARDANDO_DEMANDA ${s.AGUARDANDO_DEMANDA}; PRECISA_REVISAR_ROTA ${s.PRECISA_REVISAR_ROTA}; MANUTENCAO ${s.MANUTENCAO}; PRONTA_PARA_DECOLAR ${s.PRONTA_PARA_DECOLAR}.`,'',
@@ -66,10 +67,10 @@ function selfTest(){
  fs.writeFileSync(path.join(dir,'execution-report.json'),JSON.stringify({summary:{departed:0,held:1,unknown:0},entries:[
   {aircraftId:'1',status:'held',reason:'low demand'}]}));
  fs.writeFileSync(path.join(dir,'route-execution.json'),JSON.stringify({summary:{evaluated:0,rerouted:0,held:0,unknown:0},entries:[]}));
- fs.writeFileSync(path.join(dir,'operational-modules.json'),JSON.stringify({schemaVersion:1,maintenance:{status:'completed_observed',observedAt:'2026-01-01T00:00:00.000Z'},campaign:{status:'completed_observed',observedAt:'2026-01-01T00:00:00.000Z'}}));
+ fs.writeFileSync(path.join(dir,'operational-modules.json'),JSON.stringify({schemaVersion:1,maintenance:{status:'completed_observed',observedAt:'2026-01-01T00:00:00.000Z',evidence:{evaluated:22,selected:1,bulkCheckExecuted:true,repairEligible:false}},campaign:{status:'completed_observed',observedAt:'2026-01-01T00:00:00.000Z'}}));
  const {dashboard,states}=build(dir,path.join(dir,'missing.log'));
  assert.equal(dashboard.fleet.seen,2);assert.equal(dashboard.operationalStates.AGUARDANDO_DEMANDA,1);
- assert.equal(dashboard.maintenance.preventiveACheckRepairs,'completed_observed');assert.equal(dashboard.campaign.status,'completed_observed');
+ assert.equal(dashboard.maintenance.preventiveACheckRepairs,'completed_observed');assert.deepEqual(dashboard.maintenance.evidence,{evaluated:22,selected:1,bulkCheckExecuted:true,repairEligible:false});assert.equal(dashboard.campaign.status,'completed_observed');
  assert.equal(states.find(x=>x.aircraftId==='2').state,'NORMAL');
  fs.rmSync(dir,{recursive:true,force:true});console.log('company-dashboard self-test ok');
 }
