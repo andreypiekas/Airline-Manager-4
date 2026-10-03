@@ -91,7 +91,7 @@ test('candidate pair flight inside reset upper bound prevents assuming full dema
 test('different route flight spacing can still produce one conservative global reset intersection',()=>{
  const collection:CollectionResult={complete:true,expectedRoutes:2,warnings:[],aircraft:[
   ac('1',[e('2 hours ago','CCC','DDD',20,2,1),e('7 hours ago','AAA','BBB',1,0,0)]),
-  ac('2',[e('5 hours ago','DDD','CCC',10,1,0),e('8 hours ago','EEE','FFF',1,0,0)])
+  ac('2',[e('7 hours ago','DDD','CCC',10,1,0),e('8 hours ago','EEE','FFF',1,0,0)])
  ]};
  const calibration={status:'verified' as const,windows:[
   {pairKey:'AAA:BBB',includedMaxAgeMinutes:180,excludedMinAgeMinutes:360,consumed:{Y:1,J:0,F:0},observedAt:stamp,sourceAircraftIds:['1']},
