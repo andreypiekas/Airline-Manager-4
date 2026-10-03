@@ -31,6 +31,13 @@ test('reserves two future legs per other aircraft, excludes candidate, never con
  expect(r.reservations.map(r=>[r.aircraftId,r.from,r.to])).toEqual([['2','BBB','AAA'],['2','AAA','BBB']]);
  expect(JSON.stringify(data)).toBe(before);expect(r.reservations.every(r=>r.aircraftId!=='1')).toBe(true);
 });
+test('airport-pair pool reuses the same verified forward balance for the return leg',()=>{
+ const r=candidateReservationScenario(quote,collection(aircraft()),now,{nextLegs:2,poolScope:'airport-pair',maxAgeSeconds:300});
+ expect(r).toMatchObject({
+  status:'scenario_only',forwardAfterReservations:{Y:200,J:50,F:0},reverseAfterReservations:{Y:200,J:50,F:0},
+  futureCompetitionComplete:true,demandNetOfOtherAircraft:true
+ });
+});
 test('directional scenarios keep each direction separate and use reverse only for the next return flight',()=>{
  const data=collection(aircraft(),aircraft('2','inflight'),aircraft('3','ready',true));
  const r=candidateReservationScenario(quote,data,now,{nextLegs:1,poolScope:'directional',maxAgeSeconds:300});
