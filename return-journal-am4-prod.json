@@ -1,5 +1,1 @@
-{
-  "schemaVersion": 1,
-  "scope": "am4-prod",
-  "entries": []
-}
+{"schemaVersion":1,"scope":"am4-prod","entries":[],"events":[{"eventId":"dep_37137092484_22697512_33880008","type":"departure","aircraftId":"22697512","registration":"340-200-10","routeId":"33880008","from":"DTW","to":"PVG","observedAt":"2026-10-03T16:38:38.512Z","result":"departed","demand":{"availableBefore":{"Y":806,"J":235,"F":162},"possiblePassengers":{"Y":195,"J":10,"F":8},"occupancyPercentage":100},"actualOnboard":{"Y":131,"J":7,"F":5}},{"eventId":"dep_37137092484_22106703_32938765","type":"departure","aircraftId":"22106703","registration":"320-200-1","routeId":"32938765","from":"ANU","to":"GRU","observedAt":"2026-10-03T16:38:38.512Z","result":"departed","demand":{"availableBefore":{"Y":742,"J":847,"F":74},"possiblePassengers":{"Y":164,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":106,"J":0,"F":0}},{"eventId":"dep_37137092484_20433997_31895705","type":"departure","aircraftId":"20433997","registration":"320-200-2","routeId":"31895705","from":"PAP","to":"GRU","observedAt":"2026-10-03T16:38:38.512Z","result":"departed","demand":{"availableBefore":{"Y":1145,"J":273,"F":212},"possiblePassengers":{"Y":164,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":106,"J":0,"F":0}}]}
