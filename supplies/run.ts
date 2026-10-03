@@ -1,23 +1,32 @@
 import {Page} from '@playwright/test';
-import {mkdir,open,writeFile,rename} from 'node:fs/promises';
+import {mkdir,open,writeFile,rename,readFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {readDemandConfig} from '../demand/config';
 import {executionEnvironment} from '../demand/execute-run';
 import {Commodity,planPurchase,supplyConfig} from './policy';
 import {SupplyPort} from './port';
 import {optimizationConfig} from '../optimization/report';
-import {appendSupplyObservation} from '../optimization/return-journal';
+import {appendSupplyObservation,validateReturnJournal} from '../optimization/return-journal';
+import {adaptiveSupplyCap} from './adaptive-policy';
+import {calendarReference,loadReference,type FuelCalendar} from '../optimization/reference-data';
 export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv=process.env,directory='test-results/demand',port=new SupplyPort(page)){
  const config=supplyConfig(env);const optimization=optimizationConfig(env);
  if(!dryRun)executionEnvironment({...readDemandConfig(env),dryRun:false},env);
  await mkdir(directory,{recursive:true});
+ const journal=optimization.returnJournal?validateReturnJournal(JSON.parse(await readFile(join(optimization.returnJournal.directory,'return-journal.json'),'utf8')),optimization.returnJournal.scope,new Date()):{schemaVersion:1 as const,scope:'disabled',entries:[]};
+ const adaptive={fuel:adaptiveSupplyCap(journal,'fuel',config.maxPrice.fuel),co2:adaptiveSupplyCap(journal,'co2',config.maxPrice.co2)};
+ const effectiveConfig={...config,maxPrice:{fuel:adaptive.fuel.effectiveMax,co2:adaptive.co2.effectiveMax}};
+ const now=new Date(),local=new Date(now.getTime()-180*60000),monthLength=new Date(Date.UTC(local.getUTCFullYear(),local.getUTCMonth()+1,0)).getUTCDate();
+ const calendar=await loadReference<FuelCalendar>(monthLength===30?'fuel-calendar-30.json':'fuel-calendar-31.json');
+ const forecast={fuel:calendarReference(now,calendar,'fuel'),co2:calendarReference(now,calendar,'co2')};
  if(!dryRun){const marker=await open(join(directory,'supplies.started'),'wx');await marker.close();}
- const report:{dryRun:boolean;enabled:boolean;entries:any[];halted:boolean}={dryRun,enabled:config.enabled,entries:[],halted:false};
+ const report:{dryRun:boolean;enabled:boolean;entries:any[];halted:boolean;adaptive:any;forecast:any}={dryRun,enabled:config.enabled,entries:[],halted:false,adaptive,forecast};
  const save=async()=>{
   const file=join(directory,'supply-report.json');await writeFile(file+'.tmp',JSON.stringify(report,null,2)+'\n');await rename(file+'.tmp',file);
   await writeFile(join(directory,'supply-report.md'),['# Combustivel e CO2','',`Simulacao: ${dryRun}; habilitado: ${config.enabled}.`,'',
-   '| Recurso | Preco / 1.000 | Teto exclusivo | Quantidade | Resultado |','| --- | --- | --- | --- | --- |',
-   ...report.entries.map(e=>`| ${e.kind} | ${e.before?.pricePer1000??'—'} | ${config.maxPrice[e.kind as Commodity]} | ${e.plan?.quantity??0} | ${e.status}: ${e.reason} |`),''].join('\n'));
+   '| Recurso | Preco / 1.000 | Teto efetivo exclusivo | Politica | Quantidade | Resultado |','| --- | --- | --- | --- | --- | --- |',
+   ...report.entries.map(e=>`| ${e.kind} | ${e.before?.pricePer1000??'—'} | ${effectiveConfig.maxPrice[e.kind as Commodity]} | ${adaptive[e.kind as Commodity].source} (${adaptive[e.kind as Commodity].samples} amostras) | ${e.plan?.quantity??0} | ${e.status}: ${e.reason} |`),'',
+   `Calendario de referencia: fuel=${forecast.fuel.status}, CO2=${forecast.co2.status}. O calendario nunca autoriza compra; exige preco live.`,''].join('\n'));
  };
  await save();if(!config.enabled)return report;
  try {
@@ -25,7 +34,7 @@ export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv
    const entry:any={kind,status:'reading',reason:'PENDING',before:null,plan:null};report.entries.push(entry);await save();
    await port.open(kind);entry.before=await port.snapshot(kind);
    if(!dryRun&&optimization.returnJournal){await appendSupplyObservation(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',kind,entry.before);}
-   entry.plan=planPurchase(entry.before,kind,config);
+   entry.plan=planPurchase(entry.before,kind,effectiveConfig);
    if(entry.plan.reason==='INVALID_DATA')throw Error('SUPPLY_DATA_INVALID');
    if(!entry.plan.quantity){entry.status='skipped';entry.reason=entry.plan.reason;await save();continue;}
    entry.quotedCost=await port.quote(kind,entry.plan.quantity);
