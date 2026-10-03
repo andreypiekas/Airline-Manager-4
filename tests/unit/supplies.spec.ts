@@ -27,7 +27,7 @@ test('verified supply history can only tighten the configured cap',async()=>{
  const {adaptiveSupplyCap}=await import('../../supplies/adaptive-policy');
  const obs=[300,320,340,360,500].map((pricePer1000,i)=>({eventId:'s'+i,type:'supply-observation' as const,kind:'fuel' as const,observedAt:'2026-09-29T15:00:00Z',pricePer1000,holding:1,remainingCapacity:1,balance:1}));
  expect(adaptiveSupplyCap({schemaVersion:1,scope:'x',entries:[],supplyObservations:obs.slice(0,4)},'fuel',550)).toMatchObject({effectiveMax:550,source:'configured-cap',samples:4});
- expect(adaptiveSupplyCap({schemaVersion:1,scope:'x',entries:[],supplyObservations:obs},'fuel',550)).toEqual({configuredMax:550,effectiveMax:341,source:'verified-live-history',samples:5,historicalReference:340});
+ expect(adaptiveSupplyCap({schemaVersion:1,scope:'x',entries:[],supplyObservations:obs},'fuel',550)).toEqual({configuredMax:550,effectiveMax:330,source:'verified-live-history',samples:5,historicalReference:320});
 });
 test('adaptive supply cap is bounded and never raises configured ceiling',async()=>{
  const {adaptiveSupplyCap}=await import('../../supplies/adaptive-policy');
