@@ -51,13 +51,18 @@ test('calibrates expected load only from flights reproducing current fares exact
  expect(r.comparisonReady).toBe(false);expect(r.mutationAuthorized).toBe(false);
 });
 
-test('old-fare history rows are excluded rather than blended',()=>{
- const a=structuredClone(aircraft);
- a.flightHistory!.entries[0]={...a.flightHistory!.entries[0],revenue:a.flightHistory!.entries[0].revenue-10};
- const r=calibrateCurrentFareLoadFactor(a,quote,mode,distance);
- expect(r.sampleCount).toBe(4);
- expect(r.status).toBe('insufficient');
- expect(r.reason).toBe('TOO_FEW_CURRENT_FARE_HISTORY_SAMPLES');
+test('four exact current-fare samples are sufficient, while three still fail closed',()=>{
+ const four=structuredClone(aircraft);
+ four.flightHistory!.entries[0]={...four.flightHistory!.entries[0],revenue:four.flightHistory!.entries[0].revenue-10};
+ const ok=calibrateCurrentFareLoadFactor(four,quote,mode,distance);
+ expect(ok.sampleCount).toBe(4);
+ expect(ok.status).toBe('verified_current_fare_empirical');
+ const three=structuredClone(four);
+ three.flightHistory!.entries[1]={...three.flightHistory!.entries[1],revenue:three.flightHistory!.entries[1].revenue-10};
+ const blocked=calibrateCurrentFareLoadFactor(three,quote,mode,distance);
+ expect(blocked.sampleCount).toBe(3);
+ expect(blocked.status).toBe('insufficient');
+ expect(blocked.reason).toBe('TOO_FEW_CURRENT_FARE_HISTORY_SAMPLES');
 });
 
 test('unverified direct route or weak demand headroom fails closed',()=>{
