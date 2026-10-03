@@ -73,13 +73,14 @@ export class PlaywrightRouteExecutionPort implements RouteExecutionPort {
     const read=await readOpenCandidateQuoteAfterVerifiedAjax(this.page,{
       aircraftId:fresh.aircraftId,registration:fresh.registration,airportId:target.airportId,from:target.from,to:target.to
     });
-    if(read.status!=='observed'||!read.quote.autopriceReference?.effectiveFares)throw new Error('ROUTE_TARGET_QUOTE_UNAVAILABLE');
-
+    if(read.status!=='observed')throw new Error('ROUTE_TARGET_QUOTE_UNAVAILABLE');
     const q=read.quote;
+    const effectiveFares=q.autopriceReference?.effectiveFares;
+    if(!effectiveFares)throw new Error('ROUTE_TARGET_QUOTE_UNAVAILABLE');
     const next:RouteExecutionCandidate={
       ...target,observedAt:q.observedAt,costIndex:q.costIndex,distanceKm:q.distanceKm,durationSeconds:q.durationSeconds,
       fuelLbs:q.fuelLbs,co2KgPerPaxKm:q.co2KgPerPaxKm,routeFee:q.routeFee,
-      autoFares:{...q.autopriceReference.effectiveFares},routeMutationControl:q.routeMutationControl||null
+      autoFares:{...effectiveFares},routeMutationControl:q.routeMutationControl||null
     };
     if(!sameTarget(target,next))throw new Error('ROUTE_TARGET_FINGERPRINT_CHANGED');
 
