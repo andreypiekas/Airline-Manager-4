@@ -7,7 +7,7 @@ import { inspectRouteQuoteResponse } from './route-response-diagnostics';
 /** Bounded native suggestions from an ALREADY OPEN planner. Only inspection clicks. */
 export async function collectOpenRouteSuggestions(page: Page, aircraft: AircraftSnapshot, origin: string | null, limit=3, timeout=10000, minCoveragePercent=80, scanLimit=Math.min(10,Math.max(limit,limit*3))) {
   const result={aircraftId:aircraft.aircraftId,quotes:[] as CandidateQuote[],screenedOut:[] as {airportId:string;to:string;coverageCeilingPercent:number|null;reason:string}[],
-    scanned:0,status:'unavailable',warnings:[] as string[],candidatesComplete:false,comparisonReady:false,mutationAuthorized:false};
+    scanned:0,status:'unavailable',warnings:[] as string[],stage:'init' as string,candidatesComplete:false,comparisonReady:false,mutationAuthorized:false};
   if(!Number.isSafeInteger(limit)||limit<1||limit>10||!Number.isSafeInteger(timeout)||timeout<1||timeout>30000||
     !Number.isFinite(minCoveragePercent)||minCoveragePercent<=0||minCoveragePercent>100||
     !Number.isSafeInteger(scanLimit)||scanLimit<limit||scanLimit>20)throw new Error('SUGGESTION_CONFIG_INVALID');
