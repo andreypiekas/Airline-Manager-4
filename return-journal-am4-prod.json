@@ -1,1 +1,753 @@
-{"schemaVersion":1,"scope":"am4-prod","entries":[],"events":[{"eventId":"dep_37137092484_22697512_33880008","type":"departure","aircraftId":"22697512","registration":"340-200-10","routeId":"33880008","from":"DTW","to":"PVG","observedAt":"2026-10-03T16:38:38.512Z","result":"departed","demand":{"availableBefore":{"Y":806,"J":235,"F":162},"possiblePassengers":{"Y":195,"J":10,"F":8},"occupancyPercentage":100},"actualOnboard":{"Y":131,"J":7,"F":5}},{"eventId":"dep_37137092484_22106703_32938765","type":"departure","aircraftId":"22106703","registration":"320-200-1","routeId":"32938765","from":"ANU","to":"GRU","observedAt":"2026-10-03T16:38:38.512Z","result":"departed","demand":{"availableBefore":{"Y":742,"J":847,"F":74},"possiblePassengers":{"Y":164,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":106,"J":0,"F":0}},{"eventId":"dep_37137092484_20433997_31895705","type":"departure","aircraftId":"20433997","registration":"320-200-2","routeId":"31895705","from":"PAP","to":"GRU","observedAt":"2026-10-03T16:38:38.512Z","result":"departed","demand":{"availableBefore":{"Y":1145,"J":273,"F":212},"possiblePassengers":{"Y":164,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":106,"J":0,"F":0}},{"eventId":"dep_37140746877_22316469_33272938","type":"departure","aircraftId":"22316469","registration":"BC-605","routeId":"33272938","from":"GRU","to":"XAP","observedAt":"2026-10-03T17:38:56.270Z","result":"departed","demand":{"availableBefore":{"Y":366,"J":474,"F":72},"possiblePassengers":{"Y":12,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":9,"J":0,"F":0}},{"eventId":"dep_37140746877_20452146_30690233","type":"departure","aircraftId":"20452146","registration":"ATR 72-500","routeId":"30690233","from":"GRU","to":"BSB","observedAt":"2026-10-03T17:38:56.270Z","result":"departed","demand":{"availableBefore":{"Y":513,"J":463,"F":295},"possiblePassengers":{"Y":44,"J":9,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":31,"J":6,"F":0}},{"eventId":"dep_37140746877_21038003_31259843","type":"departure","aircraftId":"21038003","registration":"DC-9-10","routeId":"31259843","from":"IMP","to":"GRU","observedAt":"2026-10-03T17:38:56.270Z","result":"departed","demand":{"availableBefore":{"Y":296,"J":206,"F":89},"possiblePassengers":{"Y":69,"J":4,"F":4},"occupancyPercentage":100},"actualOnboard":{"Y":47,"J":3,"F":3}},{"eventId":"dep_37140746877_22664890_33815618","type":"departure","aircraftId":"22664890","registration":"340-200-8","routeId":"33815618","from":"TXL","to":"GRU","observedAt":"2026-10-03T17:38:56.270Z","result":"departed","demand":{"availableBefore":{"Y":810,"J":326,"F":507},"possiblePassengers":{"Y":202,"J":11,"F":4},"occupancyPercentage":100},"actualOnboard":{"Y":126,"J":7,"F":3}},{"eventId":"dep_37142588775_22106704_32938668","type":"departure","aircraftId":"22106704","registration":"737-700C","routeId":"32938668","from":"GRU","to":"KIN","observedAt":"2026-10-03T18:07:50.024Z","result":"departed","demand":{"availableBefore":{"Y":1020,"J":527,"F":79},"possiblePassengers":{"Y":120,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":77,"J":0,"F":0}},{"eventId":"dep_37142588775_22106705_32938585","type":"departure","aircraftId":"22106705","registration":"C11R","routeId":"32938585","from":"CTC","to":"GRU","observedAt":"2026-10-03T18:07:50.024Z","result":"departed","demand":{"availableBefore":{"Y":373,"J":196,"F":83},"possiblePassengers":{"Y":99,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":64,"J":0,"F":0}},{"eventId":"dep_37142588775_20826380_30942378","type":"departure","aircraftId":"20826380","registration":"E135Er","routeId":"30942378","from":"FOR","to":"GRU","observedAt":"2026-10-03T18:07:50.024Z","result":"departed","demand":{"availableBefore":{"Y":471,"J":196,"F":256},"possiblePassengers":{"Y":37,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":24,"J":0,"F":0}},{"eventId":"dep_37142588775_20434399_33793495","type":"departure","aircraftId":"20434399","registration":"B737-100-1","routeId":"33793495","from":"JAU","to":"GRU","observedAt":"2026-10-03T18:07:50.024Z","result":"departed","demand":{"availableBefore":{"Y":383,"J":120,"F":75},"possiblePassengers":{"Y":118,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":80,"J":0,"F":0}},{"eventId":"dep_37146319186_22316469_33272938","type":"departure","aircraftId":"22316469","registration":"BC-605","routeId":"33272938","from":"XAP","to":"GRU","observedAt":"2026-10-03T19:14:57.384Z","result":"departed","demand":{"availableBefore":{"Y":357,"J":474,"F":72},"possiblePassengers":{"Y":12,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":9,"J":0,"F":0}},{"eventId":"dep_37146319186_22316462_33273004","type":"departure","aircraftId":"22316462","registration":"CC-X","routeId":"33273004","from":"GRU","to":"CZS","observedAt":"2026-10-03T19:14:57.384Z","result":"departed","demand":{"availableBefore":{"Y":1060,"J":268,"F":83},"possiblePassengers":{"Y":12,"J":0,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":9,"J":0,"F":0}},{"eventId":"dep_37146319186_20452146_30690233","type":"departure","aircraftId":"20452146","registration":"ATR 72-500","routeId":"30690233","from":"BSB","to":"GRU","observedAt":"2026-10-03T19:14:57.384Z","result":"departed","demand":{"availableBefore":{"Y":482,"J":457,"F":295},"possiblePassengers":{"Y":44,"J":9,"F":0},"occupancyPercentage":100},"actualOnboard":{"Y":31,"J":6,"F":0}},{"eventId":"dep_37146319186_22250677_33815116","type":"departure","aircraftId":"22250677","registration":"MC-21-400","routeId":"33815116","from":"GEO","to":"DTW","observedAt":"2026-10-03T19:14:57.384Z","result":"departed","demand":{"availableBefore":{"Y":154,"J":184,"F":67},"possiblePassengers":{"Y":154,"J":8,"F":7},"occupancyPercentage":82.4390243902439},"actualOnboard":{"Y":110,"J":5,"F":5}},{"eventId":"hist_37148125400_22316469","type":"flight-history-anchor","aircraftId":"22316469","registration":"BC-605","observedAt":"2026-10-03T19:32:32.576Z","cycles":191,"rows":[{"relativeTime":"18 hours ago","from":"GRU","to":"XAP","co2Quotas":310,"onboard":{"Y":8,"J":0,"F":0},"fuelLbs":2984,"revenue":7360},{"relativeTime":"19 hours ago","from":"XAP","to":"GRU","co2Quotas":348,"onboard":{"Y":9,"J":0,"F":0},"fuelLbs":2984,"revenue":8280},{"relativeTime":"20 hours ago","from":"GRU","to":"XAP","co2Quotas":310,"onboard":{"Y":8,"J":0,"F":0},"fuelLbs":2984,"revenue":7360}]},{"eventId":"dep_37148125400_21038003_31259843","type":"departure","aircraftId":"21038003","registration":"DC-9-10","routeId":"31259843","from":"GRU","to":"IMP","observedAt":"2026-10-03T19:36:37.750Z","result":"departed","demand":{"availableBefore":{"Y":249,"J":203,"F":86},"possiblePassengers":{"Y":69,"J":4,"F":4},"occupancyPercentage":100},"actualOnboard":{"Y":44,"J":3,"F":3}}],"supplyObservations":[{"eventId":"sup_37140746877_fuel","type":"supply-observation","kind":"fuel","observedAt":"2026-10-03T17:32:03.438Z","pricePer1000":1420,"holding":4768185,"remainingCapacity":7637815,"balance":17797406},{"eventId":"sup_37140746877_co2","type":"supply-observation","kind":"co2","observedAt":"2026-10-03T17:32:04.084Z","pricePer1000":121,"holding":2226295,"remainingCapacity":2599205,"balance":17797406},{"eventId":"sup_37142588775_fuel","type":"supply-observation","kind":"fuel","observedAt":"2026-10-03T18:01:49.677Z","pricePer1000":1730,"holding":4538957,"remainingCapacity":7867043,"balance":18597866},{"eventId":"sup_37142588775_co2","type":"supply-observation","kind":"co2","observedAt":"2026-10-03T18:01:50.250Z","pricePer1000":139,"holding":1862861,"remainingCapacity":2962639,"balance":18597866},{"eventId":"sup_37146319186_fuel","type":"supply-observation","kind":"fuel","observedAt":"2026-10-03T19:02:14.150Z","pricePer1000":670,"holding":3319118,"remainingCapacity":9086882,"balance":7717997},{"eventId":"sup_37146319186_co2","type":"supply-observation","kind":"co2","observedAt":"2026-10-03T19:02:14.747Z","pricePer1000":191,"holding":-437451,"remainingCapacity":4825500,"balance":7717997},{"eventId":"sup_37148125400_fuel","type":"supply-observation","kind":"fuel","observedAt":"2026-10-03T19:31:40.529Z","pricePer1000":2500,"holding":3191640,"remainingCapacity":9214360,"balance":8084017},{"eventId":"sup_37148125400_co2","type":"supply-observation","kind":"co2","observedAt":"2026-10-03T19:31:41.073Z","pricePer1000":113,"holding":-546624,"remainingCapacity":4825500,"balance":8084017}],"holdObservations":[{"eventId":"hold_37140746877_20477015_31876337","type":"demand-hold","aircraftId":"20477015","routeId":"31876337","observedAt":"2026-10-03T17:38:56.267Z","occupancyPercentage":16.793893129770993,"reason":"hold_insufficient"},{"eventId":"hold_37140746877_22237429_33145970","type":"demand-hold","aircraftId":"22237429","routeId":"33145970","observedAt":"2026-10-03T17:38:56.267Z","occupancyPercentage":16.037735849056602,"reason":"hold_insufficient"},{"eventId":"hold_37140746877_20821798_31803282","type":"demand-hold","aircraftId":"20821798","routeId":"31803282","observedAt":"2026-10-03T17:38:56.267Z","occupancyPercentage":30.18867924528302,"reason":"hold_insufficient"},{"eventId":"hold_37142588775_20477015_31876337","type":"demand-hold","aircraftId":"20477015","routeId":"31876337","observedAt":"2026-10-03T18:07:50.022Z","occupancyPercentage":16.793893129770993,"reason":"hold_insufficient"},{"eventId":"hold_37142588775_22237429_33145970","type":"demand-hold","aircraftId":"22237429","routeId":"33145970","observedAt":"2026-10-03T18:07:50.022Z","occupancyPercentage":16.037735849056602,"reason":"hold_insufficient"},{"eventId":"hold_37142588775_20821798_31803282","type":"demand-hold","aircraftId":"20821798","routeId":"31803282","observedAt":"2026-10-03T18:07:50.022Z","occupancyPercentage":30.18867924528302,"reason":"hold_insufficient"},{"eventId":"hold_37146319186_20477015_31876337","type":"demand-hold","aircraftId":"20477015","routeId":"31876337","observedAt":"2026-10-03T19:14:57.382Z","occupancyPercentage":16.793893129770993,"reason":"hold_insufficient"},{"eventId":"hold_37146319186_22237429_33145970","type":"demand-hold","aircraftId":"22237429","routeId":"33145970","observedAt":"2026-10-03T19:14:57.382Z","occupancyPercentage":16.037735849056602,"reason":"hold_insufficient"},{"eventId":"hold_37146319186_20821798_31803282","type":"demand-hold","aircraftId":"20821798","routeId":"31803282","observedAt":"2026-10-03T19:14:57.382Z","occupancyPercentage":30.18867924528302,"reason":"hold_insufficient"},{"eventId":"hold_37148125400_20477015_31876337","type":"demand-hold","aircraftId":"20477015","routeId":"31876337","observedAt":"2026-10-03T19:36:37.748Z","occupancyPercentage":16.793893129770993,"reason":"hold_insufficient"},{"eventId":"hold_37148125400_22237429_33145970","type":"demand-hold","aircraftId":"22237429","routeId":"33145970","observedAt":"2026-10-03T19:36:37.748Z","occupancyPercentage":16.037735849056602,"reason":"hold_insufficient"},{"eventId":"hold_37148125400_20821798_31803282","type":"demand-hold","aircraftId":"20821798","routeId":"31803282","observedAt":"2026-10-03T19:36:37.748Z","occupancyPercentage":30.18867924528302,"reason":"hold_insufficient"}],"uiHealthObservations":[{"eventId":"ui_20261003190213","type":"ui-health","observedAt":"2026-10-03T19:02:13.868Z","status":"healthy","surfaces":["login","fleet","maintenance","marketing","supplies"]},{"eventId":"ui_20261003193140","type":"ui-health","observedAt":"2026-10-03T19:31:40.293Z","status":"healthy","surfaces":["login","fleet","maintenance","marketing","supplies"]}]}
+{
+  "schemaVersion": 1,
+  "scope": "am4-prod",
+  "entries": [],
+  "events": [
+    {
+      "eventId": "dep_37137092484_22697512_33880008",
+      "type": "departure",
+      "aircraftId": "22697512",
+      "registration": "340-200-10",
+      "routeId": "33880008",
+      "from": "DTW",
+      "to": "PVG",
+      "observedAt": "2026-10-03T16:38:38.512Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 806,
+          "J": 235,
+          "F": 162
+        },
+        "possiblePassengers": {
+          "Y": 195,
+          "J": 10,
+          "F": 8
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 131,
+        "J": 7,
+        "F": 5
+      }
+    },
+    {
+      "eventId": "dep_37137092484_22106703_32938765",
+      "type": "departure",
+      "aircraftId": "22106703",
+      "registration": "320-200-1",
+      "routeId": "32938765",
+      "from": "ANU",
+      "to": "GRU",
+      "observedAt": "2026-10-03T16:38:38.512Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 742,
+          "J": 847,
+          "F": 74
+        },
+        "possiblePassengers": {
+          "Y": 164,
+          "J": 0,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 106,
+        "J": 0,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37137092484_20433997_31895705",
+      "type": "departure",
+      "aircraftId": "20433997",
+      "registration": "320-200-2",
+      "routeId": "31895705",
+      "from": "PAP",
+      "to": "GRU",
+      "observedAt": "2026-10-03T16:38:38.512Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 1145,
+          "J": 273,
+          "F": 212
+        },
+        "possiblePassengers": {
+          "Y": 164,
+          "J": 0,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 106,
+        "J": 0,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37140746877_22316469_33272938",
+      "type": "departure",
+      "aircraftId": "22316469",
+      "registration": "BC-605",
+      "routeId": "33272938",
+      "from": "GRU",
+      "to": "XAP",
+      "observedAt": "2026-10-03T17:38:56.270Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 366,
+          "J": 474,
+          "F": 72
+        },
+        "possiblePassengers": {
+          "Y": 12,
+          "J": 0,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 9,
+        "J": 0,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37140746877_20452146_30690233",
+      "type": "departure",
+      "aircraftId": "20452146",
+      "registration": "ATR 72-500",
+      "routeId": "30690233",
+      "from": "GRU",
+      "to": "BSB",
+      "observedAt": "2026-10-03T17:38:56.270Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 513,
+          "J": 463,
+          "F": 295
+        },
+        "possiblePassengers": {
+          "Y": 44,
+          "J": 9,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 31,
+        "J": 6,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37140746877_21038003_31259843",
+      "type": "departure",
+      "aircraftId": "21038003",
+      "registration": "DC-9-10",
+      "routeId": "31259843",
+      "from": "IMP",
+      "to": "GRU",
+      "observedAt": "2026-10-03T17:38:56.270Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 296,
+          "J": 206,
+          "F": 89
+        },
+        "possiblePassengers": {
+          "Y": 69,
+          "J": 4,
+          "F": 4
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 47,
+        "J": 3,
+        "F": 3
+      }
+    },
+    {
+      "eventId": "dep_37140746877_22664890_33815618",
+      "type": "departure",
+      "aircraftId": "22664890",
+      "registration": "340-200-8",
+      "routeId": "33815618",
+      "from": "TXL",
+      "to": "GRU",
+      "observedAt": "2026-10-03T17:38:56.270Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 810,
+          "J": 326,
+          "F": 507
+        },
+        "possiblePassengers": {
+          "Y": 202,
+          "J": 11,
+          "F": 4
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 126,
+        "J": 7,
+        "F": 3
+      }
+    },
+    {
+      "eventId": "dep_37142588775_22106704_32938668",
+      "type": "departure",
+      "aircraftId": "22106704",
+      "registration": "737-700C",
+      "routeId": "32938668",
+      "from": "GRU",
+      "to": "KIN",
+      "observedAt": "2026-10-03T18:07:50.024Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 1020,
+          "J": 527,
+          "F": 79
+        },
+        "possiblePassengers": {
+          "Y": 120,
+          "J": 0,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 77,
+        "J": 0,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37142588775_22106705_32938585",
+      "type": "departure",
+      "aircraftId": "22106705",
+      "registration": "C11R",
+      "routeId": "32938585",
+      "from": "CTC",
+      "to": "GRU",
+      "observedAt": "2026-10-03T18:07:50.024Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 373,
+          "J": 196,
+          "F": 83
+        },
+        "possiblePassengers": {
+          "Y": 99,
+          "J": 0,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 64,
+        "J": 0,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37142588775_20826380_30942378",
+      "type": "departure",
+      "aircraftId": "20826380",
+      "registration": "E135Er",
+      "routeId": "30942378",
+      "from": "FOR",
+      "to": "GRU",
+      "observedAt": "2026-10-03T18:07:50.024Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 471,
+          "J": 196,
+          "F": 256
+        },
+        "possiblePassengers": {
+          "Y": 37,
+          "J": 0,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 24,
+        "J": 0,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37142588775_20434399_33793495",
+      "type": "departure",
+      "aircraftId": "20434399",
+      "registration": "B737-100-1",
+      "routeId": "33793495",
+      "from": "JAU",
+      "to": "GRU",
+      "observedAt": "2026-10-03T18:07:50.024Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 383,
+          "J": 120,
+          "F": 75
+        },
+        "possiblePassengers": {
+          "Y": 118,
+          "J": 0,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 80,
+        "J": 0,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37146319186_22316469_33272938",
+      "type": "departure",
+      "aircraftId": "22316469",
+      "registration": "BC-605",
+      "routeId": "33272938",
+      "from": "XAP",
+      "to": "GRU",
+      "observedAt": "2026-10-03T19:14:57.384Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 357,
+          "J": 474,
+          "F": 72
+        },
+        "possiblePassengers": {
+          "Y": 12,
+          "J": 0,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 9,
+        "J": 0,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37146319186_22316462_33273004",
+      "type": "departure",
+      "aircraftId": "22316462",
+      "registration": "CC-X",
+      "routeId": "33273004",
+      "from": "GRU",
+      "to": "CZS",
+      "observedAt": "2026-10-03T19:14:57.384Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 1060,
+          "J": 268,
+          "F": 83
+        },
+        "possiblePassengers": {
+          "Y": 12,
+          "J": 0,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 9,
+        "J": 0,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37146319186_20452146_30690233",
+      "type": "departure",
+      "aircraftId": "20452146",
+      "registration": "ATR 72-500",
+      "routeId": "30690233",
+      "from": "BSB",
+      "to": "GRU",
+      "observedAt": "2026-10-03T19:14:57.384Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 482,
+          "J": 457,
+          "F": 295
+        },
+        "possiblePassengers": {
+          "Y": 44,
+          "J": 9,
+          "F": 0
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 31,
+        "J": 6,
+        "F": 0
+      }
+    },
+    {
+      "eventId": "dep_37146319186_22250677_33815116",
+      "type": "departure",
+      "aircraftId": "22250677",
+      "registration": "MC-21-400",
+      "routeId": "33815116",
+      "from": "GEO",
+      "to": "DTW",
+      "observedAt": "2026-10-03T19:14:57.384Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 154,
+          "J": 184,
+          "F": 67
+        },
+        "possiblePassengers": {
+          "Y": 154,
+          "J": 8,
+          "F": 7
+        },
+        "occupancyPercentage": 82.4390243902439
+      },
+      "actualOnboard": {
+        "Y": 110,
+        "J": 5,
+        "F": 5
+      }
+    },
+    {
+      "eventId": "hist_37148125400_22316469",
+      "type": "flight-history-anchor",
+      "aircraftId": "22316469",
+      "registration": "BC-605",
+      "observedAt": "2026-10-03T19:32:32.576Z",
+      "cycles": 191,
+      "rows": [
+        {
+          "relativeTime": "18 hours ago",
+          "from": "GRU",
+          "to": "XAP",
+          "co2Quotas": 310,
+          "onboard": {
+            "Y": 8,
+            "J": 0,
+            "F": 0
+          },
+          "fuelLbs": 2984,
+          "revenue": 7360
+        },
+        {
+          "relativeTime": "19 hours ago",
+          "from": "XAP",
+          "to": "GRU",
+          "co2Quotas": 348,
+          "onboard": {
+            "Y": 9,
+            "J": 0,
+            "F": 0
+          },
+          "fuelLbs": 2984,
+          "revenue": 8280
+        },
+        {
+          "relativeTime": "20 hours ago",
+          "from": "GRU",
+          "to": "XAP",
+          "co2Quotas": 310,
+          "onboard": {
+            "Y": 8,
+            "J": 0,
+            "F": 0
+          },
+          "fuelLbs": 2984,
+          "revenue": 7360
+        }
+      ]
+    },
+    {
+      "eventId": "dep_37148125400_21038003_31259843",
+      "type": "departure",
+      "aircraftId": "21038003",
+      "registration": "DC-9-10",
+      "routeId": "31259843",
+      "from": "GRU",
+      "to": "IMP",
+      "observedAt": "2026-10-03T19:36:37.750Z",
+      "result": "departed",
+      "demand": {
+        "availableBefore": {
+          "Y": 249,
+          "J": 203,
+          "F": 86
+        },
+        "possiblePassengers": {
+          "Y": 69,
+          "J": 4,
+          "F": 4
+        },
+        "occupancyPercentage": 100
+      },
+      "actualOnboard": {
+        "Y": 44,
+        "J": 3,
+        "F": 3
+      }
+    },
+    {
+      "eventId": "unc_126_21114720_31876446",
+      "type": "departure-uncertain",
+      "aircraftId": "21114720",
+      "registration": "220-100-2",
+      "routeId": "31876446",
+      "from": "GRU",
+      "to": "BJL",
+      "observedAt": "2026-10-03T20:17:12.682Z",
+      "result": "outcome_unknown",
+      "reason": "NO_RETRY_AFTER_CLICK_ATTEMPT:UNCLASSIFIED",
+      "sourceRunId": "37149951091"
+    }
+  ],
+  "supplyObservations": [
+    {
+      "eventId": "sup_37140746877_fuel",
+      "type": "supply-observation",
+      "kind": "fuel",
+      "observedAt": "2026-10-03T17:32:03.438Z",
+      "pricePer1000": 1420,
+      "holding": 4768185,
+      "remainingCapacity": 7637815,
+      "balance": 17797406
+    },
+    {
+      "eventId": "sup_37140746877_co2",
+      "type": "supply-observation",
+      "kind": "co2",
+      "observedAt": "2026-10-03T17:32:04.084Z",
+      "pricePer1000": 121,
+      "holding": 2226295,
+      "remainingCapacity": 2599205,
+      "balance": 17797406
+    },
+    {
+      "eventId": "sup_37142588775_fuel",
+      "type": "supply-observation",
+      "kind": "fuel",
+      "observedAt": "2026-10-03T18:01:49.677Z",
+      "pricePer1000": 1730,
+      "holding": 4538957,
+      "remainingCapacity": 7867043,
+      "balance": 18597866
+    },
+    {
+      "eventId": "sup_37142588775_co2",
+      "type": "supply-observation",
+      "kind": "co2",
+      "observedAt": "2026-10-03T18:01:50.250Z",
+      "pricePer1000": 139,
+      "holding": 1862861,
+      "remainingCapacity": 2962639,
+      "balance": 18597866
+    },
+    {
+      "eventId": "sup_37146319186_fuel",
+      "type": "supply-observation",
+      "kind": "fuel",
+      "observedAt": "2026-10-03T19:02:14.150Z",
+      "pricePer1000": 670,
+      "holding": 3319118,
+      "remainingCapacity": 9086882,
+      "balance": 7717997
+    },
+    {
+      "eventId": "sup_37146319186_co2",
+      "type": "supply-observation",
+      "kind": "co2",
+      "observedAt": "2026-10-03T19:02:14.747Z",
+      "pricePer1000": 191,
+      "holding": -437451,
+      "remainingCapacity": 4825500,
+      "balance": 7717997
+    },
+    {
+      "eventId": "sup_37148125400_fuel",
+      "type": "supply-observation",
+      "kind": "fuel",
+      "observedAt": "2026-10-03T19:31:40.529Z",
+      "pricePer1000": 2500,
+      "holding": 3191640,
+      "remainingCapacity": 9214360,
+      "balance": 8084017
+    },
+    {
+      "eventId": "sup_37148125400_co2",
+      "type": "supply-observation",
+      "kind": "co2",
+      "observedAt": "2026-10-03T19:31:41.073Z",
+      "pricePer1000": 113,
+      "holding": -546624,
+      "remainingCapacity": 4825500,
+      "balance": 8084017
+    }
+  ],
+  "holdObservations": [
+    {
+      "eventId": "hold_37140746877_20477015_31876337",
+      "type": "demand-hold",
+      "aircraftId": "20477015",
+      "routeId": "31876337",
+      "observedAt": "2026-10-03T17:38:56.267Z",
+      "occupancyPercentage": 16.793893129770993,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37140746877_22237429_33145970",
+      "type": "demand-hold",
+      "aircraftId": "22237429",
+      "routeId": "33145970",
+      "observedAt": "2026-10-03T17:38:56.267Z",
+      "occupancyPercentage": 16.037735849056602,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37140746877_20821798_31803282",
+      "type": "demand-hold",
+      "aircraftId": "20821798",
+      "routeId": "31803282",
+      "observedAt": "2026-10-03T17:38:56.267Z",
+      "occupancyPercentage": 30.18867924528302,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37142588775_20477015_31876337",
+      "type": "demand-hold",
+      "aircraftId": "20477015",
+      "routeId": "31876337",
+      "observedAt": "2026-10-03T18:07:50.022Z",
+      "occupancyPercentage": 16.793893129770993,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37142588775_22237429_33145970",
+      "type": "demand-hold",
+      "aircraftId": "22237429",
+      "routeId": "33145970",
+      "observedAt": "2026-10-03T18:07:50.022Z",
+      "occupancyPercentage": 16.037735849056602,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37142588775_20821798_31803282",
+      "type": "demand-hold",
+      "aircraftId": "20821798",
+      "routeId": "31803282",
+      "observedAt": "2026-10-03T18:07:50.022Z",
+      "occupancyPercentage": 30.18867924528302,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37146319186_20477015_31876337",
+      "type": "demand-hold",
+      "aircraftId": "20477015",
+      "routeId": "31876337",
+      "observedAt": "2026-10-03T19:14:57.382Z",
+      "occupancyPercentage": 16.793893129770993,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37146319186_22237429_33145970",
+      "type": "demand-hold",
+      "aircraftId": "22237429",
+      "routeId": "33145970",
+      "observedAt": "2026-10-03T19:14:57.382Z",
+      "occupancyPercentage": 16.037735849056602,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37146319186_20821798_31803282",
+      "type": "demand-hold",
+      "aircraftId": "20821798",
+      "routeId": "31803282",
+      "observedAt": "2026-10-03T19:14:57.382Z",
+      "occupancyPercentage": 30.18867924528302,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37148125400_20477015_31876337",
+      "type": "demand-hold",
+      "aircraftId": "20477015",
+      "routeId": "31876337",
+      "observedAt": "2026-10-03T19:36:37.748Z",
+      "occupancyPercentage": 16.793893129770993,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37148125400_22237429_33145970",
+      "type": "demand-hold",
+      "aircraftId": "22237429",
+      "routeId": "33145970",
+      "observedAt": "2026-10-03T19:36:37.748Z",
+      "occupancyPercentage": 16.037735849056602,
+      "reason": "hold_insufficient"
+    },
+    {
+      "eventId": "hold_37148125400_20821798_31803282",
+      "type": "demand-hold",
+      "aircraftId": "20821798",
+      "routeId": "31803282",
+      "observedAt": "2026-10-03T19:36:37.748Z",
+      "occupancyPercentage": 30.18867924528302,
+      "reason": "hold_insufficient"
+    }
+  ],
+  "uiHealthObservations": [
+    {
+      "eventId": "ui_20261003190213",
+      "type": "ui-health",
+      "observedAt": "2026-10-03T19:02:13.868Z",
+      "status": "healthy",
+      "surfaces": [
+        "login",
+        "fleet",
+        "maintenance",
+        "marketing",
+        "supplies"
+      ]
+    },
+    {
+      "eventId": "ui_20261003193140",
+      "type": "ui-health",
+      "observedAt": "2026-10-03T19:31:40.293Z",
+      "status": "healthy",
+      "surfaces": [
+        "login",
+        "fleet",
+        "maintenance",
+        "marketing",
+        "supplies"
+      ]
+    }
+  ]
+}
