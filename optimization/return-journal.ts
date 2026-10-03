@@ -5,7 +5,9 @@ import { withRunLock } from '../utils/run-lock';
 import { reviewEventId, RouteOptimizer, RoutePlan, RouteReview } from './route-optimizer';
 
 type CompletedDecision = 'would_reroute' | 'keep_route' | 'hold';
-interface Entry { aircraftId: string; origin: string; flightId: string; reviewedAt: string; decision: CompletedDecision }
+interface RoutePerformanceEvidence { routeId:string; viable:boolean; netProfit:number|null; netProfitPerHour:number|null; occupancyPercentages:number[] }
+interface Entry { aircraftId: string; origin: string; flightId: string; reviewedAt: string; decision: CompletedDecision;
+  reviewEvidence?: { trigger:'return'|'daily'; reviewedRouteId:string; selectedRouteId:string|null; result:CompletedDecision; routePerformance:RoutePerformanceEvidence[] } }
 export interface Journal { schemaVersion: 1; scope: string; entries: Entry[] }
 export interface JournalOptions {
   /** Durable directory supplied by the caller; ephemeral Actions runners require explicit transport. */
@@ -21,13 +23,27 @@ const completed = (d: string): d is CompletedDecision => ['would_reroute', 'keep
 const validId = (v: unknown): v is string => typeof v === 'string' && /^[A-Za-z0-9_-]{1,100}$/.test(v);
 const validOrigin = (v: unknown): v is string => typeof v === 'string' && /^[A-Z]{3}$/.test(v);
 const key = (e: Pick<Entry, 'aircraftId' | 'origin' | 'flightId'>) => JSON.stringify([e.aircraftId, e.origin, e.flightId]);
+const validPerformance=(v:unknown):v is RoutePerformanceEvidence=>{
+  if(!v||typeof v!=='object')return false;const x=v as RoutePerformanceEvidence;
+  return Object.keys(x).sort().join(',')==='netProfit,netProfitPerHour,occupancyPercentages,routeId,viable'&&validId(x.routeId)&&typeof x.viable==='boolean'&&
+    (x.netProfit===null||Number.isFinite(x.netProfit))&&(x.netProfitPerHour===null||Number.isFinite(x.netProfitPerHour))&&Array.isArray(x.occupancyPercentages)&&
+    x.occupancyPercentages.length<=2&&x.occupancyPercentages.every(n=>Number.isFinite(n)&&n>=0&&n<=100);
+};
+const validReviewEvidence=(v:unknown,decision:CompletedDecision)=>{
+  if(!v||typeof v!=='object')return false;const x=v as NonNullable<Entry['reviewEvidence']>;
+  return Object.keys(x).sort().join(',')==='result,reviewedRouteId,routePerformance,selectedRouteId,trigger'&&['return','daily'].includes(x.trigger)&&
+    validId(x.reviewedRouteId)&&(x.selectedRouteId===null||validId(x.selectedRouteId))&&x.result===decision&&Array.isArray(x.routePerformance)&&
+    x.routePerformance.length>0&&x.routePerformance.length<=100&&x.routePerformance.every(validPerformance);
+};
 export function validateReturnJournal(value: unknown, scope: string, now: Date): Journal {
   const data = value as Journal;
   if (!data || typeof data !== 'object' || Object.keys(data).sort().join(',') !== 'entries,schemaVersion,scope' || data.schemaVersion !== 1 || data.scope !== scope || !Array.isArray(data.entries) || data.entries.length > 100000) throw new Error('JOURNAL_INVALID');
   const seen = new Set<string>();
   for (const e of data.entries) {
-    if (!e || typeof e !== 'object' || Object.keys(e).sort().join(',') !== 'aircraftId,decision,flightId,origin,reviewedAt' || !validId(e.aircraftId) || !validId(e.flightId) || !validOrigin(e.origin) || !completed(e.decision) ||
-        typeof e.reviewedAt !== 'string' || !Number.isFinite(Date.parse(e.reviewedAt)) || Date.parse(e.reviewedAt) > now.getTime() || seen.has(key(e))) throw new Error('JOURNAL_INVALID');
+    const keys=Object.keys(e||{}).sort().join(',');
+    if (!e || typeof e !== 'object' || !['aircraftId,decision,flightId,origin,reviewedAt','aircraftId,decision,flightId,origin,reviewEvidence,reviewedAt'].includes(keys) || !validId(e.aircraftId) || !validId(e.flightId) || !validOrigin(e.origin) || !completed(e.decision) ||
+        typeof e.reviewedAt !== 'string' || !Number.isFinite(Date.parse(e.reviewedAt)) || Date.parse(e.reviewedAt) > now.getTime() || seen.has(key(e)) ||
+        ('reviewEvidence' in e && !validReviewEvidence(e.reviewEvidence,e.decision))) throw new Error('JOURNAL_INVALID');
     seen.add(key(e));
   }
   return data;
@@ -56,7 +72,10 @@ export async function reviewWithReturnJournal(input: RouteReview, options: Journ
     const plan = optimizer.review(input, now);
     if (!completed(plan.decision)) return plan; // Missing data is retryable; never consume the arrival.
     if (data.entries.length >= 100000) throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');
-    data.entries.push({ ...entry, decision: plan.decision });
+    data.entries.push({ ...entry, decision: plan.decision, reviewEvidence:{
+      trigger:input.trigger==='daily'?'daily':'return',reviewedRouteId:input.currentRouteId,selectedRouteId:plan.selectedRouteId,result:plan.decision,
+      routePerformance:plan.scores.map(s=>({routeId:s.routeId,viable:s.viable,netProfit:s.netProfit,netProfitPerHour:s.netProfitPerHour,occupancyPercentages:[...s.occupancyPercentages]}))
+    } });
     const temporary = join(directory, `return-journal.${randomUUID()}.tmp`);
     try {
       const file = await open(temporary, 'wx', 0o600);

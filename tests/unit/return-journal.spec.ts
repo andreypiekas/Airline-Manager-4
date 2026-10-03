@@ -17,7 +17,9 @@ test('fresh instances retain reviews across process-style reopen',async()=>{
   expect((await reviewWithReturnJournal(input(),options(),now)).decision).toBe('keep_route');
   expect((await reviewWithReturnJournal(input(),options(),now)).decision).toBe('already_reviewed');
   const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
-  expect(saved.entries).toEqual([{aircraftId:'1',origin:'AAA',flightId:'flight-1',reviewedAt:now.toISOString(),decision:'keep_route'}]);
+  expect(saved.entries).toHaveLength(1);
+  expect(saved.entries[0]).toMatchObject({aircraftId:'1',origin:'AAA',flightId:'flight-1',reviewedAt:now.toISOString(),decision:'keep_route',reviewEvidence:{trigger:'return',reviewedRouteId:'current',selectedRouteId:'current',result:'keep_route'}});
+  expect(saved.entries[0].reviewEvidence.routePerformance).toEqual([{routeId:'current',viable:true,netProfit:198700,netProfitPerHour:49675,occupancyPercentages:[100,100]}]);
 });
 test('next flight is reviewed, old flight remains deduplicated',async()=>{
   await reviewWithReturnJournal(input(),options(),now);
@@ -89,4 +91,13 @@ test('daily review away from base cannot be recorded', async () => {
   expect((await reviewWithReturnJournal(r,options(),now)).decision).toBe('not_at_base_return');
   r.position.airport='AAA';
   expect((await reviewWithReturnJournal(r,options(),now)).decision).toBe('keep_route');
+});
+
+test('legacy entry remains valid while new entries append enriched evidence',async()=>{
+  const p=join(directory,'return-journal.json');
+  await writeFile(p,JSON.stringify({schemaVersion:1,scope:'company-test',entries:[{aircraftId:'1',origin:'AAA',flightId:'legacy',reviewedAt:'2026-09-29T11:00:00.000Z',decision:'keep_route'}]}));
+  expect((await reviewWithReturnJournal(input('flight-new'),options(),now)).decision).toBe('keep_route');
+  const saved=JSON.parse(await readFile(p,'utf8'));
+  expect(saved.entries[0]).toEqual({aircraftId:'1',origin:'AAA',flightId:'legacy',reviewedAt:'2026-09-29T11:00:00.000Z',decision:'keep_route'});
+  expect(saved.entries[1].reviewEvidence).toMatchObject({trigger:'return',reviewedRouteId:'current',result:'keep_route'});
 });
