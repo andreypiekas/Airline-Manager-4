@@ -8,8 +8,15 @@ export interface RouteExecutionCandidate {
   to:string;
   airportId:string;
   comparisonReady:boolean;
+  observedAt:string;
   capacity:Cabins;
+  autoFares:Cabins;
   costIndex:number;
+  distanceKm:number;
+  durationSeconds:number;
+  fuelLbs:number;
+  co2KgPerPaxKm:number;
+  routeFee:number;
   routeMutationControl:RouteMutationControlEvidence|null;
 }
 
@@ -25,6 +32,7 @@ export interface RouteExecutionPort {
 export interface RouteExecutionSettings {
   enabled:boolean;
   maxReroutes:number;
+  maxAgeSeconds:number;
 }
 
 export interface RouteExecutionEntry {
@@ -54,6 +62,14 @@ const sameCurrentContext=(a:AircraftSnapshot,b:AircraftSnapshot)=>
   a.aircraftId===b.aircraftId&&a.registration===b.registration&&a.routeId===b.routeId&&
   a.from===b.from&&a.to===b.to&&a.state==='ready'&&b.state==='ready'&&!a.issue&&!b.issue;
 
+const sameCabins=(a:Cabins,b:Cabins)=>['Y','J','F'].every(k=>a[k as keyof Cabins]===b[k as keyof Cabins]);
+const finite=(n:number)=>Number.isFinite(n)&&n>=0&&n<=Number.MAX_SAFE_INTEGER;
+const sameTargetEvidence=(a:RouteExecutionCandidate,b:RouteExecutionCandidate)=>
+  a.aircraftId===b.aircraftId&&a.from===b.from&&a.to===b.to&&a.airportId===b.airportId&&
+  a.costIndex===b.costIndex&&a.distanceKm===b.distanceKm&&a.durationSeconds===b.durationSeconds&&
+  a.fuelLbs===b.fuelLbs&&a.co2KgPerPaxKm===b.co2KgPerPaxKm&&a.routeFee===b.routeFee&&
+  sameCabins(a.capacity,b.capacity)&&sameCabins(a.autoFares,b.autoFares);
+
 const mutationControlReady=(candidate:RouteExecutionCandidate)=>{
   const c=candidate.routeMutationControl;
   return !!c&&c.nativeClickReady&&c.endpointVerified&&c.targetVerified&&c.directRouteVerified&&
@@ -71,7 +87,8 @@ export class RouteMutationExecutor {
     private readonly saveReport:(report:RouteExecutionReport)=>Promise<void>
   ){
     if(typeof settings.enabled!=='boolean'||!Number.isSafeInteger(settings.maxReroutes)||
-      settings.maxReroutes<1||settings.maxReroutes>5)throw new Error('ROUTE_EXECUTION_SETTINGS_INVALID');
+      settings.maxReroutes<1||settings.maxReroutes>5||!Number.isSafeInteger(settings.maxAgeSeconds)||
+      settings.maxAgeSeconds<1||settings.maxAgeSeconds>900)throw new Error('ROUTE_EXECUTION_SETTINGS_INVALID');
   }
 
   async run(
@@ -120,10 +137,19 @@ export class RouteMutationExecutor {
       if(this.attemptedAircraft.size>=this.settings.maxReroutes){entry.reason='ROUTE_EXECUTION_LIMIT';continue;}
       if(!expected||matches.length!==1){entry.reason='FLEET_OR_CANDIDATE_CONTEXT_UNAVAILABLE';continue;}
       const target=matches[0];
+      const age=Date.now()-Date.parse(target.observedAt);
       if(expected.state!=='ready'||expected.issue||!safeId(expected.aircraftId)||!safeId(expected.routeId)||
         expected.aircraftId!==target.aircraftId||expected.from!==target.from||
         !safeId(target.airportId)||target.from===target.to||!target.comparisonReady||
+        !Number.isFinite(age)||age<0||age>this.settings.maxAgeSeconds*1000||
         !Number.isSafeInteger(target.costIndex)||target.costIndex<0||target.costIndex>200||
+        !Number.isSafeInteger(target.distanceKm)||target.distanceKm<=0||
+        !Number.isSafeInteger(target.durationSeconds)||target.durationSeconds<=0||
+        !Number.isSafeInteger(target.fuelLbs)||target.fuelLbs<=0||
+        !finite(target.co2KgPerPaxKm)||target.co2KgPerPaxKm<=0||
+        !Number.isSafeInteger(target.routeFee)||target.routeFee<0||
+        !sameCabins(target.capacity,target.capacity)||!sameCabins(target.autoFares,target.autoFares)||
+        ['Y','J','F'].some(k=>!Number.isSafeInteger(target.autoFares[k as keyof Cabins])||target.autoFares[k as keyof Cabins]<=0)||
         !mutationControlReady(target)){
         entry.reason='ROUTE_EXECUTION_GUARD_REJECTED';continue;
       }
@@ -131,11 +157,10 @@ export class RouteMutationExecutor {
       let fresh:{aircraft:AircraftSnapshot;target:RouteExecutionCandidate};
       try{fresh=await this.port.prepare(expected,target);}
       catch{entry.reason='ROUTE_EXECUTION_PREPARE_FAILED';continue;}
-      if(!sameCurrentContext(expected,fresh.aircraft)||
-        fresh.target.aircraftId!==target.aircraftId||fresh.target.from!==target.from||
-        fresh.target.to!==target.to||fresh.target.airportId!==target.airportId||
-        fresh.target.costIndex!==target.costIndex||!fresh.target.comparisonReady||
-        !mutationControlReady(fresh.target)){
+      const freshAge=Date.now()-Date.parse(fresh.target.observedAt);
+      if(!sameCurrentContext(expected,fresh.aircraft)||!sameTargetEvidence(target,fresh.target)||
+        !fresh.target.comparisonReady||!Number.isFinite(freshAge)||freshAge<0||
+        freshAge>this.settings.maxAgeSeconds*1000||!mutationControlReady(fresh.target)){
         entry.reason='ROUTE_EXECUTION_CONTEXT_CHANGED';continue;
       }
 
