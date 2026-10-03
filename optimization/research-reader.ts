@@ -335,7 +335,13 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
       compareKnownContribution(currentKnown,candidateKnown,quote.routeFee):
       {status:'unavailable' as const,current:null,candidate:candidateKnown,componentSetMatches:false,deltaKnownContributionPerHour:null,
        candidateFirstCycleAfterSetupKnownContribution:null,reason:'CURRENT_ROUTE_REFERENCE_UNAVAILABLE',comparisonReady:false as const,mutationAuthorized:false as const};
+    const routeExecutionEvidence={
+      observedAt:quote.observedAt,costIndex:quote.costIndex,distanceKm:quote.distanceKm,durationSeconds:quote.durationSeconds,
+      fuelLbs:quote.fuelLbs,co2KgPerPaxKm:quote.co2KgPerPaxKm,routeFee:quote.routeFee,
+      autoFares:quote.autopriceReference?.effectiveFares?{...quote.autopriceReference.effectiveFares}:null
+    };
     return {aircraftId:quote.aircraftId,airportId:quote.airportId,from:quote.from,to:quote.to,quoteObservedAt:quote.observedAt,
+      routeExecutionEvidence,
       createControl:quote.createControl||null,routeActionDiagnostics:quote.routeActionDiagnostics||[],routeListenerDiagnostics:quote.routeListenerDiagnostics||[],routeMutationControl:quote.routeMutationControl||null,autopriceFunctionEvidence:quote.autopriceFunctionEvidence||null,quoteFieldDiagnostics:quote.quoteFieldDiagnostics||[],routeDirectionEvidence:quote.routeDirectionEvidence||null,airportDistance,runwayEvidence,runwayCrossChecked,gameModeEvidence,currentGameModeEvidence,currentAirportDistance,reverseEquivalent,currentReverseEquivalent,loadFactorCalibration,candidateLoadFactor,candidateRepairReferenceVerified,currentRepairReferenceVerified,routeProfitModel,candidateVariableCycle,currentVariableCycle,variableCycleComparison,co2Calibration,demand,screening,priority,knownContributionComparison,roundTrip,reservations,currentReservations,costScenarios,effectiveCosts,modelCostReference:model,costs:{fuelAtObservedMarketPrice:fuel,co2:null,maintenance:null,airportAndOther:null},
       setupFee:quote.routeFee,costsComplete:false,netProfit:null,comparisonReady:false,mutationAuthorized:false,
       missing:['FUTURE_OTHER_AIRCRAFT_RESERVATIONS','REVERSE_LEG_ECONOMICS',
