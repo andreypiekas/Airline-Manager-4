@@ -1,6 +1,6 @@
 import { test, expect, Page } from '@playwright/test';
 import { readOpenCandidateQuote, readOpenCandidateQuoteAfterVerifiedAjax, QuoteIdentity, parseQuoteAutoprice } from '../../optimization/quote-reader';
-import { readOperationalObservation } from '../../optimization/observations';
+import { parseDeliveredAgeMinutes, readOperationalObservation } from '../../optimization/observations';
 
 const identity: QuoteIdentity = { aircraftId: '101', registration: 'TEST-1', airportId: '200', from: 'AAA', to: 'BBB' };
 async function fixture(page: Page) {
@@ -188,10 +188,19 @@ test('missing quote is unavailable without waiting or navigation', async ({ page
 });
 test('operational labels read observed units; cycles do not become a flight ID or home base', async ({ page }) => {
   await page.setContent('<div id="details"><span class="s-text">Range</span><br><span class="m-text">3,440km</span><br><span class="s-text">Min runway</span><br><span class="m-text">7,550ft</span><br><span class="s-text">Flight hours/Cycles</span><br><span class="m-text">682 / 206</span></div>');
-  expect(await readOperationalObservation(page.locator('#details'))).toEqual({rangeKm:3440,minRunwayFt:7550,flightHours:682,cycles:206,homeBase:null,flightId:null});
+  expect(await readOperationalObservation(page.locator('#details'))).toEqual({rangeKm:3440,minRunwayFt:7550,flightHours:682,cycles:206,deliveredAgeMinutes:null,homeBase:null,flightId:null});
   await page.locator('span.m-text').first().evaluate(e=>e.textContent='3,440miles');
   expect(await readOperationalObservation(page.locator('#details'))).toBeNull();
 });
+test('delivery age telemetry is bounded and never guesses coarse month labels',async({page})=>{
+  expect(parseDeliveredAgeMinutes('18 mins ago')).toBe(18);
+  expect(parseDeliveredAgeMinutes('12 hours ago')).toBe(720);
+  expect(parseDeliveredAgeMinutes('1 day ago')).toBe(1440);
+  expect(parseDeliveredAgeMinutes('1 month ago')).toBeNull();
+  await page.setContent('<div id="details"><span class="s-text">Range</span><br><span class="m-text">3,440km</span><br><span class="s-text">Min runway</span><br><span class="m-text">7,550ft</span><br><span class="s-text">Flight hours/Cycles</span><br><span class="m-text">63 / 3</span><br><span class="s-text">Delivered</span><br><span class="m-text">12 hours ago</span></div>');
+  expect(await readOperationalObservation(page.locator('#details'))).toMatchObject({cycles:3,deliveredAgeMinutes:720});
+});
+
 test('missing and duplicate operational labels fail closed', async ({ page }) => {
   await page.setContent('<div id="details"><span class="s-text">Range</span><span class="s-text">Range</span></div>');
   expect(await readOperationalObservation(page.locator('#details'))).toBeNull();
