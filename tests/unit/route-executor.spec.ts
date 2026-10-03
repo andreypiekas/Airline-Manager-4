@@ -7,7 +7,9 @@ const aircraft=(o:Partial<AircraftSnapshot>={}):AircraftSnapshot=>({
   capacity:{Y:100,J:10,F:5},remaining:{Y:100,J:10,F:5},dailyTotal:{Y:200,J:20,F:10},observedAt:new Date().toISOString(),...o
 });
 const candidate=(o:Partial<RouteExecutionCandidate>={}):RouteExecutionCandidate=>({
-  aircraftId:'101',from:'AAA',to:'CCC',airportId:'300',comparisonReady:true,capacity:{Y:100,J:10,F:5},costIndex:200,
+  aircraftId:'101',from:'AAA',to:'CCC',airportId:'300',comparisonReady:true,observedAt:new Date().toISOString(),
+  capacity:{Y:100,J:10,F:5},autoFares:{Y:1000,J:2000,F:3000},costIndex:200,
+  distanceKm:1200,durationSeconds:5400,fuelLbs:12000,co2KgPerPaxKm:.12,routeFee:25000,
   routeMutationControl:{
     observed:true,source:'jquery-direct-click',endpointVerified:true,targetVerified:true,
     aircraftIdMatchesContext:true,airportIdMatchesContext:true,registrationInputVerified:true,
@@ -34,7 +36,7 @@ class FakePort implements RouteExecutionPort{
 
 test('persists intent, mutates once and confirms a changed route',async()=>{
  const port=new FakePort();let reports:any[]=[];
- const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1},async x=>{reports.push(JSON.parse(JSON.stringify(x)));})
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async x=>{reports.push(JSON.parse(JSON.stringify(x)));})
   .run([aircraft()],[decision],[candidate()]);
  expect(port.reroutes).toBe(1);
  expect(r.summary).toEqual({evaluated:1,rerouted:1,held:0,unknown:0});
@@ -44,21 +46,34 @@ test('persists intent, mutates once and confirms a changed route',async()=>{
 
 test('disabled executor never prepares or mutates',async()=>{
  const port=new FakePort();
- const r=await new RouteMutationExecutor(port,{enabled:false,maxReroutes:1},async()=>{}).run([aircraft()],[decision],[candidate()]);
+ const r=await new RouteMutationExecutor(port,{enabled:false,maxReroutes:1,maxAgeSeconds:300},async()=>{}).run([aircraft()],[decision],[candidate()]);
  expect(port.reroutes).toBe(0);expect(r.entries).toHaveLength(0);
 });
 
 test('unverified candidate stays held without mutation',async()=>{
  const port=new FakePort();
  const bad=candidate({comparisonReady:false});
- const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1},async()=>{}).run([aircraft()],[decision],[bad]);
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async()=>{}).run([aircraft()],[decision],[bad]);
  expect(port.reroutes).toBe(0);
  expect(r.entries[0]).toMatchObject({status:'held',reason:'ROUTE_EXECUTION_GUARD_REJECTED'});
 });
 
+test('stale or changed target fingerprint stays held before mutation',async()=>{
+ const port=new FakePort();
+ const stale=candidate({observedAt:new Date(Date.now()-301000).toISOString()});
+ const staleResult=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async()=>{}).run([aircraft()],[decision],[stale]);
+ expect(staleResult.entries[0]).toMatchObject({status:'held',reason:'ROUTE_EXECUTION_GUARD_REJECTED'});
+ expect(port.reroutes).toBe(0);
+ const changedPort=new FakePort();
+ changedPort.prepare=async(expected,target)=>({aircraft:{...expected},target:{...target,routeFee:target.routeFee+1}});
+ const changed=await new RouteMutationExecutor(changedPort,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async()=>{}).run([aircraft()],[decision],[candidate()]);
+ expect(changed.entries[0]).toMatchObject({status:'held',reason:'ROUTE_EXECUTION_CONTEXT_CHANGED'});
+ expect(changedPort.reroutes).toBe(0);
+});
+
 test('context change before mutation fails closed',async()=>{
  const port=new FakePort();port.prepareChange=true;
- const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1},async()=>{}).run([aircraft()],[decision],[candidate()]);
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async()=>{}).run([aircraft()],[decision],[candidate()]);
  expect(port.reroutes).toBe(0);
  expect(r.entries[0]).toMatchObject({status:'held',reason:'ROUTE_EXECUTION_CONTEXT_CHANGED'});
 });
@@ -69,7 +84,7 @@ test('unconfirmed mutation halts without retry',async()=>{
  const a2=aircraft({aircraftId:'102',registration:'TEST-102',routeId:'9002'});
  const c2=candidate({aircraftId:'102',to:'DDD',airportId:'301',routeMutationControl:{...candidate().routeMutationControl!,
    aircraftIdMatchesContext:true,airportIdMatchesContext:true}});
- const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:2},async()=>{})
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:2,maxAgeSeconds:300},async()=>{})
    .run([aircraft(),a2],[decision,d2],[candidate(),c2]);
  expect(port.reroutes).toBe(1);
  expect(r.halted).toBe(true);
