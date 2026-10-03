@@ -9,7 +9,8 @@ interface RoutePerformanceEvidence { routeId:string; viable:boolean; netProfit:n
 interface Entry { aircraftId: string; origin: string; flightId: string; reviewedAt: string; decision: CompletedDecision;
   reviewEvidence?: { trigger:'return'|'daily'; reviewedRouteId:string; selectedRouteId:string|null; result:CompletedDecision; routePerformance:RoutePerformanceEvidence[] } }
 export interface DepartureHistoryEvent { eventId:string; type:'departure'; aircraftId:string; registration:string; routeId:string; from:string; to:string; observedAt:string; result:'departed'; demand:{ availableBefore:{Y:number;J:number;F:number}; possiblePassengers:{Y:number;J:number;F:number}; occupancyPercentage:number }; actualOnboard:{Y:number;J:number;F:number} }
-export interface Journal { schemaVersion: 1; scope: string; entries: Entry[]; events?:DepartureHistoryEvent[] }
+export interface SupplyObservationEvent { eventId:string; type:'supply-observation'; kind:'fuel'|'co2'; observedAt:string; pricePer1000:number; holding:number; remainingCapacity:number; balance:number }
+export interface Journal { schemaVersion: 1; scope: string; entries: Entry[]; events?:DepartureHistoryEvent[]; supplyObservations?:SupplyObservationEvent[] }
 export interface JournalOptions {
   /** Durable directory supplied by the caller; ephemeral Actions runners require explicit transport. */
   directory: string;
@@ -45,11 +46,12 @@ const validDepartureEvent=(v:unknown,now:Date):v is DepartureHistoryEvent=>{
     x.demand&&Object.keys(x.demand).sort().join(',')==='availableBefore,occupancyPercentage,possiblePassengers'&&validCabins(x.demand.availableBefore)&&validCabins(x.demand.possiblePassengers)&&
     Number.isFinite(x.demand.occupancyPercentage)&&x.demand.occupancyPercentage>=0&&x.demand.occupancyPercentage<=100&&validCabins(x.actualOnboard);
 };
+const validSupplyObservation=(v:unknown,now:Date):v is SupplyObservationEvent=>{if(!v||typeof v!=='object')return false;const x=v as SupplyObservationEvent;return Object.keys(x).sort().join(',')==='balance,eventId,holding,kind,observedAt,pricePer1000,remainingCapacity,type'&&validId(x.eventId)&&x.type==='supply-observation'&&['fuel','co2'].includes(x.kind)&&typeof x.observedAt==='string'&&Number.isFinite(Date.parse(x.observedAt))&&Date.parse(x.observedAt)<=now.getTime()&&Number.isSafeInteger(x.pricePer1000)&&x.pricePer1000>0&&Number.isSafeInteger(x.holding)&&(x.kind==='co2'||x.holding>=0)&&Number.isSafeInteger(x.remainingCapacity)&&x.remainingCapacity>=0&&Number.isSafeInteger(x.balance)&&x.balance>=0;};
 export function validateReturnJournal(value: unknown, scope: string, now: Date): Journal {
   const data = value as Journal;
   const topKeys=Object.keys(data||{}).sort().join(',');
-  if (!data || typeof data !== 'object' || !['entries,schemaVersion,scope','entries,events,schemaVersion,scope'].includes(topKeys) || data.schemaVersion !== 1 || data.scope !== scope || !Array.isArray(data.entries) || data.entries.length > 100000 ||
-      ('events' in data&&(!Array.isArray(data.events)||data.events.length>100000))) throw new Error('JOURNAL_INVALID');
+  if (!data || typeof data !== 'object' || !['entries,schemaVersion,scope','entries,events,schemaVersion,scope','entries,schemaVersion,scope,supplyObservations','entries,events,schemaVersion,scope,supplyObservations'].includes(topKeys) || data.schemaVersion !== 1 || data.scope !== scope || !Array.isArray(data.entries) || data.entries.length > 100000 ||
+      ('events' in data&&(!Array.isArray(data.events)||data.events.length>100000))||('supplyObservations' in data&&(!Array.isArray(data.supplyObservations)||data.supplyObservations.length>100000))) throw new Error('JOURNAL_INVALID');
   const seen = new Set<string>();
   for (const e of data.entries) {
     const keys=Object.keys(e||{}).sort().join(',');
@@ -60,7 +62,11 @@ export function validateReturnJournal(value: unknown, scope: string, now: Date):
   }
   const eventIds=new Set<string>();
   for(const e of data.events||[]){if(!validDepartureEvent(e,now)||eventIds.has(e.eventId))throw new Error('JOURNAL_INVALID');eventIds.add(e.eventId);}
+  const supplyIds=new Set<string>();for(const e of data.supplyObservations||[]){if(!validSupplyObservation(e,now)||supplyIds.has(e.eventId))throw new Error('JOURNAL_INVALID');supplyIds.add(e.eventId);}
   return data;
+}
+export async function appendSupplyObservation(directory:string,scope:string,runId:string,kind:'fuel'|'co2',snapshot:{pricePer1000:number;holding:number;remainingCapacity:number;balance:number},now=new Date()):Promise<boolean>{
+ if(!validId(scope)||!validId(runId)||!Number.isFinite(now.getTime()))throw new Error('JOURNAL_CONFIG_INVALID');const root=resolve(directory);await mkdir(root,{recursive:true});return withRunLock(async()=>{const filename=join(root,'return-journal.json');let data:Journal;try{data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);}catch{throw new Error('JOURNAL_UNAVAILABLE: historico de suprimentos bloqueado.');}const event:SupplyObservationEvent={eventId:`sup_${runId}_${kind}`,type:'supply-observation',kind,observedAt:now.toISOString(),pricePer1000:snapshot.pricePer1000,holding:snapshot.holding,remainingCapacity:snapshot.remainingCapacity,balance:snapshot.balance};if(!validSupplyObservation(event,now))throw new Error('JOURNAL_SUPPLY_EVENT_INVALID');const list=data.supplyObservations?[...data.supplyObservations]:[];if(list.some(x=>x.eventId===event.eventId))return false;if(list.length>=100000)throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');list.push(event);data.supplyObservations=list;const temporary=join(root,`return-journal.${randomUUID()}.tmp`);try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(data,null,2)+'\\n');await file.sync();}finally{await file.close();}await rename(temporary,filename);}catch{throw new Error('JOURNAL_SAVE_FAILED: observacao de suprimento nao persistida.');}finally{await unlink(temporary).catch(()=>undefined);}return true;},join(root,'.return-journal.lock'));
 }
 export async function appendConfirmedDepartures(directory:string,scope:string,runId:string,report:{entries:any[]},now=new Date()):Promise<number>{
   if(!validId(scope)||!validId(runId)||!Number.isFinite(now.getTime()))throw new Error('JOURNAL_CONFIG_INVALID');

@@ -117,3 +117,12 @@ test('hold and uncertain departure never become confirmed history',async()=>{
   expect(await appendConfirmedDepartures(directory,'company-test','124',{entries:[{status:'held'},{status:'outcome_unknown'}]} as any,now)).toBe(0);
   const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));expect(saved.events).toBeUndefined();
 });
+
+test('verified supply observations append once per run and kind',async()=>{
+ await reviewWithReturnJournal(input(),options(),now);const {appendSupplyObservation}=await import('../../optimization/return-journal');
+ const snap={pricePer1000:500,holding:1000,remainingCapacity:2000,balance:3000};
+ expect(await appendSupplyObservation(directory,'company-test','200','fuel',snap,now)).toBe(true);
+ expect(await appendSupplyObservation(directory,'company-test','200','fuel',snap,now)).toBe(false);
+ expect(await appendSupplyObservation(directory,'company-test','200','co2',{...snap,pricePer1000:110},now)).toBe(true);
+ const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));expect(saved.supplyObservations).toHaveLength(2);expect(saved.supplyObservations[0]).toMatchObject({eventId:'sup_200_fuel',kind:'fuel',pricePer1000:500});
+});

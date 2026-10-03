@@ -5,8 +5,10 @@ import {readDemandConfig} from '../demand/config';
 import {executionEnvironment} from '../demand/execute-run';
 import {Commodity,planPurchase,supplyConfig} from './policy';
 import {SupplyPort} from './port';
+import {optimizationConfig} from '../optimization/report';
+import {appendSupplyObservation} from '../optimization/return-journal';
 export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv=process.env,directory='test-results/demand',port=new SupplyPort(page)){
- const config=supplyConfig(env);
+ const config=supplyConfig(env);const optimization=optimizationConfig(env);
  if(!dryRun)executionEnvironment({...readDemandConfig(env),dryRun:false},env);
  await mkdir(directory,{recursive:true});
  if(!dryRun){const marker=await open(join(directory,'supplies.started'),'wx');await marker.close();}
@@ -21,7 +23,9 @@ export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv
  try {
   for(const kind of ['fuel','co2'] as const){
    const entry:any={kind,status:'reading',reason:'PENDING',before:null,plan:null};report.entries.push(entry);await save();
-   await port.open(kind);entry.before=await port.snapshot(kind);entry.plan=planPurchase(entry.before,kind,config);
+   await port.open(kind);entry.before=await port.snapshot(kind);
+   if(!dryRun&&optimization.returnJournal){await appendSupplyObservation(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',kind,entry.before);}
+   entry.plan=planPurchase(entry.before,kind,config);
    if(entry.plan.reason==='INVALID_DATA')throw Error('SUPPLY_DATA_INVALID');
    if(!entry.plan.quantity){entry.status='skipped';entry.reason=entry.plan.reason;await save();continue;}
    entry.quotedCost=await port.quote(kind,entry.plan.quantity);

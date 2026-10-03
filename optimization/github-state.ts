@@ -56,7 +56,8 @@ export class GitHubReturnState {
     if (baseline.repository !== this.options.repository || baseline.scope !== this.options.scope || baseline.branch !== BRANCH || !/^[a-f0-9]{40}$/.test(baseline.sha)) throw new Error('STATE_BASELINE_INVALID');
     const original = this.parse(canonical(baseline.original));
     const current = this.parse(await readFile(join(this.options.directory, 'return-journal.json'), 'utf8'));
-    if (current.entries.length < original.entries.length || original.entries.some((e, i) => canonical(e) !== canonical(current.entries[i]))) throw new Error('STATE_NOT_APPEND_ONLY');
+    const prefix=(before:unknown[]|undefined,after:unknown[]|undefined)=>{const a=before||[],b=after||[];return b.length>=a.length&&a.every((e,i)=>canonical(e)===canonical(b[i]));};
+    if (!prefix(original.entries,current.entries)||!prefix(original.events,current.events)||!prefix(original.supplyObservations,current.supplyObservations)) throw new Error('STATE_NOT_APPEND_ONLY');
     const originalEvents=original.events||[],currentEvents=current.events||[];
     if(currentEvents.length<originalEvents.length||originalEvents.some((e,i)=>canonical(e)!==canonical(currentEvents[i])))throw new Error('STATE_NOT_APPEND_ONLY');
     if (canonical(original) === canonical(current)) return 'unchanged';
