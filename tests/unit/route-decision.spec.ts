@@ -1,0 +1,42 @@
+import { test,expect } from '@playwright/test';
+import { planVariableRouteDecision, RouteDecisionCandidate } from '../../optimization/route-decision';
+
+const candidate=(to:string,low:number,status:'candidate_dominates'|'keep_current'='candidate_dominates',control=true):RouteDecisionCandidate=>({
+  aircraftId:'101',from:'GRU',to,airportId:to==='AAA'?'1':to==='BBB'?'2':'3',
+  comparisonReady:true,
+  variableCycleComparison:{status,comparisonReady:true},
+  candidateVariableCycle:{
+    status:'verified_interval',
+    recurringCycleProfitPerHour:{low,expected:low+100,high:low+200},
+    firstCycleAfterSetup:{low:low*2,expected:low*2+100,high:low*2+200}
+  },
+  routeMutationControl:control?{
+    nativeClickReady:true,endpointVerified:true,targetVerified:true,
+    aircraftIdMatchesContext:true,airportIdMatchesContext:true
+  }:null
+});
+
+test('selects highest conservative low bound among verified dominating candidates',()=>{
+  const r=planVariableRouteDecision('101',[candidate('AAA',1000),candidate('BBB',1500),candidate('CCC',1200)]);
+  expect(r).toMatchObject({
+    decision:'would_reroute',compared:3,dominating:3,
+    selected:{from:'GRU',to:'BBB',airportId:'2',conservativeProfitPerHour:1500},
+    mutationAuthorized:false
+  });
+});
+
+test('keeps route when no inspected candidate proves conservative dominance',()=>{
+  const r=planVariableRouteDecision('101',[candidate('AAA',1000,'keep_current'),candidate('BBB',1200,'keep_current')]);
+  expect(r).toMatchObject({decision:'keep_route',compared:2,dominating:0,selected:null});
+});
+
+test('dominant economics without verified native target cannot produce reroute plan',()=>{
+  const r=planVariableRouteDecision('101',[candidate('AAA',1000,'candidate_dominates',false)]);
+  expect(r).toMatchObject({decision:'keep_route',dominating:0,mutationAuthorized:false});
+});
+
+test('incomplete comparison set fails closed',()=>{
+  const c=candidate('AAA',1000);c.comparisonReady=false;
+  expect(planVariableRouteDecision('101',[c])).toMatchObject({decision:'unavailable',reason:'NO_VERIFIED_VARIABLE_CYCLE_COMPARISON'});
+  expect(planVariableRouteDecision('bad',[c])).toMatchObject({decision:'unavailable'});
+});
