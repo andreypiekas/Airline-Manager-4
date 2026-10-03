@@ -2,6 +2,7 @@ import { expect, Page } from '@playwright/test';
 import { AircraftSnapshot } from '../demand/types';
 import { CandidateQuote, readOpenCandidateQuote } from './quote-reader';
 import { screenCandidateEconomics } from './economic-screen';
+import { inspectRouteQuoteResponse } from './route-response-diagnostics';
 
 /** Bounded native suggestions from an ALREADY OPEN planner. Only inspection clicks. */
 export async function collectOpenRouteSuggestions(page: Page, aircraft: AircraftSnapshot, origin: string | null, limit=3, timeout=10000, minCoveragePercent=80, scanLimit=Math.min(10,Math.max(limit,limit*3))) {
@@ -38,13 +39,24 @@ export async function collectOpenRouteSuggestions(page: Page, aircraft: Aircraft
       const airportId=quoteCallback.match(/&airportId=(\d+)&/)![1];
       if(seen.has(airportId)){result.warnings.push('REPEATED_SUGGESTION');break;}
       seen.add(airportId);
-      await next.click({timeout});
+      const responsePromise=page.waitForResponse(r=>{
+        try{
+          const u=new URL(r.url());
+          return u.pathname.endsWith('/new_route_info.php')&&u.searchParams.get('id')===aircraft.aircraftId&&
+            u.searchParams.get('airportId')===airportId&&u.searchParams.get('ferry')==='0';
+        }catch{return false;}
+      },{timeout});
+      const [responseResult]=await Promise.allSettled([responsePromise,next.click({timeout})]);
       const panel=page.locator('#newRouteInfo');
       await panel.waitFor({state:'visible',timeout});
       const codes=await panel.locator('.col-3.m-text > b').allTextContents();
       if(codes.length!==2||codes[0].trim()!==origin||!/^[A-Z]{3}$/.test(codes[1].trim()))throw new Error();
       const read=await readOpenCandidateQuote(page,{aircraftId:aircraft.aircraftId,registration:aircraft.registration,airportId,from:origin,to:codes[1].trim()});
       if(read.status!=='observed')throw new Error();
+      if(responseResult.status==='fulfilled'&&responseResult.value.ok()){
+        try{read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse(await responseResult.value.text());}
+        catch{read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse('');}
+      }else read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse('');
       result.scanned++;
       const screening=screenCandidateEconomics(read.quote,aircraft.capacity,minCoveragePercent,new Date(),300);
       if(screening.demandStatus==='cannot_meet_threshold') {
@@ -87,6 +99,7 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
       routeMutationControl:CandidateQuote['routeMutationControl']|null;
       autopriceFunctionEvidence:CandidateQuote['autopriceFunctionEvidence']|null;
       quoteFieldDiagnostics:NonNullable<CandidateQuote['quoteFieldDiagnostics']>;
+      routeResponseDiagnostics:NonNullable<CandidateQuote['routeResponseDiagnostics']>;
     },
     warnings:[] as string[],
     mutationAuthorized:false as false
@@ -118,7 +131,14 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
     ),{timeout});
     const quoteCallback=await next.getAttribute('onclick')||'';
     const airportId=quoteCallback.match(/&airportId=(\d+)&/)![1];
-    await next.click({timeout});
+    const responsePromise=page.waitForResponse(r=>{
+      try{
+        const u=new URL(r.url());
+        return u.pathname.endsWith('/new_route_info.php')&&u.searchParams.get('id')===aircraft.aircraftId&&
+          u.searchParams.get('airportId')===airportId&&u.searchParams.get('ferry')==='0';
+      }catch{return false;}
+    },{timeout});
+    const [responseResult]=await Promise.allSettled([responsePromise,next.click({timeout})]);
     const panel=page.locator('#newRouteInfo');
     await panel.waitFor({state:'visible',timeout});
     const codes=(await panel.locator('.col-3.m-text > b').allTextContents()).map(s=>s.trim());
@@ -127,6 +147,10 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
       aircraftId:aircraft.aircraftId,registration:aircraft.registration,airportId,from:currentAirport,to:codes[1]
     });
     if(read.status!=='observed')throw new Error();
+    if(responseResult.status==='fulfilled'&&responseResult.value.ok()){
+      try{read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse(await responseResult.value.text());}
+      catch{read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse('');}
+    }else read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse('');
     result.observation={
       airportId,from:read.quote.from,to:read.quote.to,
       createControl:read.quote.createControl||null,
@@ -134,7 +158,8 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
       routeListenerDiagnostics:read.quote.routeListenerDiagnostics||[],
       routeMutationControl:read.quote.routeMutationControl||null,
       autopriceFunctionEvidence:read.quote.autopriceFunctionEvidence||null,
-      quoteFieldDiagnostics:read.quote.quoteFieldDiagnostics||[]
+      quoteFieldDiagnostics:read.quote.quoteFieldDiagnostics||[],
+      routeResponseDiagnostics:read.quote.routeResponseDiagnostics||inspectRouteQuoteResponse('')
     };
     result.status='observed';
 
