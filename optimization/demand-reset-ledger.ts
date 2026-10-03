@@ -150,11 +150,22 @@ export function historicalRemainingForCandidate(
     }
   }
   if(!windows.length)return {...base,reason:upperBoundFailure||base.reason};
-  // Reset time is airline-wide; accept it only when all calibrated pairs agree.
-  const signatures=[...new Set(windows.map(w=>w.includedMaxAgeMinutes+':'+w.excludedMinAgeMinutes))];
-  if(signatures.length!==1)return {...base,reason:'RESET_WINDOW_NOT_GLOBAL'};
-  const window=windows[0];
-  const included=window.includedMaxAgeMinutes,excluded=window.excludedMinAgeMinutes;
+  // Every calibrated pair bounds the SAME airline-wide reset instant. Exact
+  // excluded buckets may differ simply because each route has different flight
+  // spacing. Intersect all verified intervals conservatively instead of
+  // requiring byte-identical boundaries.
+  const included=Math.max(...windows.map(w=>w.includedMaxAgeMinutes));
+  const excluded=Math.min(...windows.map(w=>w.excludedMinAgeMinutes));
+  if(!Number.isSafeInteger(included)||!Number.isSafeInteger(excluded)||included<0||excluded<=included)
+    return {...base,reason:'RESET_WINDOW_GLOBAL_INTERSECTION_EMPTY'};
+  const window:DemandResetWindow={
+    pairKey:'GLOBAL',
+    includedMaxAgeMinutes:included,
+    excludedMinAgeMinutes:excluded,
+    consumed:zero(),
+    observedAt:windows.map(w=>w.observedAt).sort().at(-1)||new Date(0).toISOString(),
+    sourceAircraftIds:[...new Set(windows.flatMap(w=>w.sourceAircraftIds))].sort()
+  };
   let consumed=zero();
   for(const a of collection.aircraft){
     const h=a.flightHistory;
@@ -177,5 +188,5 @@ export function historicalRemainingForCandidate(
   if(CLASSES.some(k=>consumed[k]>dailyTotal[k]))return {...base,resetWindow:window,reason:'HISTORICAL_CONSUMPTION_EXCEEDS_DAILY_TOTAL'};
   const remaining:Cabins={Y:dailyTotal.Y-consumed.Y,J:dailyTotal.J-consumed.J,F:dailyTotal.F-consumed.F};
   return {...base,status:'verified',consumedSinceReset:consumed,remaining,historyCoverageVerified:true,resetWindow:window,
-    reason:'FLEET_HISTORY_COVERS_CALIBRATED_RESET_WINDOW'};
+    reason:'FLEET_HISTORY_COVERS_GLOBAL_RESET_WINDOW_INTERSECTION'};
 }
