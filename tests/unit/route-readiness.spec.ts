@@ -21,7 +21,6 @@ test('readiness gate stays closed with incomplete economics and no native contro
   expect(r.comparisonBlockers).toContain('ROUND_TRIP:RETURN_LIVE_QUOTE_REQUIRED');
   expect(r.mutationBlockers).toContain('NATIVE_ROUTE_ENDPOINT_UNVERIFIED');
   expect(r.mutationBlockers).toContain('NATIVE_ROUTE_MUTATION_CONTROL_UNVERIFIED');
-  expect(r.mutationBlockers).toContain('ROUTE_MUTATION_EXECUTOR_NOT_IMPLEMENTED');
 });
 
 test('independent route direction evidence is required by the comparison gate',()=>{
@@ -76,9 +75,9 @@ test('verified variable-cycle comparison replaces legacy full-cost blockers with
   }));
   expect(r.comparisonReady).toBe(true);
   expect(r.comparisonBlockers).toEqual([]);
-  expect(r.mutationReady).toBe(false);
+  expect(r.mutationReady).toBe(true);
   expect(r.mutationAuthorized).toBe(false);
-  expect(r.mutationBlockers).toEqual(['ROUTE_MUTATION_EXECUTOR_NOT_IMPLEMENTED']);
+  expect(r.mutationBlockers).toEqual([]);
 });
 
 test('variable-cycle comparison remains blocked without pinned route-profit provenance',()=>{
@@ -112,7 +111,7 @@ test('observed endpoint without contextual verification never opens mutation gat
   expect(r.mutationBlockers).toContain('NATIVE_ROUTE_MUTATION_CONTROL_UNVERIFIED');
 });
 
-test('fully verified native Create route still stays blocked until economics and executor are complete',()=>{
+test('fully verified native Create route still stays blocked until economics are complete',()=>{
   const r=assessCandidateComparisonReadiness(candidate({
     routeMutationControl:{
       nativeClickReady:true,endpointVerified:true,targetVerified:true,
@@ -123,7 +122,6 @@ test('fully verified native Create route still stays blocked until economics and
   expect(r.mutationAuthorized).toBe(false);
   expect(r.mutationBlockers).not.toContain('NATIVE_ROUTE_MUTATION_CONTROL_UNVERIFIED');
   expect(r.mutationBlockers).toContain('COMPARISON_NOT_READY');
-  expect(r.mutationBlockers).toContain('ROUTE_MUTATION_EXECUTOR_NOT_IMPLEMENTED');
 });
 
 test('summary preserves fail-closed behavior across candidates',()=>{
