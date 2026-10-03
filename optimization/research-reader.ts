@@ -205,7 +205,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   let reputation=await readReputationDiagnostics(page);
   // Market and maintenance sources must be validated even when no aircraft is eligible for research.
   if(research.config.enabled&&uiRestored){
-    demandLabelCalibration=await calibrateDemandLabelOnCurrentRoutes(page,collection,airportCatalog,research.config.timeout,3);
+    demandLabelCalibration=await calibrateDemandLabelOnCurrentRoutes(page,collection,airportCatalog,research.config.timeout,10);
     if(!demandLabelCalibration.uiRestored){uiRestored=false;warnings.push('DEMAND_LABEL_CALIBRATION_LIST_RESTORE_FAILED');}
     warnings.push(...demandLabelCalibration.warnings);
     demandResetCalibration=calibrateDemandResetWindows(collection,demandLabelCalibration);
