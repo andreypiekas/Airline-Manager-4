@@ -11,7 +11,7 @@ import { DemandReader } from './reader';
 import { writeDemandReport } from './report';
 import { DemandConfig, DemandReport } from './types';
 
-export async function runDemandSimulation(page: Page, config: DemandConfig = readDemandConfig(), reviews: Record<string, RouteReview> = {}): Promise<DemandReport> {
+export async function runDemandSimulationDetailed(page: Page, config: DemandConfig = readDemandConfig(), reviews: Record<string, RouteReview> = {}) {
   const optimization = optimizationConfig();
   const research = researchConfig();
   const collection = await new DemandReader(page, 10000, true).collect();
@@ -27,5 +27,15 @@ export async function runDemandSimulation(page: Page, config: DemandConfig = rea
   await writeCandidateDataReport(candidateData);
   if(!candidateData.uiRestored)throw new Error('[Demand] Painel nao restaurado apos consulta; nenhuma operacao autorizada.');
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');
-  return report;
+  return {report,collection,researchReport,candidateData};
+}
+
+export type DemandSimulationContext=Awaited<ReturnType<typeof runDemandSimulationDetailed>>;
+
+export async function runDemandSimulation(
+  page: Page,
+  config: DemandConfig = readDemandConfig(),
+  reviews: Record<string, RouteReview> = {}
+): Promise<DemandReport> {
+  return (await runDemandSimulationDetailed(page,config,reviews)).report;
 }
