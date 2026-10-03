@@ -35,7 +35,13 @@ test('cross-checks realism mode and a-check multiplier',()=>{
 test('ambiguous aircraft variant fails closed',()=>{
   const r=inferGameModeEvidence(quote('easy'),[variant(0,900),variant(1,900)]);
   expect(r.status).toBe('conflict');
-  expect(r.reason).toBe('AIRCRAFT_VARIANT_SPEED_AMBIGUOUS');
+  expect(r.reason).toBe('AIRCRAFT_VARIANT_SPEED_FUEL_AMBIGUOUS');
+});
+
+test('live fuel observation disambiguates equal-speed engine variants',()=>{
+  const r=inferGameModeEvidence(quote('easy'),[variant(1,900,4),variant(2,900,5)]);
+  expect(r).toMatchObject({status:'verified',variantPriority:1,fuelTraining:0,speedMatches:true,fuelMatches:true});
+  expect(r.mutationAuthorized).toBe(false);
 });
 
 test('fare/speed disagreement never verifies mode',()=>{
