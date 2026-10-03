@@ -1,0 +1,78 @@
+import { test,expect } from '@playwright/test';
+import type { AircraftSnapshot } from '../../demand/types';
+import { RouteMutationExecutor, type RouteExecutionCandidate, type RouteExecutionPort } from '../../optimization/route-executor';
+
+const aircraft=(o:Partial<AircraftSnapshot>={}):AircraftSnapshot=>({
+  aircraftId:'101',registration:'TEST-101',routeId:'9001',routeLabel:'AAA-BBB',from:'AAA',to:'BBB',state:'ready',
+  capacity:{Y:100,J:10,F:5},remaining:{Y:100,J:10,F:5},dailyTotal:{Y:200,J:20,F:10},observedAt:new Date().toISOString(),...o
+});
+const candidate=(o:Partial<RouteExecutionCandidate>={}):RouteExecutionCandidate=>({
+  aircraftId:'101',from:'AAA',to:'CCC',airportId:'300',comparisonReady:true,capacity:{Y:100,J:10,F:5},costIndex:200,
+  routeMutationControl:{
+    observed:true,source:'jquery-direct-click',endpointVerified:true,targetVerified:true,
+    aircraftIdMatchesContext:true,airportIdMatchesContext:true,registrationInputVerified:true,
+    seatInputsVerified:true,endCostIndexVerified:true,nonCharterBranchVerified:true,charterBranchObserved:false,
+    stopoverIds:[0],ferryModes:[0],directRouteVerified:true,nativeClickReady:true,shape:'native',mutationAuthorized:false
+  },...o
+});
+const decision:any={
+  aircraftId:'101',decision:'would_reroute',selected:{from:'AAA',to:'CCC',airportId:'300',conservativeProfitPerHour:100,firstCycleLow:1000},
+  compared:1,dominating:1,reason:'verified',dryRun:true,mutationAuthorized:false
+};
+
+class FakePort implements RouteExecutionPort{
+  reroutes=0;failConfirm=false;prepareChange=false;
+  async prepare(expected:AircraftSnapshot,target:RouteExecutionCandidate){
+    return {aircraft:this.prepareChange?{...expected,to:'ZZZ'}:{...expected},target:{...target}};
+  }
+  async reroute(){this.reroutes++;}
+  async confirm(expected:AircraftSnapshot,target:RouteExecutionCandidate){
+    if(this.failConfirm)return null;
+    return {...expected,routeId:'9999',from:target.from,to:target.to,routeLabel:target.from+'-'+target.to};
+  }
+}
+
+test('persists intent, mutates once and confirms a changed route',async()=>{
+ const port=new FakePort();let reports:any[]=[];
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1},async x=>reports.push(JSON.parse(JSON.stringify(x))))
+  .run([aircraft()],[decision],[candidate()]);
+ expect(port.reroutes).toBe(1);
+ expect(r.summary).toEqual({evaluated:1,rerouted:1,held:0,unknown:0});
+ expect(r.entries[0]).toMatchObject({status:'rerouted',reason:'NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED'});
+ expect(reports.some(x=>x.entries[0]?.status==='attempting')).toBe(true);
+});
+
+test('disabled executor never prepares or mutates',async()=>{
+ const port=new FakePort();
+ const r=await new RouteMutationExecutor(port,{enabled:false,maxReroutes:1},async()=>{}).run([aircraft()],[decision],[candidate()]);
+ expect(port.reroutes).toBe(0);expect(r.entries).toHaveLength(0);
+});
+
+test('unverified candidate stays held without mutation',async()=>{
+ const port=new FakePort();
+ const bad=candidate({comparisonReady:false});
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1},async()=>{}).run([aircraft()],[decision],[bad]);
+ expect(port.reroutes).toBe(0);
+ expect(r.entries[0]).toMatchObject({status:'held',reason:'ROUTE_EXECUTION_GUARD_REJECTED'});
+});
+
+test('context change before mutation fails closed',async()=>{
+ const port=new FakePort();port.prepareChange=true;
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1},async()=>{}).run([aircraft()],[decision],[candidate()]);
+ expect(port.reroutes).toBe(0);
+ expect(r.entries[0]).toMatchObject({status:'held',reason:'ROUTE_EXECUTION_CONTEXT_CHANGED'});
+});
+
+test('unconfirmed mutation halts without retry',async()=>{
+ const port=new FakePort();port.failConfirm=true;
+ const d2={...decision,aircraftId:'102',selected:{...decision.selected,to:'DDD',airportId:'301'}};
+ const a2=aircraft({aircraftId:'102',registration:'TEST-102',routeId:'9002'});
+ const c2=candidate({aircraftId:'102',to:'DDD',airportId:'301',routeMutationControl:{...candidate().routeMutationControl!,
+   aircraftIdMatchesContext:true,airportIdMatchesContext:true}});
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:2},async()=>{})
+   .run([aircraft(),a2],[decision,d2],[candidate(),c2]);
+ expect(port.reroutes).toBe(1);
+ expect(r.halted).toBe(true);
+ expect(r.entries[0]).toMatchObject({status:'outcome_unknown',reason:'NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT'});
+ expect(r.entries[1]).toMatchObject({status:'held',reason:'PREVIOUS_ROUTE_OUTCOME_UNKNOWN'});
+});
