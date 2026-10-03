@@ -1,3 +1,6 @@
+import {readFile} from 'node:fs/promises';
+import {join} from 'node:path';
+import {validateReturnJournal} from '../optimization/return-journal';
 import type { Journal } from '../optimization/return-journal';
 
 export interface AdaptiveThreshold { percentage:number; source:'verified-departure-history'; samples:number }
@@ -20,3 +23,8 @@ export function adaptiveDemandThresholds(journal:Journal,basePercentage:number,m
  return out;
 }
 export const adaptiveDemandKey=key;
+
+export async function loadAdaptiveDemandThresholds(directory:string,scope:string,basePercentage:number,now=new Date()):Promise<ReadonlyMap<string,AdaptiveThreshold>>{
+ const journal=validateReturnJournal(JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8')),scope,now);
+ return adaptiveDemandThresholds(journal,basePercentage);
+}

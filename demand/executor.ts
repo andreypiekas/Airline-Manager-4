@@ -1,5 +1,6 @@
 import { AircraftSnapshot, CollectionResult, DemandConfig, DemandDecision } from './types';
 import { DemandManager } from './manager';
+import type { AdaptiveThreshold } from './adaptive-threshold';
 import { resolveAircraftOrigin } from '../optimization/aircraft-origins';
 
 export interface DeparturePort {
@@ -36,7 +37,8 @@ export class IndividualDepartureExecutor {
   private readonly attemptedAircraft = new Set<string>();
   private readonly attemptedRoutes = new Set<string>();
   constructor(private readonly port: DeparturePort,private readonly demand: DemandConfig,
-    private readonly settings: ExecutionSettings,private readonly save: (report: ExecutionReport)=>Promise<void>) {
+    private readonly settings: ExecutionSettings,private readonly save: (report: ExecutionReport)=>Promise<void>,
+    private readonly adaptive:ReadonlyMap<string,AdaptiveThreshold>=new Map()) {
     if (!demand.enabled || !demand.failSafe || !Number.isSafeInteger(settings.maxDepartures) || settings.maxDepartures<1 || settings.maxDepartures>100 ||
       !settings.airlineBases.length || settings.airlineBases.some(b=>!/^[A-Z]{3}$/.test(b))) throw new Error('EXECUTION_SETTINGS_INVALID');
   }
@@ -79,7 +81,7 @@ export class IndividualDepartureExecutor {
       try {fresh=await this.port.prepare(current);}catch{entry.reason='DEPARTURE_CONTROL_OR_FRESH_DETAILS_UNVERIFIED';continue;}
       if(fresh.state!=='ready'||!sameContext(current,fresh)){entry.reason='AIRCRAFT_CONTEXT_CHANGED';continue;}
       const updated={...collection,aircraft:collection.aircraft.map(a=>a.aircraftId===fresh.aircraftId?fresh:a)};
-      const decision=new DemandManager({...this.demand,dryRun:true}).analyze(updated).decisions.find(d=>d.aircraftId===fresh.aircraftId)!;
+      const decision=new DemandManager({...this.demand,dryRun:true},this.adaptive).analyze(updated).decisions.find(d=>d.aircraftId===fresh.aircraftId)!;
       entry.demand=decision;
       if(decision.decision!=='would_depart'){entry.reason=decision.reason;continue;}
       entry.reason=decision.reason;

@@ -10,12 +10,14 @@ import { DemandManager } from './manager';
 import { DemandReader } from './reader';
 import { writeDemandReport } from './report';
 import { DemandConfig, DemandReport } from './types';
+import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
 
 export async function runDemandSimulationDetailed(page: Page, config: DemandConfig = readDemandConfig(), reviews: Record<string, RouteReview> = {}) {
   const optimization = optimizationConfig();
   const research = researchConfig();
   const collection = await new DemandReader(page, 10000, true).collect();
-  const report = new DemandManager({...config,dryRun:true}).analyze(collection);
+  const adaptive=optimization.returnJournal?await loadAdaptiveDemandThresholds(optimization.returnJournal.directory,optimization.returnJournal.scope,config.minPercentage):new Map();
+  const report = new DemandManager({...config,dryRun:true},adaptive).analyze(collection);
   await writeDemandReport(report);
   await writeOccupancyAudit(collection, config);
   await writeFleetObservations(collection, optimization.aircraftOrigins, 'test-results/demand', config.maxAgeSeconds, optimization.airlineBases);

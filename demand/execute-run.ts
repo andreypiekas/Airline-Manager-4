@@ -7,6 +7,7 @@ import { IndividualDepartureExecutor, ExecutionReport } from './executor';
 import { PlaywrightDeparturePort } from './departure-port';
 import { optimizationConfig } from '../optimization/report';
 import { appendConfirmedDepartures } from '../optimization/return-journal';
+import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
 
 export function executionEnvironment(config:DemandConfig,env:NodeJS.ProcessEnv=process.env){
   const maxDepartures=Number(env.DEMAND_MAX_DEPARTURES_PER_RUN||'1');
@@ -35,8 +36,9 @@ export async function runDemandExecution(page:Page,config=readDemandConfig(),env
       'Na propria base, a aeronave pode decolar pela rota atual quando identidade, controle nativo e demanda fresca estiverem validados. Rotas e tarifas continuam sem alteracoes. No workflow principal, abastecimento e documentado separadamente em supply-report.json.',''
     ].join('\n'));
   };
+  const adaptive=optimization.returnJournal?await loadAdaptiveDemandThresholds(optimization.returnJournal.directory,optimization.returnJournal.scope,config.minPercentage):new Map();
   const report=await new IndividualDepartureExecutor(new PlaywrightDeparturePort(page),config,{...settings,
-    aircraftOrigins:optimization.aircraftOrigins,airlineBases:optimization.airlineBases},save).run();
+    aircraftOrigins:optimization.aircraftOrigins,airlineBases:optimization.airlineBases},save,adaptive).run();
   console.log('[IndividualDepartures] '+JSON.stringify(report.summary));
   if(!settings.dryRun&&optimization.returnJournal&&!report.halted){
     const added=await appendConfirmedDepartures(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);
