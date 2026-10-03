@@ -82,7 +82,8 @@ export function candidateReservationScenario(quote: CandidateQuote, collection: 
     }
   }
   result.forwardAfterReservations=evidence.remaining?{...pools.get(forwardKey)!}:null;
-  result.reverseAfterReservations=evidence.reverseRemaining?{...pools.get(reverseKey)!}:null;
+  result.reverseAfterReservations=evidence.reverseRemaining||config.poolScope==='airport-pair'&&evidence.remaining?
+    {...pools.get(reverseKey)!}:null;
   if(evidence.remaining){
     // For the candidate's single outbound+return cycle, every other aircraft has
     // exactly two deterministic legs on its CURRENT route (ready: current leg then
