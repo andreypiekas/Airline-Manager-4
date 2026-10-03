@@ -54,6 +54,8 @@ export interface DemandDecision extends AircraftSnapshot {
   classOccupancy: Record<Cabin, number | null> | null;
   requiredPassengers: number | null;
   requiredByClass: Cabins | null;
+  thresholdPercentage: number;
+  thresholdSource: 'configured-floor' | 'verified-departure-history';
   // A simulation decision is never an execution authorization.
   departureAuthorized: false;
 }

@@ -1,11 +1,12 @@
 import { AircraftSnapshot, Cabins, CLASSES, CollectionResult, DemandConfig, DemandDecision, DemandReport } from './types';
+import { AdaptiveThreshold, adaptiveDemandKey } from './adaptive-threshold';
 
 const validCabins = (value: Cabins | null): value is Cabins => !!value && CLASSES.every(k => Number.isSafeInteger(value[k]) && value[k] >= 0);
 const sum = (value: Cabins) => CLASSES.reduce((total, k) => total + value[k], 0);
 const mapCabins = (fn: (k: typeof CLASSES[number]) => number): Cabins => ({ Y: fn('Y'), J: fn('J'), F: fn('F') });
 
 export class DemandManager {
-  constructor(private readonly config: DemandConfig) {
+  constructor(private readonly config: DemandConfig,private readonly adaptive:ReadonlyMap<string,AdaptiveThreshold>=new Map()) {
     if (!config.dryRun || !config.failSafe || !Number.isFinite(config.minPercentage) || config.minPercentage <= 0 || config.minPercentage > 100 ||
         !['aggregate', 'per-class'].includes(config.mode) || !['airport-pair', 'directional'].includes(config.poolScope) ||
         !Number.isSafeInteger(config.maxAgeSeconds) || config.maxAgeSeconds < 1) throw new Error('Configuracao de demanda insegura/invalida.');
@@ -44,8 +45,10 @@ export class DemandManager {
     }
     const decisions: DemandDecision[] = collection.aircraft.map(a => {
       const key = this.pool(a);
+      const adaptive=this.adaptive.get(adaptiveDemandKey(a.aircraftId,a.routeId));
+      const threshold=adaptive?.percentage??this.config.minPercentage;
       const d: DemandDecision = { ...a, poolKey: key, decision: 'hold_unavailable', reason: '', availableBefore: null,
-        possiblePassengers: null, occupancyPercentage: null, classOccupancy: null, requiredPassengers: null, requiredByClass: null, departureAuthorized: false };
+        possiblePassengers: null, occupancyPercentage: null, classOccupancy: null, requiredPassengers: null, requiredByClass: null, thresholdPercentage:threshold, thresholdSource:adaptive?.source??'configured-floor', departureAuthorized: false };
       if (a.state === 'inflight') return { ...d, decision: 'not_ready', reason: 'Em voo; nenhuma nova decolagem nesta analise.' };
       if (!this.config.enabled) return { ...d, reason: 'Gerenciador desativado; nenhuma autorizacao emitida.' };
       if (!collection.complete) return { ...d, reason: 'Coleta incompleta; liberacoes simuladas bloqueadas.' };
@@ -59,8 +62,8 @@ export class DemandManager {
       const possible = mapCabins(k => Math.min(capacity[k], available[k]));
       const totalSeats = sum(capacity), totalPossible = sum(possible);
       const percentage = 100 * totalPossible / totalSeats;
-      const requiredByClass = mapCabins(k => Math.ceil(capacity[k] * this.config.minPercentage / 100));
-      const requiredPassengers = Math.ceil(totalSeats * this.config.minPercentage / 100);
+      const requiredByClass = mapCabins(k => Math.ceil(capacity[k] * threshold / 100));
+      const requiredPassengers = Math.ceil(totalSeats * threshold / 100);
       const enough = totalPossible > 0 && (this.config.mode === 'aggregate' ? totalPossible >= requiredPassengers : CLASSES.every(k => possible[k] >= requiredByClass[k]));
       d.availableBefore = { ...available };
       d.possiblePassengers = possible;
@@ -69,7 +72,7 @@ export class DemandManager {
       d.requiredPassengers = requiredPassengers;
       d.requiredByClass = requiredByClass;
       d.decision = enough ? 'would_depart' : 'hold_insufficient';
-      d.reason = totalPossible === 0 ? 'Sem demanda nas classes configuradas.' : `${totalPossible}/${totalSeats} assentos cobertos por demanda (${percentage.toFixed(2)}%); limite ${this.config.minPercentage}% (${this.config.mode}).`;
+      d.reason = totalPossible === 0 ? 'Sem demanda nas classes configuradas.' : `${totalPossible}/${totalSeats} assentos cobertos por demanda (${percentage.toFixed(2)}%); limite ${threshold}% (${this.config.mode}; ${d.thresholdSource}).`;
       if (enough) pools.set(key, mapCabins(k => available[k] - possible[k]));
       return d;
     });

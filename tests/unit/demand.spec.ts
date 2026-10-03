@@ -135,3 +135,18 @@ test('Telegram message is aggregate-only and silent when healthy', () => {
   expect(text).toContain('insuficientes 1'); expect(text).not.toContain('PRIVATE-NAME'); expect(text).not.toContain('AAA');
   expect(() => message({ summary: { evaluated: 'oops' } })).toThrow();
 });
+
+test('adaptive threshold only raises floor after enough verified history',async()=>{
+  const {adaptiveDemandThresholds,adaptiveDemandKey}=await import('../../demand/adaptive-threshold');
+  const events=[80,95,94,93,92,91].map((p,i)=>({eventId:'e'+i,type:'departure' as const,aircraftId:'1',registration:'T',routeId:'10',from:'AAA',to:'BBB',observedAt:now.toISOString(),result:'departed' as const,demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:p,J:0,F:0},occupancyPercentage:p},actualOnboard:{Y:p,J:0,F:0}}));
+  expect(adaptiveDemandThresholds({schemaVersion:1,scope:'x',entries:[],events:events.slice(0,4)},80).size).toBe(0);
+  const map=adaptiveDemandThresholds({schemaVersion:1,scope:'x',entries:[],events:events.slice(1)},80);
+  expect(map.get(adaptiveDemandKey('1','10'))).toEqual({percentage:90,source:'verified-departure-history',samples:5});
+  const r=new DemandManager(config,map).analyze(collection([aircraft({remaining:{Y:85,J:0,F:0}})]),now);
+  expect(r.decisions[0]).toMatchObject({decision:'hold_insufficient',thresholdPercentage:90,thresholdSource:'verified-departure-history'});
+});
+test('adaptive history never lowers configured threshold',async()=>{
+  const {adaptiveDemandThresholds}=await import('../../demand/adaptive-threshold');
+  const events=[70,71,72,73,74].map((p,i)=>({eventId:'l'+i,type:'departure' as const,aircraftId:'1',registration:'T',routeId:'10',from:'AAA',to:'BBB',observedAt:now.toISOString(),result:'departed' as const,demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:p,J:0,F:0},occupancyPercentage:p},actualOnboard:{Y:p,J:0,F:0}}));
+  expect(adaptiveDemandThresholds({schemaVersion:1,scope:'x',entries:[],events},80).size).toBe(0);
+});
