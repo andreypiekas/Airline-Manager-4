@@ -118,7 +118,8 @@ test('rounded live factor is refined only by stable observed history inside its 
  const displayed=.17,actual=.17006534,fixedObserved=.05009575;
  const entries=[0,11,68,75,91,101,112,117].map((Y,i)=>({relativeTime:'1 hour ago',from:i%2?'GRU':'SCL',to:i%2?'SCL':'GRU',registrationLabel:'B727',co2Quotas:Math.round(distance*(actual*Y+fixedObserved)),onboard:{Y,J:0,F:0},fuelLbs:1,revenue:Y*1000}));
  const a=aircraft(entries);a.registration='B727';a.capacity={Y:131,J:0,F:0};a.remaining={Y:20,J:0,F:0};a.dailyTotal={Y:200,J:0,F:0};
- const r=calibrateCo2FromFlightHistory(a,[quote(displayed)],catalog(),now);
+ const live=quote(displayed);live.registration='B727';
+ const r=calibrateCo2FromFlightHistory(a,[live],catalog(),now);
  expect(r.status).toBe('verified_single_cabin_equivalence');expect(r.formulaVerified).toBe(true);expect(r.quoteFactor).toBe(displayed);expect(r.calibratedFactorPerUnit).toBeCloseTo(actual,4);expect(r.fixedQuotasPerKm).toBeCloseTo(fixedObserved,3);
 });
 test('history slope outside live displayed-factor rounding remains fail closed',()=>{
