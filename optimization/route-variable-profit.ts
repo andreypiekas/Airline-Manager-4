@@ -107,15 +107,16 @@ export function routeVariableProfitInterval(
     !Number.isFinite(quote.distanceKm)||quote.distanceKm<=0||!finite(setupFee)||!co2Calibration||!co2Market||
     !fresh(co2Market.observedAt,now,maxAgeSeconds)||!repairReferenceVerified)return base;
 
+  const lowLoad=load.confidence95Low,expectedLoad=load.expectedAggregate,highLoad=load.confidence95High;
   const active=CLASSES.filter(k=>capacity[k]>0);
-  if(!active.length||!active.every(k=>fares[k]>0&&remaining[k]>=capacity[k]*load.confidence95High))
+  if(!active.length||!active.every(k=>fares[k]>0&&remaining[k]>=capacity[k]*highLoad))
     return {...base,demandSupportsInterval:false,reason:'REMAINING_DEMAND_DOES_NOT_SUPPORT_LOAD_INTERVAL'};
 
   const gross=(f:number)=>CLASSES.reduce((sum,k)=>sum+capacity[k]*f*fares[k],0);
-  const revLow=gross(load.confidence95Low),revExpected=gross(load.expectedAggregate),revHigh=gross(load.confidence95High);
-  const co2Low=co2Cost(co2Calibration,co2Market,quote,capacity,load.confidence95Low);
-  const co2Expected=co2Cost(co2Calibration,co2Market,quote,capacity,load.expectedAggregate);
-  const co2High=co2Cost(co2Calibration,co2Market,quote,capacity,load.confidence95High);
+  const revLow=gross(lowLoad),revExpected=gross(expectedLoad),revHigh=gross(highLoad);
+  const co2Low=co2Cost(co2Calibration,co2Market,quote,capacity,lowLoad);
+  const co2Expected=co2Cost(co2Calibration,co2Market,quote,capacity,expectedLoad);
+  const co2High=co2Cost(co2Calibration,co2Market,quote,capacity,highLoad);
   const fuel=costs.fuelAtMarketReplacementPrice,aCheck=costs.aCheck.catalogProration;
   const repair0=costs.wearRepairReference.expectedPerDepartureAtTraining0;
   const repair5=costs.wearRepairReference.expectedPerDepartureAtTraining5;
@@ -131,7 +132,7 @@ export function routeVariableProfitInterval(
   if(!values.every(Number.isFinite))return base;
   return {
     ...base,status:'verified_interval',
-    loadFactor:{low:load.confidence95Low,expected:load.expectedAggregate,high:load.confidence95High,
+    loadFactor:{low:lowLoad,expected:expectedLoad,high:highLoad,
       source:'empirical-current-fare-95ci'},
     demandSupportsInterval:true,revenue:{low:revLow,expected:revExpected,high:revHigh},
     costs:{fuel,co2Low,co2Expected,co2High,aCheck,repairMin,repairMax},
