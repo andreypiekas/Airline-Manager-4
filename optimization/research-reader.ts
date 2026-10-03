@@ -141,7 +141,7 @@ export async function writeRouteResearchReport(report: Awaited<ReturnType<typeof
     '## Sondas estruturais fora da base — somente leitura',
     '',
     ...probeRows.flatMap(probe=>[
-      `- Aeronave ${probe.aircraftId} em ${probe.currentAirport}: ${probe.status}.`,
+      `- Aeronave ${probe.aircraftId} em ${probe.currentAirport}: ${probe.status}; etapa ${probe.stage}.`,
       ...(probe.observation?[
         `  - Trecho: ${probe.observation.from}–${probe.observation.to}; Create route validado ${probe.observation.routeMutationControl?.nativeClickReady?'sim':'nao'}.`,
         `  - Autoprice: ${probe.observation.autopriceFunctionEvidence?.observed?'observado':'indisponivel'}; transformacao ${probe.observation.autopriceFunctionEvidence?.fareTransformVerified?'verificada':'nao verificada'}; modelos VIP ${probe.observation.autopriceFunctionEvidence?.vipModelIds?.join(', ')||'nenhum'}; multiplicador ${probe.observation.autopriceFunctionEvidence?.vipMultiplier??'indisponivel'}.`,
