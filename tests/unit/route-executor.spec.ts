@@ -34,7 +34,7 @@ class FakePort implements RouteExecutionPort{
 
 test('persists intent, mutates once and confirms a changed route',async()=>{
  const port=new FakePort();let reports:any[]=[];
- const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1},async x=>reports.push(JSON.parse(JSON.stringify(x))))
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1},async x=>{reports.push(JSON.parse(JSON.stringify(x)));})
   .run([aircraft()],[decision],[candidate()]);
  expect(port.reroutes).toBe(1);
  expect(r.summary).toEqual({evaluated:1,rerouted:1,held:0,unknown:0});
