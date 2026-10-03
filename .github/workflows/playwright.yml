@@ -235,6 +235,8 @@ jobs:
         DEMAND_TELEGRAM_ENABLED: ${{ vars.DEMAND_TELEGRAM_ENABLED || 'false' }}
         TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
         TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        BOT_RESULT: ${{ steps.bot.outcome }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
       run: node scripts/telegram-demand.cjs
 
     - name: Enviar relatorios da execucao

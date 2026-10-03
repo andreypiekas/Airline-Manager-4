@@ -150,3 +150,11 @@ test('adaptive history never lowers configured threshold',async()=>{
   const events=[70,71,72,73,74].map((p,i)=>({eventId:'l'+i,type:'departure' as const,aircraftId:'1',registration:'T',routeId:'10',from:'AAA',to:'BBB',observedAt:now.toISOString(),result:'departed' as const,demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:p,J:0,F:0},occupancyPercentage:p},actualOnboard:{Y:p,J:0,F:0}}));
   expect(adaptiveDemandThresholds({schemaVersion:1,scope:'x',entries:[],events},80).size).toBe(0);
 });
+
+test('Telegram important events stays silent on ordinary holds and reports only actionable evidence',async()=>{
+ const fs=await import('node:fs/promises'),os=await import('node:os'),path=await import('node:path');const dir=await fs.mkdtemp(path.join(os.tmpdir(),'am4-tg-'));const {importantMessage}=require('../../scripts/telegram-demand.cjs');
+ try{await fs.writeFile(path.join(dir,'demand-report.json'),JSON.stringify({decisions:[{decision:'hold_insufficient',occupancyPercentage:25}]}));expect(importantMessage(dir,'success')).toBeNull();
+ await fs.writeFile(path.join(dir,'ui-health.json'),JSON.stringify({status:'UI_CHANGE_DETECTED'}));expect(importantMessage(dir,'failure')).toContain('UI_CHANGE_DETECTED');
+ await fs.writeFile(path.join(dir,'route-execution.json'),JSON.stringify({summary:{rerouted:1,unknown:0},halted:false}));expect(importantMessage(dir,'success')).toContain('rotas alteradas e confirmadas: 1');
+ await fs.writeFile(path.join(dir,'supply-report.json'),JSON.stringify({halted:false,adaptive:{fuel:{source:'verified-live-history',historicalReference:400}},entries:[{kind:'fuel',status:'purchased',before:{pricePer1000:350}}]}));expect(importantMessage(dir,'success')).toContain('combustivel materialmente barato');}finally{await fs.rm(dir,{recursive:true,force:true});}
+});
