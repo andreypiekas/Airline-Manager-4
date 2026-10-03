@@ -18,7 +18,7 @@ export interface FlightHistoryEvidence {
   source:'inspected-aircraft-flight-history';
   complete:false;
   entries:FlightHistoryEntry[];
-  navigationDiagnostics:Array<{tag:string;id:string|null;text:string|null;title:string|null;onclick:string|null;href:string|null;classShape:string|null}>;
+  navigationDiagnostics?:Array<{tag:string;id:string|null;text:string|null;title:string|null;onclick:string|null;href:string|null;classShape:string|null}>;
   comparisonReady:false;
   mutationAuthorized:false;
 }
