@@ -6,6 +6,7 @@ import { readRouteListenerDiagnostics, RouteListenerDiagnostic } from './route-l
 import { readRouteMutationControl, RouteMutationControlEvidence } from './route-mutation-control';
 import { readAutopriceFunctionEvidence, effectiveAutopriceBase, AutopriceFunctionEvidence } from './autoprice-diagnostics';
 import { readRouteQuoteFieldDiagnostics, RouteQuoteFieldDiagnostic } from './route-quote-diagnostics';
+import type { RouteResponseDiagnostic } from './route-response-diagnostics';
 import { inspectRouteDirectionEvidence, RouteDirectionEvidence } from './route-direction-evidence';
 
 export interface QuoteIdentity { aircraftId: string; registration: string; airportId: string; from: string; to: string }
@@ -30,6 +31,7 @@ export interface CandidateQuote extends QuoteIdentity {
   autopriceFunctionEvidence?: AutopriceFunctionEvidence;
   quoteFieldDiagnostics?: RouteQuoteFieldDiagnostic[];
   routeDirectionEvidence?: RouteDirectionEvidence;
+  routeResponseDiagnostics?: RouteResponseDiagnostic;
   remainingDemand: null;
   netProfit: null;
   comparisonReady: false;
