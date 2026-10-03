@@ -56,6 +56,7 @@ test('verifies weighted cabin-unit CO2 formula from multiple observed mixes',()=
   expect(r.status).toBe('verified_weighted_cabin_units');
   expect(r.formulaVerified).toBe(true);
   expect(r.quoteFactor).toBe(factor);
+  expect(r.calibratedFactorPerUnit).toBeCloseTo(factor,4);
   expect(r.fixedQuotasPerKm).toBeCloseTo(fixed,3);
   expect(r.samples).toHaveLength(5);
   expect(r.weightedResidualSpread).toBeLessThanOrEqual(.025);
@@ -107,8 +108,20 @@ test('conflicting route catalogue distances still fail closed',()=>{
 test('verified evidence estimates quota use but unavailable evidence never does',()=>{
   const r=calibrateCo2FromFlightHistory(aircraft(),[quote(),quote(factor,'BBB')],catalog(),now);
   expect(estimateObservedCo2Quotas(r,1000,{Y:100,J:5,F:2})).toBe(
-    Math.round(1000*(r.fixedQuotasPerKm!+factor*(100+10+6)))
+    Math.round(1000*(r.fixedQuotasPerKm!+r.calibratedFactorPerUnit!*(100+10+6)))
   );
   expect(estimateObservedCo2Quotas({...r,formulaVerified:false},1000,{Y:100,J:5,F:2})).toBeNull();
   expect(estimateObservedCo2Quotas(r,-1,{Y:100,J:5,F:2})).toBeNull();
+});
+
+test('rounded live factor is refined only by stable observed history inside its display interval',()=>{
+ const displayed=.17,actual=.17006534,fixedObserved=.05009575;
+ const entries=[0,11,68,75,91,101,112,117].map((Y,i)=>({relativeTime:'1 hour ago',from:i%2?'GRU':'SCL',to:i%2?'SCL':'GRU',registrationLabel:'B727',co2Quotas:Math.round(distance*(actual*Y+fixedObserved)),onboard:{Y,J:0,F:0},fuelLbs:1,revenue:Y*1000}));
+ const a=aircraft(entries);a.registration='B727';a.capacity={Y:131,J:0,F:0};a.remaining={Y:20,J:0,F:0};a.dailyTotal={Y:200,J:0,F:0};
+ const r=calibrateCo2FromFlightHistory(a,[quote(displayed)],catalog(),now);
+ expect(r.status).toBe('verified_single_cabin_equivalence');expect(r.formulaVerified).toBe(true);expect(r.quoteFactor).toBe(displayed);expect(r.calibratedFactorPerUnit).toBeCloseTo(actual,4);expect(r.fixedQuotasPerKm).toBeCloseTo(fixedObserved,3);
+});
+test('history slope outside live displayed-factor rounding remains fail closed',()=>{
+ const entries=[10,30,60,90].map(Y=>history(Y,0,0));const a=aircraft(entries);a.capacity={Y:100,J:0,F:0};
+ const r=calibrateCo2FromFlightHistory(a,[quote(.17)],catalog(),now);expect(r.formulaVerified).toBe(false);expect(r.reason).toBe('HISTORICAL_FACTOR_OUTSIDE_LIVE_DISPLAY_ROUNDING');
 });

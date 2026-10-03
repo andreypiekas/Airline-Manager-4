@@ -18,6 +18,7 @@ export interface Co2CalibrationEvidence {
   status:'verified_weighted_cabin_units'|'verified_single_cabin_equivalence'|'insufficient'|'inconsistent';
   observedAt:string;
   quoteFactor:number|null;
+  calibratedFactorPerUnit:number|null;
   fixedQuotasPerKm:number|null;
   samples:Co2CalibrationSample[];
   weightedResidualSpread:number|null;
@@ -38,6 +39,16 @@ const pair=(a:string,b:string,x:string,y:string)=>(a===x&&b===y)||(a===y&&b===x)
 const spread=(values:number[])=>values.length?Math.max(...values)-Math.min(...values):null;
 const mean=(values:number[])=>values.reduce((a,b)=>a+b,0)/values.length;
 const round=(value:number)=>Math.round(value*1e9)/1e9;
+const fit=(samples:Co2CalibrationSample[],units:(s:Co2CalibrationSample)=>number)=>{
+  const xs=samples.map(units),ys=samples.map(s=>s.quotas/s.distanceKm),xm=mean(xs),ym=mean(ys);
+  const denominator=xs.reduce((sum,x)=>sum+(x-xm)**2,0);
+  if(!Number.isFinite(denominator)||denominator<=0)return null;
+  const slope=xs.reduce((sum,x,i)=>sum+(x-xm)*(ys[i]-ym),0)/denominator,intercept=ym-slope*xm;
+  if(!Number.isFinite(slope)||!Number.isFinite(intercept))return null;
+  const residuals=samples.map((s,i)=>ys[i]-(intercept+slope*xs[i]));
+  const errors=samples.map((s,i)=>Math.abs(s.distanceKm*(intercept+slope*xs[i])-s.quotas)/Math.max(1,s.quotas));
+  return {slope,intercept,residualSpread:spread(residuals)!,mae:mean(errors)};
+};
 
 /**
  * Calibrates only a formula shape already evidenced by the game's own visible
@@ -54,7 +65,7 @@ export function calibrateCo2FromFlightHistory(
 ):Co2CalibrationEvidence {
   const base:Co2CalibrationEvidence={
     aircraftId:aircraft.aircraftId,status:'insufficient',observedAt:now.toISOString(),
-    quoteFactor:null,fixedQuotasPerKm:null,samples:[],
+    quoteFactor:null,calibratedFactorPerUnit:null,fixedQuotasPerKm:null,samples:[],
     weightedResidualSpread:null,physicalResidualSpread:null,
     weightedMeanAbsoluteErrorRatio:null,physicalMeanAbsoluteErrorRatio:null,
     formulaVerified:false,reason:'EVIDENCE_INCOMPLETE',comparisonReady:false,mutationAuthorized:false
@@ -101,20 +112,17 @@ export function calibrateCo2FromFlightHistory(
   }
   if(samples.length<4)return {...base,quoteFactor:factor,samples,reason:'TOO_FEW_RESOLVED_HISTORY_SAMPLES'};
 
-  const weightedResiduals=samples.map(s=>s.weightedResidualPerKm);
-  const physicalResiduals=samples.map(s=>s.physicalResidualPerKm);
-  const fixed=mean(weightedResiduals);
-  const weightedErrors=samples.map(s=>Math.abs((s.distanceKm*(factor*s.weightedCabinUnits+fixed))-s.quotas)/Math.max(1,s.quotas));
-  const physicalFixed=mean(physicalResiduals);
-  const physicalErrors=samples.map(s=>Math.abs((s.distanceKm*(factor*s.physicalPassengers+physicalFixed))-s.quotas)/Math.max(1,s.quotas));
-  const weightedSpread=spread(weightedResiduals)!;
-  const physicalSpread=spread(physicalResiduals)!;
-  const weightedMae=mean(weightedErrors);
-  const physicalMae=mean(physicalErrors);
+  const weightedFit=fit(samples,s=>s.weightedCabinUnits),physicalFit=fit(samples,s=>s.physicalPassengers);
+  if(!weightedFit||!physicalFit)return {...base,quoteFactor:factor,samples,reason:'HISTORY_LOAD_VARIATION_INSUFFICIENT'};
+  const fixed=weightedFit.intercept,weightedSpread=weightedFit.residualSpread,physicalSpread=physicalFit.residualSpread;
+  const weightedMae=weightedFit.mae,physicalMae=physicalFit.mae;
+  // The UI exposes the live factor rounded to two decimals. Historical calibration may refine
+  // that displayed value, but only inside the exact rounding interval represented by the UI.
+  const factorCompatible=Math.abs(weightedFit.slope-factor)<0.005;
   const premiumMix=new Set(samples.map(s=>s.onboard.J+2*s.onboard.F)).size>=2&&samples.some(s=>s.onboard.J+s.onboard.F>0);
   const loadMix=new Set(samples.map(s=>s.weightedCabinUnits)).size>=3;
 
-  const stable=Number.isFinite(fixed)&&fixed>=0&&weightedSpread<=0.025&&weightedMae<=0.005;
+  const stable=factorCompatible&&weightedFit.slope>0&&Number.isFinite(fixed)&&fixed>=0&&weightedSpread<=0.025&&weightedMae<=0.005;
   const distinguishes=premiumMix&&loadMix&&(physicalSpread>=weightedSpread+0.05||physicalMae>=Math.max(0.002,weightedMae*2));
   const economyOnly=aircraft.capacity.Y>0&&aircraft.capacity.J===0&&aircraft.capacity.F===0&&samples.every(s=>s.onboard.J===0&&s.onboard.F===0);
   // For an economy-only layout, physical passengers and Y+2J+3F are mathematically identical.
@@ -125,12 +133,12 @@ export function calibrateCo2FromFlightHistory(
   return {
     ...base,
     status:verified?(singleCabinEquivalent?'verified_single_cabin_equivalence':'verified_weighted_cabin_units'):stable?'insufficient':'inconsistent',
-    quoteFactor:factor,fixedQuotasPerKm:round(fixed),samples,
+    quoteFactor:factor,calibratedFactorPerUnit:round(weightedFit.slope),fixedQuotasPerKm:round(fixed),samples,
     weightedResidualSpread:round(weightedSpread),physicalResidualSpread:round(physicalSpread),
     weightedMeanAbsoluteErrorRatio:round(weightedMae),physicalMeanAbsoluteErrorRatio:round(physicalMae),
     formulaVerified:verified,
     reason:verified?(singleCabinEquivalent?'LIVE_HISTORY_SUPPORTS_ECONOMY_ONLY_EQUIVALENT_FORMULA_WITH_STABLE_PER_KM_INTERCEPT':'LIVE_HISTORY_SUPPORTS_WEIGHTED_CABIN_UNITS_WITH_STABLE_PER_KM_INTERCEPT'):
-      !stable?'WEIGHTED_FORMULA_NOT_STABLE':'PREMIUM_CABIN_MIX_INSUFFICIENT_TO_DISTINGUISH_FORMULA'
+      !factorCompatible?'HISTORICAL_FACTOR_OUTSIDE_LIVE_DISPLAY_ROUNDING':!stable?'WEIGHTED_FORMULA_NOT_STABLE':'PREMIUM_CABIN_MIX_INSUFFICIENT_TO_DISTINGUISH_FORMULA'
   };
 }
 
@@ -140,11 +148,11 @@ export function estimateObservedCo2Quotas(
   onboard:{Y:number;J:number;F:number}
 ):number|null {
   if(!evidence.formulaVerified||!['verified_weighted_cabin_units','verified_single_cabin_equivalence'].includes(evidence.status)||
-    evidence.quoteFactor===null||evidence.fixedQuotasPerKm===null||
+    evidence.calibratedFactorPerUnit===null||evidence.fixedQuotasPerKm===null||
     !Number.isFinite(distanceKm)||distanceKm<=0||
     ![onboard.Y,onboard.J,onboard.F].every(Number.isSafeInteger)||[onboard.Y,onboard.J,onboard.F].some(n=>n<0))
     return null;
   const weighted=onboard.Y+2*onboard.J+3*onboard.F;
-  const quotas=distanceKm*(evidence.fixedQuotasPerKm+evidence.quoteFactor*weighted);
+  const quotas=distanceKm*(evidence.fixedQuotasPerKm+evidence.calibratedFactorPerUnit*weighted);
   return Number.isFinite(quotas)&&quotas>=0?Math.round(quotas):null;
 }
