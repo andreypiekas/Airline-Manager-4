@@ -33,13 +33,15 @@ export async function collectOpenRouteSuggestions(page: Page, aircraft: Aircraft
         // while the next read request is still loading.
         if(previousNext)await expect.poll(()=>previousNext.evaluate(e=>e.isConnected),{timeout}).toBe(false);
       } finally {await previousNext?.dispose();}
-      const next=page.locator('#introSuggestm');
+      result.stage='next_control';
+    const next=page.locator('#introSuggestm');
       await expect(next).toHaveAttribute('onclick',new RegExp(`^playSound\\('neutral_click'\\);Ajax\\('new_route_info\\.php\\?id=${aircraft.aircraftId}&airportId=\\d+&ferry=0','newRouteInfo',this,false,true\\);\\s*$`),{timeout});
       const quoteCallback=await next.getAttribute('onclick')||'';
       const airportId=quoteCallback.match(/&airportId=(\d+)&/)![1];
       if(seen.has(airportId)){result.warnings.push('REPEATED_SUGGESTION');break;}
       seen.add(airportId);
-      const responsePromise=page.waitForResponse(r=>{
+      result.stage='quote_click';
+    const responsePromise=page.waitForResponse(r=>{
         try{
           const u=new URL(r.url());
           return u.pathname.endsWith('/new_route_info.php')&&u.searchParams.get('id')===aircraft.aircraftId&&
@@ -47,11 +49,13 @@ export async function collectOpenRouteSuggestions(page: Page, aircraft: Aircraft
         }catch{return false;}
       },{timeout});
       const [responseResult]=await Promise.allSettled([responsePromise,next.click({timeout})]);
-      const panel=page.locator('#newRouteInfo');
+      result.stage='quote_panel';
+    const panel=page.locator('#newRouteInfo');
       await panel.waitFor({state:'visible',timeout});
       const codes=await panel.locator('.col-3.m-text > b').allTextContents();
       if(codes.length!==2||codes[0].trim()!==origin||!/^[A-Z]{3}$/.test(codes[1].trim()))throw new Error();
-      const read=await readOpenCandidateQuote(page,{aircraftId:aircraft.aircraftId,registration:aircraft.registration,airportId,from:origin,to:codes[1].trim()});
+      result.stage='quote_read';
+    const read=await readOpenCandidateQuote(page,{aircraftId:aircraft.aircraftId,registration:aircraft.registration,airportId,from:origin,to:codes[1].trim()});
       if(read.status!=='observed')throw new Error();
       if(responseResult.status==='fulfilled'&&responseResult.value.ok()){
         try{read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse(await responseResult.value.text());}
@@ -64,7 +68,8 @@ export async function collectOpenRouteSuggestions(page: Page, aircraft: Aircraft
       } else {
         result.quotes.push(read.quote);
       }
-      const back=panel.getByRole('button',{name:/Back$/});
+      result.stage='back_control';
+    const back=panel.getByRole('button',{name:/Back$/});
       if(await back.count()!==1)throw new Error();
       // Confirm the inspected close-only callback before clicking. Never click Create route.
       if(!/^\$\('#newRouteInfo'\)\.hide\('fast'\);playSound\('neutral_click'\);(?:\/\*(?:(?!\*\/)[\s\S])*\*\/)?$/.test(await back.getAttribute('onclick')||''))throw new Error();
@@ -102,6 +107,7 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
       routeResponseDiagnostics:NonNullable<CandidateQuote['routeResponseDiagnostics']>;
     },
     warnings:[] as string[],
+    stage:'init' as string,
     mutationAuthorized:false as false
   };
   if(!Number.isSafeInteger(timeout)||timeout<1||timeout>30000)throw new Error('SUGGESTION_CONFIG_INVALID');
@@ -112,6 +118,7 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
     result.warnings.push('DIAGNOSTIC_AIRCRAFT_CONTEXT_INVALID');return result;
   }
   try{
+    result.stage='suggest_control';
     const suggest=page.locator('#introSuggest');
     if(await suggest.count()!==1||!await suggest.isVisible()||!await suggest.isEnabled())throw new Error();
     const callback=(await suggest.getAttribute('onclick')||'').trim();
@@ -119,6 +126,7 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
     const tail=callback.slice(allowed.length).replace(/\s/g,'');
     if(!callback.startsWith(allowed)||!(tail===''||tail==='isItrouteClick=true;hideAirpAndHubs();remPrevClickedMarkerAirc();'))throw new Error();
 
+    result.stage='suggest_click';
     const previousNext=await page.locator('#introSuggestm').count()===1?await page.locator('#introSuggestm').elementHandle():null;
     try{
       await suggest.click({timeout});
@@ -151,6 +159,7 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
       try{read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse(await responseResult.value.text());}
       catch{read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse('');}
     }else read.quote.routeResponseDiagnostics=inspectRouteQuoteResponse('');
+    result.stage='observed';
     result.observation={
       airportId,from:read.quote.from,to:read.quote.to,
       createControl:read.quote.createControl||null,
@@ -166,9 +175,10 @@ export async function probeOpenRouteControl(page:Page,aircraft:AircraftSnapshot,
     const back=panel.getByRole('button',{name:/Back$/});
     if(await back.count()!==1||!/^\$\('#newRouteInfo'\)\.hide\('fast'\);playSound\('neutral_click'\);(?:\/\*(?:(?!\*\/)[\s\S])*\*\/)?$/.test(await back.getAttribute('onclick')||''))throw new Error();
     await back.click({timeout});await panel.waitFor({state:'hidden',timeout});
+    result.stage='complete';
   }catch{
     result.status='unavailable';
-    result.warnings.push('DIAGNOSTIC_ROUTE_CONTROL_PROBE_FAILED');
+    result.warnings.push('DIAGNOSTIC_ROUTE_CONTROL_PROBE_FAILED:'+result.stage);
   }
   return result;
 }
