@@ -18,6 +18,7 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build:state
+      - run: node scripts/company-dashboard.cjs --self-test
       - run: npx playwright install --with-deps chromium
       - run: npm test
       - name: Publicar simulacoes sem dados da companhia

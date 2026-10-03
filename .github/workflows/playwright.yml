@@ -181,9 +181,16 @@ jobs:
         RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
       run: node .am4-tools/optimization/github-state.js save
 
+    - name: Consolidar dashboard e estados operacionais
+      if: always()
+      run: node scripts/company-dashboard.cjs
+
     - name: Resumo de demanda
       if: always()
       run: |
+        if [ -f test-results/demand/company-dashboard.md ]; then
+          cat test-results/demand/company-dashboard.md >> "$GITHUB_STEP_SUMMARY"
+        fi
         if [ -f test-results/demand/demand-report.md ]; then
           cat test-results/demand/demand-report.md >> "$GITHUB_STEP_SUMMARY"
         fi
