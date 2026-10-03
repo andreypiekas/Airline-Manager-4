@@ -160,7 +160,7 @@ test('persisted flight-history anchors prove overlap only as read-only evidence'
  current.rows=[row('20 hours ago','AAA','BBB',800),row('21 hours ago','AAA','BBB',800)];
  expect(compareFlightHistoryAnchors(previous,current)).toMatchObject({status:'unavailable',reason:'ANCHOR_OVERLAP_INSUFFICIENT',comparisonReady:false,mutationAuthorized:false});
  const duplicate=row('1 hour ago','AAA','BBB',777),other=row('2 hours ago','BBB','AAA',666);
- previous.rows=[duplicate,other,duplicate,other];current.rows=[duplicate,other,duplicate,other];
+ previous.rows=[duplicate,other,duplicate,other];current.rows=[duplicate,other];
  expect(compareFlightHistoryAnchors(previous,current)).toMatchObject({status:'unavailable',reason:'ANCHOR_OVERLAP_ALIGNMENT_AMBIGUOUS',comparisonReady:false,mutationAuthorized:false});
  previous.rows=[duplicate,other,duplicate];current.rows=[row('30 mins ago','CCC','DDD',555),duplicate,other,duplicate];
  expect(compareFlightHistoryAnchors(previous,current)).toMatchObject({status:'verified_overlap',overlapRows:3,reason:'PERSISTED_FLIGHT_ROWS_OVERLAP_VERIFIED',comparisonReady:false,mutationAuthorized:false});
