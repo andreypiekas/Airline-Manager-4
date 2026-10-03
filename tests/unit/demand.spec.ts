@@ -158,3 +158,8 @@ test('Telegram important events stays silent on ordinary holds and reports only 
  await fs.writeFile(path.join(dir,'route-execution.json'),JSON.stringify({summary:{rerouted:1,unknown:0},halted:false}));expect(importantMessage(dir,'success')).toContain('rotas alteradas e confirmadas: 1');
  await fs.writeFile(path.join(dir,'supply-report.json'),JSON.stringify({halted:false,adaptive:{fuel:{source:'verified-live-history',historicalReference:400}},entries:[{kind:'fuel',status:'purchased',before:{pricePer1000:350}}]}));expect(importantMessage(dir,'success')).toContain('combustivel materialmente barato');}finally{await fs.rm(dir,{recursive:true,force:true});}
 });
+
+test('Telegram critical maintenance reuses verified operational thresholds',async()=>{
+ const fs=await import('node:fs/promises'),os=await import('node:os'),path=await import('node:path');const dir=await fs.mkdtemp(path.join(os.tmpdir(),'am4-tgm-'));const {importantMessage}=require('../../scripts/telegram-demand.cjs');
+ try{await fs.writeFile(path.join(dir,'candidate-data.json'),JSON.stringify({maintenance:{status:'observed',complete:true,aircraft:[{hoursToCheck:20,wearPercentage:10},{hoursToCheck:100,wearPercentage:31}]}}));expect(importantMessage(dir,'success')).toContain('manutencao critica pela politica verificada: 2');}finally{await fs.rm(dir,{recursive:true,force:true});}
+});

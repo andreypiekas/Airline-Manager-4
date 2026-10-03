@@ -9,13 +9,15 @@ function message(report) {
 }
 const read=(dir,name)=>{try{return JSON.parse(fs.readFileSync(dir+'/'+name,'utf8'));}catch{return null;}};
 function importantMessage(dir='test-results/demand',botResult=process.env.BOT_RESULT){
- const events=[];const ui=read(dir,'ui-health.json'),demand=read(dir,'demand-report.json'),route=read(dir,'route-execution.json'),execution=read(dir,'execution-report.json'),pricing=read(dir,'pricing-execution.json'),supply=read(dir,'supply-report.json');
+ const events=[];const ui=read(dir,'ui-health.json'),demand=read(dir,'demand-report.json'),route=read(dir,'route-execution.json'),execution=read(dir,'execution-report.json'),pricing=read(dir,'pricing-execution.json'),supply=read(dir,'supply-report.json'),candidate=read(dir,'candidate-data.json');
  if(botResult&&botResult!=='success')events.push('falha do run: '+botResult);
  if(ui?.status==='UI_CHANGE_DETECTED')events.push('UI_CHANGE_DETECTED em superficie critica');
  const unknown=(name,r)=>{const n=r?.summary?.unknown;if(Number.isSafeInteger(n)&&n>0)events.push(name+' com resultado incerto: '+n);if(r?.halted===true)events.push(name+' interrompido por fail-safe');};
  unknown('decolagem',execution);unknown('reroute',route);unknown('pricing',pricing);if(supply?.halted===true)events.push('suprimentos interrompidos por fail-safe');
  const rerouted=route?.summary?.rerouted;if(Number.isSafeInteger(rerouted)&&rerouted>0)events.push('rotas alteradas e confirmadas: '+rerouted);
  if(Array.isArray(demand?.decisions)){const exhausted=demand.decisions.filter(x=>x?.decision==='hold_insufficient'&&x?.occupancyPercentage===0).length;if(exhausted>0)events.push('demanda esgotada observada: '+exhausted);}
+ const hours=Number(process.env.HOURS_CHECK||'20'),wear=Number(process.env.REPAIR_WEAR||'30');
+ if(candidate?.maintenance?.status==='observed'&&candidate.maintenance.complete===true&&Number.isFinite(hours)&&Number.isFinite(wear)){const critical=(candidate.maintenance.aircraft||[]).filter(x=>Number.isFinite(x.hoursToCheck)&&Number.isFinite(x.wearPercentage)&&(x.hoursToCheck<=hours||x.wearPercentage>=wear)).length;if(critical>0)events.push('manutencao critica pela politica verificada: '+critical);}
  const fuel=(supply?.entries||[]).find(x=>x?.kind==='fuel'),policy=supply?.adaptive?.fuel;
  if(policy?.source==='verified-live-history'&&Number.isSafeInteger(policy.historicalReference)&&fuel?.before&&Number.isSafeInteger(fuel.before.pricePer1000)&&fuel.before.pricePer1000<=policy.historicalReference&&['purchased','would_buy'].includes(fuel.status))events.push('combustivel materialmente barato vs historico verificado');
  if(!events.length)return null;return 'AM4 alerta: '+[...new Set(events)].join('; ')+'.';
