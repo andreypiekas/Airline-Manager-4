@@ -80,8 +80,9 @@ export function calibrateCo2FromFlightHistory(
     if(!/^[A-Z0-9]{3}$/.test(h.from)||!/^[A-Z0-9]{3}$/.test(h.to)||h.from===h.to)continue;
     const refs=catalog.routes.filter(r=>!r.conflict&&pair(r.from,r.to,h.from,h.to)&&
       Number.isFinite(r.distanceKm)&&r.distanceKm>0);
-    if(refs.length!==1)continue;
-    const distanceKm=refs[0].distanceKm;
+    const distances=[...new Set(refs.map(r=>r.distanceKm))];
+    if(!refs.length||distances.length!==1)continue;
+    const distanceKm=distances[0];
     const {Y,J,F}=h.onboard;
     if(![Y,J,F,h.co2Quotas].every(Number.isSafeInteger)||[Y,J,F,h.co2Quotas].some(n=>n<0))continue;
     if(Y>aircraft.capacity.Y||J>aircraft.capacity.J||F>aircraft.capacity.F)continue;

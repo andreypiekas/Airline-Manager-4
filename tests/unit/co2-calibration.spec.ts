@@ -93,12 +93,15 @@ test('conflicting live quote factors fail closed',()=>{
   expect(r.reason).toBe('LIVE_QUOTE_CO2_FACTOR_CONFLICT');
 });
 
-test('ambiguous route catalogue prevents historical samples from being treated as calibrated',()=>{
+test('reciprocal catalogue rows with identical verified distance remain usable',()=>{
   const duplicate={from:'SCL',to:'GRU',distanceKm:distance,referenceDemand:{Y:1,J:1,F:1},sourceRow:2};
   const r=calibrateCo2FromFlightHistory(aircraft(),[quote(),quote(factor,'BBB')],catalog([duplicate]),now);
-  expect(r.status).toBe('insufficient');
-  expect(r.samples).toHaveLength(0);
-  expect(r.reason).toBe('TOO_FEW_RESOLVED_HISTORY_SAMPLES');
+  expect(r.status).toBe('verified_weighted_cabin_units');expect(r.samples).toHaveLength(5);
+});
+test('conflicting route catalogue distances still fail closed',()=>{
+  const conflict={from:'SCL',to:'GRU',distanceKm:distance+1,referenceDemand:{Y:1,J:1,F:1},sourceRow:2};
+  const r=calibrateCo2FromFlightHistory(aircraft(),[quote(),quote(factor,'BBB')],catalog([conflict]),now);
+  expect(r.status).toBe('insufficient');expect(r.samples).toHaveLength(0);expect(r.reason).toBe('TOO_FEW_RESOLVED_HISTORY_SAMPLES');
 });
 
 test('verified evidence estimates quota use but unavailable evidence never does',()=>{
