@@ -9,6 +9,7 @@ import { pricingExecutionSettings, runTicketPricingExecution } from '../pricing/
 import { routeExecutionSettings, runRouteExecution } from '../optimization/route-execution-run';
 import { withRunLock } from '../utils/run-lock';
 import { loginForReadOnlyCollection } from '../utils/read-only-login';
+import { runInitialUiHealthCheck } from '../utils/ui-health';
 import { test } from '@playwright/test';
 import { GeneralUtils } from '../utils/general.utils';
 import { FuelUtils } from '../utils/fuel.utils';
@@ -190,6 +191,7 @@ test('All Operations', async ({ page }) => {
     };
 
     await loginForReadOnlyCollection(page, process.env, 90000);
+    await test.step('UI health pre-mutation', async()=>await runInitialUiHealthCheck(page));
 
     // Mantem o modulo novo de abastecimento e reincorpora as funcoes da fork original.
     await runSupplies(page, demandConfig.dryRun);

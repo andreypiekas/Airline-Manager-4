@@ -188,6 +188,9 @@ jobs:
     - name: Resumo de demanda
       if: always()
       run: |
+        if [ -f test-results/demand/ui-health.md ]; then
+          cat test-results/demand/ui-health.md >> "$GITHUB_STEP_SUMMARY"
+        fi
         if [ -f test-results/demand/company-dashboard.md ]; then
           cat test-results/demand/company-dashboard.md >> "$GITHUB_STEP_SUMMARY"
         fi
