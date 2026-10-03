@@ -6,7 +6,7 @@ import { DemandConfig } from './types';
 import { IndividualDepartureExecutor, ExecutionReport } from './executor';
 import { PlaywrightDeparturePort } from './departure-port';
 import { optimizationConfig } from '../optimization/report';
-import { appendConfirmedDepartures } from '../optimization/return-journal';
+import { appendConfirmedDepartures,appendDemandHoldObservations } from '../optimization/return-journal';
 import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
 
 export function executionEnvironment(config:DemandConfig,env:NodeJS.ProcessEnv=process.env){
@@ -41,6 +41,8 @@ export async function runDemandExecution(page:Page,config=readDemandConfig(),env
     aircraftOrigins:optimization.aircraftOrigins,airlineBases:optimization.airlineBases},save,adaptive).run();
   console.log('[IndividualDepartures] '+JSON.stringify(report.summary));
   if(!settings.dryRun&&optimization.returnJournal&&!report.halted){
+    const held=await appendDemandHoldObservations(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);
+    console.log('[History] Holds de demanda observados acrescentados: '+held+'.');
     const added=await appendConfirmedDepartures(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);
     console.log('[History] Decolagens confirmadas acrescentadas: '+added+'.');
   }

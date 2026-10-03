@@ -57,7 +57,7 @@ export class GitHubReturnState {
     const original = this.parse(canonical(baseline.original));
     const current = this.parse(await readFile(join(this.options.directory, 'return-journal.json'), 'utf8'));
     const prefix=(before:unknown[]|undefined,after:unknown[]|undefined)=>{const a=before||[],b=after||[];return b.length>=a.length&&a.every((e,i)=>canonical(e)===canonical(b[i]));};
-    if (!prefix(original.entries,current.entries)||!prefix(original.events,current.events)||!prefix(original.supplyObservations,current.supplyObservations)) throw new Error('STATE_NOT_APPEND_ONLY');
+    if (!prefix(original.entries,current.entries)||!prefix(original.events,current.events)||!prefix(original.supplyObservations,current.supplyObservations)||!prefix(original.holdObservations,current.holdObservations)) throw new Error('STATE_NOT_APPEND_ONLY');
     const originalEvents=original.events||[],currentEvents=current.events||[];
     if(currentEvents.length<originalEvents.length||originalEvents.some((e,i)=>canonical(e)!==canonical(currentEvents[i])))throw new Error('STATE_NOT_APPEND_ONLY');
     if (canonical(original) === canonical(current)) return 'unchanged';

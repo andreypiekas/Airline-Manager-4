@@ -126,3 +126,10 @@ test('verified supply observations append once per run and kind',async()=>{
  expect(await appendSupplyObservation(directory,'company-test','200','co2',{...snap,pricePer1000:110},now)).toBe(true);
  const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));expect(saved.supplyObservations).toHaveLength(2);expect(saved.supplyObservations[0]).toMatchObject({eventId:'sup_200_fuel',kind:'fuel',pricePer1000:500});
 });
+
+test('verified demand holds append only when executor observed insufficient demand',async()=>{
+ await reviewWithReturnJournal(input(),options(),now);const {appendDemandHoldObservations}=await import('../../optimization/return-journal');
+ const report={entries:[{status:'held',aircraftId:'1',routeId:'10',demand:{decision:'hold_insufficient',occupancyPercentage:25}},{status:'held',aircraftId:'2',routeId:'20',demand:null},{status:'departed',aircraftId:'3',routeId:'30',demand:{decision:'would_depart',occupancyPercentage:100}}]};
+ expect(await appendDemandHoldObservations(directory,'company-test','300',report,now)).toBe(1);expect(await appendDemandHoldObservations(directory,'company-test','300',report,now)).toBe(0);
+ const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));expect(saved.holdObservations).toEqual([{eventId:'hold_300_1_10',type:'demand-hold',aircraftId:'1',routeId:'10',observedAt:now.toISOString(),occupancyPercentage:25,reason:'hold_insufficient'}]);
+});
