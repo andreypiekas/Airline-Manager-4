@@ -50,7 +50,7 @@ export function calibrateCurrentFareLoadFactor(
   currentQuote:CandidateQuote|null,
   currentMode:GameModeEvidence|null,
   currentDistance:AirportDistanceEvidence|null,
-  minimumSamples=5
+  minimumSamples=4
 ):LoadFactorCalibrationEvidence {
   const base:LoadFactorCalibrationEvidence={
     aircraftId:aircraft.aircraftId,status:'insufficient',observedAt:new Date().toISOString(),sampleCount:0,samples:[],
