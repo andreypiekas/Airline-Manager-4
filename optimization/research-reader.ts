@@ -31,6 +31,7 @@ import { calibrateCurrentFareLoadFactor, transferCurrentFareLoadFactor } from '.
 import { candidateLoadEnvelope, currentRouteLoadEnvelope } from './route-variable-profit';
 import { compareRouteVariableCycles, conservativeSharedPairRemaining, routeVariableRoundTripInterval } from './route-variable-cycle';
 import { routeProfitModelEvidence } from './route-profit-model';
+import { planVariableRouteDecision } from './route-decision';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -345,8 +346,19 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   });
   const priorityRanking=rankCandidatePriorities(candidates);
   const routeReadiness=summarizeComparisonReadiness(candidates);
-  return {schemaVersion:14,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,comparisonReady:false,
-    uiRestored,screenedOutBeforeModelReference,routeProfitModel,reputation,demandLabelCalibration,demandResetCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,
+  const routeDecisions=[...new Set(candidates.map(c=>c.aircraftId))].map(aircraftId=>planVariableRouteDecision(
+    aircraftId,
+    candidates.filter(c=>c.aircraftId===aircraftId).map(c=>({
+      aircraftId:c.aircraftId,from:c.from,to:c.to,airportId:c.airportId,
+      comparisonReady:routeReadiness.candidates.find(r=>r.aircraftId===c.aircraftId&&r.from===c.from&&r.to===c.to)?.comparisonReady===true,
+      variableCycleComparison:c.variableCycleComparison,
+      candidateVariableCycle:c.candidateVariableCycle,
+      routeMutationControl:c.routeMutationControl
+    }))
+  ));
+  return {schemaVersion:15,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,
+    comparisonReady:routeDecisions.some(d=>d.decision!=='unavailable'),
+    uiRestored,screenedOutBeforeModelReference,routeProfitModel,reputation,demandLabelCalibration,demandResetCalibration,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,routeDecisions,
     warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }
 export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof collectCandidateData>>,directory='test-results/demand'){
@@ -382,6 +394,12 @@ export async function writeCandidateDataReport(report:Awaited<ReturnType<typeof 
       ...report.routeReadiness.candidates.map(r=>`- ${r.aircraftId} ${r.from}–${r.to}: comparacao ${r.comparisonReady?'pronta':'bloqueada'}; bloqueios ${r.comparisonBlockers.join(', ')||'nenhum'}; mutacao ${r.mutationReady?'pronta':'bloqueada'}; bloqueios ${r.mutationBlockers.join(', ')||'nenhum'}.`),
       '',
       'Este gate apenas consolida evidencias. mutationAuthorized permanece false ate existir comparacao completa e executor nativo verificado.',''
+    ]:[]),
+    ...(report.routeDecisions.length?[
+      '## Decisao conservadora por aeronave — somente leitura','',
+      ...report.routeDecisions.map(d=>`- ${d.aircraftId}: ${d.decision}; comparadas ${d.compared}; dominantes ${d.dominating}; selecionada ${d.selected?`${d.selected.from}–${d.selected.to} (${d.selected.conservativeProfitPerHour.toFixed(2)}/h low, primeiro ciclo low ${d.selected.firstCycleLow.toFixed(2)})`:'nenhuma'}; motivo ${d.reason}.`),
+      '',
+      'would_reroute e somente um plano; nenhuma rota e alterada por este relatorio.',''
     ]:[]),
     ...report.candidates.map(c=>`- ${c.aircraftId} ${c.from}–${c.to}: triagem ${c.screening.demandStatus}, teto de cobertura ${c.screening.coverageCeilingPercent===null?'indisponivel':c.screening.coverageCeilingPercent.toFixed(2)+'%'}, teto de receita/decolagem ${c.screening.grossRevenueCeilingPerDeparture??'indisponivel'}, prioridade ${c.priority.status==='rankable'?c.priority.recurringKnownContributionCeilingPerHour?.toFixed(2)+'/h':'indisponivel'}; delta contribuicao conhecida vs atual ${c.knownContributionComparison.status==='comparable_reference'?(c.knownContributionComparison.deltaKnownContributionPerHour??0).toFixed(2)+'/h':'indisponivel'}; ciclo variavel ${c.candidateVariableCycle.status}, atual ${c.currentVariableCycle?.status||'indisponivel'}, comparacao ${c.variableCycleComparison.status}, delta conservador/h ${c.variableCycleComparison.deltaPerHour.conservativeLower===null?'indisponivel':c.variableCycleComparison.deltaPerHour.conservativeLower.toFixed(2)}, primeiro ciclo low ${c.candidateVariableCycle.firstCycleAfterSetup.low===null?'indisponivel':c.candidateVariableCycle.firstCycleAfterSetup.low.toFixed(2)}; Create route ${c.createControl?.observed?'observado':'nao observado'}, endpoints ${c.createControl?.phpEndpoints?.join(', ')||'nenhum'}, shape ${c.createControl?.onclickShape||'indisponivel'}; controles inspecionados ${c.routeActionDiagnostics.length}: ${c.routeActionDiagnostics.map(a=>[a.tag,a.id||'',a.label||'',a.phpEndpoints.join('+')||'',a.callbackShape||a.hrefShape||''].filter(Boolean).join(' ')).join(' || ')||'nenhum'}; listeners ${c.routeListenerDiagnostics.length}: ${c.routeListenerDiagnostics.map(a=>[a.scope,a.event,a.elementTag||'',a.elementId||'',a.elementLabel||'',a.phpEndpoints.join('+')||'',a.handlerShape||''].filter(Boolean).join(' ')).join(' || ')||'nenhum'}; Create route validado ${c.routeMutationControl?.nativeClickReady?'sim':'nao'}; endpoint ${c.routeMutationControl?.endpointVerified?'ok':'nao'}; aeronave ${c.routeMutationControl?.aircraftIdMatchesContext?'ok':'nao'}; aeroporto ${c.routeMutationControl?.airportIdMatchesContext?'ok':'nao'}; Autoprice funcao ${c.autopriceFunctionEvidence?.observed?'observada':'indisponivel'}, rede ${c.autopriceFunctionEvidence?.networkMutationObserved?'detectada':'nao detectada'}, modelos ${c.autopriceFunctionEvidence?.modelIds?.join('+')||'nenhum'}; campos operacionais ${c.quoteFieldDiagnostics.map(f=>[f.id||'',f.label||'',f.title||''].filter(Boolean).join(' ')).join(' || ')||'nenhum'}; pistas ref ${c.runwayEvidence.originRunwayFt??'?'}/${c.runwayEvidence.destinationRunwayFt??'?'} ft, requerido ${c.runwayEvidence.requiredRunwayFt}, status ${c.runwayEvidence.status}, cross-check ${c.runwayCrossChecked?'ok':'nao'}; distancia airport ref ${c.airportDistance.distanceKm??'?'}, delta ${c.airportDistance.deltaKm??'?'}, airportId ${c.airportDistance.destinationAirportIdMatches===true?'ok':c.airportDistance.destinationAirportIdMatches===false?'mismatch':'n/a'}; modo ${c.gameModeEvidence.status==='verified'?c.gameModeEvidence.mode:'indisponivel'}, velocidade ${c.gameModeEvidence.speedMatches?'ok':'nao'}, treino combustivel ${c.gameModeEvidence.fuelTraining??'indisponivel'}; volta equivalente ${c.reverseEquivalent.status==='verified'?'verificada':'indisponivel'}; carga ${c.candidateLoadFactor?.verified?(c.candidateLoadFactor.expectedAggregate!*100).toFixed(2)+'%':'indisponivel'} (${c.loadFactorCalibration?.sampleCount??0} amostras tarifa atual); CO2 calibracao ${c.co2Calibration?.status||'indisponivel'}, formula ${c.co2Calibration?.formulaVerified?'verificada':'nao verificada'}, fator ${c.co2Calibration?.quoteFactor??'indisponivel'}, intercepto/km ${c.co2Calibration?.fixedQuotasPerKm??'indisponivel'}, amostras ${c.co2Calibration?.samples.length??0}; ciclo ${c.roundTrip.status}, volta ${c.roundTrip.returnLeg.from}–${c.roundTrip.returnLeg.to}, demanda restante volta ${JSON.stringify(c.roundTrip.returnLeg.remainingAfterReservations)}, bloqueios ciclo ${c.roundTrip.blockers.join(', ')}; demanda restante ida ${c.demand.status}; reservas ${c.reservations.status} (${c.reservations.reservations.length} trechos); saldo simulado ida ${JSON.stringify(c.reservations.forwardAfterReservations)}; combustivel ao preco observado ${c.costs.fuelAtObservedMarketPrice??'indisponivel'}; CO2 de referencia ${c.costScenarios.co2.atDemandCeiling??'indisponivel'}; A-check de referencia ${c.costScenarios.aCheck.catalogProration??'indisponivel'}; custos efetivos faltantes ${c.effectiveCosts.missing.join(', ')}; pendencias ${c.missing.join(', ')}.`),'',
     `Candidatas descartadas antes da consulta de referencia por nao atingirem o limite nem no teto diario: ${report.screenedOutBeforeModelReference}.`,'',
