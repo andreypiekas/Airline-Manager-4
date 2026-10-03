@@ -131,6 +131,21 @@ test('candidate remaining is reconstructed only when every aircraft history cove
  expect(r).toMatchObject({status:'verified',consumedSinceReset:{Y:30,J:3,F:1},remaining:{Y:70,J:17,F:9},historyCoverageVerified:true});
 });
 
+test('new inflight aircraft can prove lifetime coverage only with precise delivery age, exact current-cycle gap and onboard manifest',()=>{
+ const a=ac('1',[e('15 mins ago','AAA','BBB',20,2,1)],2);
+ a.state='inflight';a.onboard={Y:80,J:5,F:2};a.operational!.deliveredAgeMinutes=18;
+ const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[a]};
+ const calibration={status:'verified' as const,windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:960,excludedMinAgeMinutes:1140,
+  consumed:{Y:80,J:5,F:3},observedAt:stamp,sourceAircraftIds:['1']}],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
+ expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration)).toMatchObject({
+  status:'verified',remaining:{Y:100,J:20,F:10},historyCoverageVerified:true
+ });
+ for(const mutate of [()=>{a.onboard=null},()=>{a.operational!.cycles=3},()=>{a.operational!.deliveredAgeMinutes=null}]){
+  a.onboard={Y:80,J:5,F:2};a.operational!.cycles=2;a.operational!.deliveredAgeMinutes=18;mutate();
+  expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration).status).toBe('unavailable');
+ }
+});
+
 test('history that does not extend beyond reset fails closed',()=>{
  const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[ac('1',[e('2 hours ago','CCC','DDD',20,2,1),e('10 hours ago')],100)]};
  const calibration={status:'verified' as const,windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:1200,excludedMinAgeMinutes:1260,

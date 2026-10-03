@@ -24,6 +24,15 @@ const zero=():Cabins=>({Y:0,J:0,F:0});
 const add=(a:Cabins,b:Cabins):Cabins=>({Y:a.Y+b.Y,J:a.J+b.J,F:a.F+b.F});
 const eq=(a:Cabins,b:Cabins)=>CLASSES.every(k=>a[k]===b[k]);
 const valid=(c:Cabins|null|undefined):c is Cabins=>!!c&&CLASSES.every(k=>Number.isSafeInteger(c[k])&&c[k]>=0);
+const lifetimeHistoryCovered=(a:CollectionResult['aircraft'][number],visibleEntries:number,boundaryMinutes:number)=>{
+  const op=a.operational;
+  if(!op||!Number.isSafeInteger(op.cycles)||op.cycles<0||!Number.isFinite(op.deliveredAgeMinutes)||op.deliveredAgeMinutes!<0||op.deliveredAgeMinutes!>boundaryMinutes)return false;
+  // Live fleet evidence shows an inflight aircraft's current cycle is not yet in
+  // the completed-flight history. Accept exactly that one-cycle gap only when
+  // the current onboard manifest is independently observed; never generalize it.
+  if(a.state==='inflight')return op.cycles===visibleEntries+1&&valid(a.onboard);
+  return a.state==='ready'&&op.cycles===visibleEntries;
+};
 
 export function relativeAgeMinutes(text:string):number|null{
   const s=text.trim().toLowerCase();
@@ -139,7 +148,7 @@ export function historicalRemainingForCandidate(
         const parsed=h.entries.map(e=>({entry:e,age:relativeAgeMinutes(e.relativeTime)}));
         if(parsed.some(x=>x.age===null)){unparseable=true;covered=false;continue;}
         const ages=parsed.map(x=>x.age!);
-        const lifetimeCovered=!!a.operational&&Number.isSafeInteger(a.operational.cycles)&&a.operational.cycles<=h.entries.length;
+        const lifetimeCovered=lifetimeHistoryCovered(a,h.entries.length,upper);
         const oldest=ages.length?Math.max(...ages):null;
         if(!lifetimeCovered&&(oldest===null||oldest<upper))covered=false;
         if(parsed.some(x=>x.age!<upper&&key(x.entry.from,x.entry.to)===pairKey&&valid(x.entry.onboard)&&CLASSES.some(k=>x.entry.onboard[k]>0)))
@@ -175,7 +184,7 @@ export function historicalRemainingForCandidate(
     const parsed=h.entries.map(e=>({entry:e,age:relativeAgeMinutes(e.relativeTime)}));
     if(parsed.some(x=>x.age===null))return {...base,resetWindow:window,reason:'HISTORY_AGE_UNPARSEABLE'};
     const ages=parsed.map(x=>x.age!) ;
-    const lifetimeCovered=!!a.operational&&Number.isSafeInteger(a.operational.cycles)&&a.operational.cycles<=h.entries.length;
+    const lifetimeCovered=lifetimeHistoryCovered(a,h.entries.length,excluded);
     const oldest=ages.length?Math.max(...ages):null;
     if(!lifetimeCovered&&(oldest===null||oldest<excluded))return {...base,resetWindow:window,reason:'FLEET_HISTORY_DOES_NOT_COVER_RESET'};
     if(parsed.some(x=>x.age!>included&&x.age!<excluded&&key(x.entry.from,x.entry.to)===pairKey))
