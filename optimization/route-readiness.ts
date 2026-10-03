@@ -75,13 +75,12 @@ export function assessCandidateComparisonReadiness(
   if(!candidate.routeMutationControl?.aircraftIdMatchesContext)mutationBlockers.push('NATIVE_ROUTE_AIRCRAFT_CONTEXT_UNVERIFIED');
   if(!candidate.routeMutationControl?.airportIdMatchesContext)mutationBlockers.push('NATIVE_ROUTE_AIRPORT_CONTEXT_UNVERIFIED');
   if(!candidate.routeMutationControl?.nativeClickReady)mutationBlockers.push('NATIVE_ROUTE_MUTATION_CONTROL_UNVERIFIED');
-  mutationBlockers.push('ROUTE_MUTATION_EXECUTOR_NOT_IMPLEMENTED');
 
   return {
     aircraftId:candidate.aircraftId,from:candidate.from,to:candidate.to,
     comparisonReady:comparisonBlockers.length===0,
     comparisonBlockers:[...new Set(comparisonBlockers)],
-    mutationReady:false,
+    mutationReady:mutationBlockers.length===0,
     mutationBlockers:[...new Set(mutationBlockers)],
     mutationAuthorized:false
   };
