@@ -11,7 +11,8 @@ import { DemandReader } from './reader';
 import { writeDemandReport } from './report';
 import { DemandConfig, DemandReport } from './types';
 import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
-import { appendFlightHistoryAnchors } from '../optimization/return-journal';
+import { appendFlightHistoryAnchors, readFlightHistoryContinuityDiagnostics } from '../optimization/return-journal';
+import { writeFile } from 'node:fs/promises';
 
 export async function runDemandSimulationDetailed(page: Page, config: DemandConfig = readDemandConfig(), reviews: Record<string, RouteReview> = {}) {
   const optimization = optimizationConfig();
@@ -31,6 +32,9 @@ export async function runDemandSimulationDetailed(page: Page, config: DemandConf
   if(optimization.returnJournal&&/^[1-9]\d*$/.test(process.env.GITHUB_RUN_ID||'')){
     const anchors=await appendFlightHistoryAnchors(optimization.returnJournal.directory,optimization.returnJournal.scope,process.env.GITHUB_RUN_ID!,collection,candidateData.flightHistoryCoverage);
     console.log('[History] Ancoras compactas de Flight History acrescentadas: '+anchors+'.');
+    const continuity=await readFlightHistoryContinuityDiagnostics(optimization.returnJournal.directory,optimization.returnJournal.scope);
+    await writeFile('test-results/demand/flight-history-continuity.json',JSON.stringify({schemaVersion:1,generatedAt:new Date().toISOString(),diagnostics:continuity},null,2)+'\\n');
+    await writeFile('test-results/demand/flight-history-continuity.md',['# Continuidade persistente do Flight History','',...(continuity.length?continuity.map(x=>`- ${x.aircraftId}: ${x.status}; sobreposicao ${x.overlapRows}; delta de ciclos ${x.cycleDelta??'n/d'}; motivo ${x.reason}.`):['Nenhum par de snapshots persistidos disponivel neste run.']),'','_Somente evidencia de continuidade. comparisonReady e mutationAuthorized permanecem false._',''].join('\\n'));
   }
   if(!candidateData.uiRestored)throw new Error('[Demand] Painel nao restaurado apos consulta; nenhuma operacao autorizada.');
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');

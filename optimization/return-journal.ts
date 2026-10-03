@@ -56,6 +56,21 @@ export function compareFlightHistoryAnchors(previous:FlightHistoryAnchorEvent,cu
  const cycleDelta=current.cycles-previous.cycles;if(overlap<2)return {...base,cycleDelta,overlapRows:overlap,reason:'ANCHOR_OVERLAP_INSUFFICIENT'};
  return {...base,status:'verified_overlap',cycleDelta,overlapRows:overlap,reason:'PERSISTED_FLIGHT_ROWS_OVERLAP_VERIFIED'};
 }
+export function flightHistoryContinuityDiagnostics(journal:Journal):FlightHistoryContinuityDiagnostic[]{
+ const grouped=new Map<string,FlightHistoryAnchorEvent[]>();
+ for(const e of journal.events||[])if(e.type==='flight-history-anchor'){const a=grouped.get(e.aircraftId)||[];a.push(e);grouped.set(e.aircraftId,a);}
+ const out:FlightHistoryContinuityDiagnostic[]=[];
+ for(const anchors of grouped.values()){
+  anchors.sort((a,b)=>Date.parse(a.observedAt)-Date.parse(b.observedAt));
+  if(anchors.length<2)continue;
+  out.push(compareFlightHistoryAnchors(anchors.at(-2)!,anchors.at(-1)!));
+ }
+ return out.sort((a,b)=>a.aircraftId.localeCompare(b.aircraftId));
+}
+export async function readFlightHistoryContinuityDiagnostics(directory:string,scope:string,now=new Date()):Promise<FlightHistoryContinuityDiagnostic[]>{
+ const journal=validateReturnJournal(JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8')),scope,now);
+ return flightHistoryContinuityDiagnostics(journal);
+}
 const validDepartureEvent=(v:unknown,now:Date):v is DepartureHistoryEvent=>{
   if(!v||typeof v!=='object')return false;const x=v as DepartureHistoryEvent;
   return Object.keys(x).sort().join(',')==='actualOnboard,aircraftId,demand,eventId,from,observedAt,registration,result,routeId,to,type'&&validId(x.eventId)&&x.type==='departure'&&validId(x.aircraftId)&&

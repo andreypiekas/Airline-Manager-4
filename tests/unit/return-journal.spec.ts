@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { mkdtemp, readFile, writeFile, mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { appendFlightHistoryAnchors, compareFlightHistoryAnchors, reviewWithReturnJournal } from '../../optimization/return-journal';
+import { appendFlightHistoryAnchors, compareFlightHistoryAnchors, flightHistoryContinuityDiagnostics, reviewWithReturnJournal } from '../../optimization/return-journal';
 import { RouteReview } from '../../optimization/route-optimizer';
 const now = new Date('2026-09-30T11:00:00Z');
 function input(flightId='flight-1'): RouteReview {
@@ -159,4 +159,13 @@ test('persisted flight-history anchors prove overlap only as read-only evidence'
  expect(compareFlightHistoryAnchors(previous,current)).toMatchObject({status:'verified_overlap',cycleDelta:1,overlapRows:2,reason:'PERSISTED_FLIGHT_ROWS_OVERLAP_VERIFIED',comparisonReady:false,mutationAuthorized:false});
  current.rows=[row('20 hours ago','AAA','BBB',800),row('21 hours ago','AAA','BBB',800)];
  expect(compareFlightHistoryAnchors(previous,current)).toMatchObject({status:'unavailable',reason:'ANCHOR_ROWS_AMBIGUOUS',comparisonReady:false,mutationAuthorized:false});
+});
+
+
+test('journal continuity diagnostics compares only the latest two persisted anchors per aircraft',()=>{
+ const row=(from:string,to:string,revenue:number)=>({relativeTime:'1 hour ago',from,to,co2Quotas:1,onboard:{Y:1,J:0,F:0},fuelLbs:2,revenue});
+ const anchor=(eventId:string,observedAt:string,cycles:number,rows:any[])=>({eventId,type:'flight-history-anchor' as const,aircraftId:'1',registration:'FAST',observedAt,cycles,rows});
+ const shared1=row('AAA','BBB',100),shared2=row('BBB','AAA',90);
+ const journal:any={schemaVersion:1,scope:'x',entries:[],events:[anchor('hist_1','2026-10-03T18:00:00Z',10,[row('CCC','DDD',70)]),anchor('hist_2','2026-10-03T19:00:00Z',11,[shared1,shared2]),anchor('hist_3','2026-10-03T20:00:00Z',12,[shared1,shared2,row('EEE','FFF',80)])]};
+ expect(flightHistoryContinuityDiagnostics(journal)).toEqual([expect.objectContaining({status:'verified_overlap',aircraftId:'1',cycleDelta:1,overlapRows:2,comparisonReady:false,mutationAuthorized:false})]);
 });
