@@ -23,6 +23,8 @@ export function executionEnvironment(config:DemandConfig,env:NodeJS.ProcessEnv=p
 }
 export async function runDemandExecution(page:Page,config=readDemandConfig(),env:NodeJS.ProcessEnv=process.env,directory='test-results/demand'){
   const settings=executionEnvironment(config,env),optimization=optimizationConfig(env);
+  // Verified unknown outcome from production #126. Never retry this aircraft/route pair.
+  const blockedDepartureKeys=new Set<string>(['21114720:31876446']);
   await mkdir(directory,{recursive:true});
   // Exclusive marker survives repeated calls in this runner; Actions rejects every real rerun attempt.
   const marker=await open(join(directory,'individual-execution.started'),'wx');await marker.close();
@@ -41,7 +43,7 @@ export async function runDemandExecution(page:Page,config=readDemandConfig(),env
   };
   const adaptive=optimization.returnJournal?await loadAdaptiveDemandThresholds(optimization.returnJournal.directory,optimization.returnJournal.scope,config.minPercentage):new Map();
   const report=await new IndividualDepartureExecutor(new PlaywrightDeparturePort(page),config,{...settings,
-    aircraftOrigins:optimization.aircraftOrigins,airlineBases:optimization.airlineBases},save,adaptive).run();
+    aircraftOrigins:optimization.aircraftOrigins,airlineBases:optimization.airlineBases,blockedDepartureKeys},save,adaptive).run();
   console.log('[IndividualDepartures] '+JSON.stringify(report.summary));
   if(!settings.dryRun&&optimization.returnJournal&&!report.halted){
     const held=await appendDemandHoldObservations(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);

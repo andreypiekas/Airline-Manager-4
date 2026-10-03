@@ -17,6 +17,7 @@ export interface ExecutionSettings {
   airlineBases: readonly string[];
   /** Absolute deadline after which no new departure mutation may start. */
   mutationDeadlineEpochMs?: number;
+  blockedDepartureKeys?: ReadonlySet<string>;
 }
 export interface ExecutionEntry {
   aircraftId: string; registration: string; routeId: string; from: string; to: string;
@@ -65,6 +66,7 @@ export class IndividualDepartureExecutor {
       report.entries.push(entry);
       if(report.halted){entry.reason='PREVIOUS_OUTCOME_UNKNOWN';continue;}
       if(this.attemptedAircraft.has(expected.aircraftId)||this.attemptedRoutes.has(expected.routeId)){entry.reason='ALREADY_ATTEMPTED';continue;}
+      if(this.settings.blockedDepartureKeys?.has(expected.aircraftId+':'+expected.routeId)){entry.reason='PERSISTED_UNCERTAIN_DEPARTURE_BLOCK';continue;}
       if(this.attemptedAircraft.size>=this.settings.maxDepartures){entry.reason='EXECUTION_LIMIT';continue;}
       if(!initial.complete){entry.reason='INITIAL_COLLECTION_INCOMPLETE';continue;}
       let collection: CollectionResult;
