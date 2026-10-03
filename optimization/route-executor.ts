@@ -44,6 +44,7 @@ export interface RouteExecutionEntry {
   targetFrom:string;
   targetTo:string;
   targetAirportId:string;
+  confirmedRouteId:string|null;
   status:'held'|'attempting'|'rerouted'|'outcome_unknown';
   /** Ephemeral authorization: true only after the fresh pre-mutation context is revalidated. */
   mutationAuthorized:boolean;
@@ -131,7 +132,7 @@ export class RouteMutationExecutor {
       const entry:RouteExecutionEntry={
         aircraftId:decision.aircraftId,registration:expected?.registration||'unknown',
         previousRouteId:expected?.routeId||'unknown',previousFrom:expected?.from||'unknown',previousTo:expected?.to||'unknown',
-        targetFrom:selected.from,targetTo:selected.to,targetAirportId:selected.airportId,
+        targetFrom:selected.from,targetTo:selected.to,targetAirportId:selected.airportId,confirmedRouteId:null,
         status:'held',mutationAuthorized:false,reason:'ROUTE_EXECUTION_EVIDENCE_INCOMPLETE'
       };
       report.entries.push(entry);
@@ -183,7 +184,7 @@ export class RouteMutationExecutor {
         if(!after||after.aircraftId!==expected.aircraftId||after.registration!==expected.registration||
           after.from!==target.from||after.to!==target.to||after.routeId===expected.routeId)
           throw new Error('ROUTE_EXECUTION_UNCONFIRMED');
-        entry.status='rerouted';entry.mutationAuthorized=false;entry.reason='NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED';
+        entry.status='rerouted';entry.confirmedRouteId=after.routeId;entry.mutationAuthorized=false;entry.reason='NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED';
       }catch{
         entry.status='outcome_unknown';entry.mutationAuthorized=false;entry.reason='NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT';report.halted=true;
       }

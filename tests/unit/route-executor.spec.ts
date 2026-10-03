@@ -40,7 +40,7 @@ test('persists intent, mutates once and confirms a changed route',async()=>{
   .run([aircraft()],[decision],[candidate()]);
  expect(port.reroutes).toBe(1);
  expect(r.summary).toEqual({evaluated:1,rerouted:1,held:0,unknown:0});
- expect(r.entries[0]).toMatchObject({status:'rerouted',reason:'NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED'});
+ expect(r.entries[0]).toMatchObject({status:'rerouted',confirmedRouteId:'9999',reason:'NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED'});
  expect(reports.some(x=>x.entries[0]?.status==='attempting'&&x.entries[0]?.mutationAuthorized===true&&x.entries[0]?.reason==='FRESH_CONTEXT_VERIFIED_NATIVE_REROUTE_AUTHORIZED')).toBe(true);
  expect(r.entries[0].mutationAuthorized).toBe(false);
 });

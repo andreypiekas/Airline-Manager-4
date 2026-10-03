@@ -7,7 +7,7 @@ import { PlaywrightRouteExecutionPort } from './route-playwright-port';
 import { RouteMutationExecutor,type RouteExecutionCandidate,type RouteExecutionReport } from './route-executor';
 import { optimizationConfig } from './report';
 import { resolveAircraftOrigin } from './aircraft-origins';
-import { appendVerifiedKeepRouteDecisions } from './return-journal';
+import { appendConfirmedRerouteReviews, appendVerifiedKeepRouteDecisions } from './return-journal';
 
 export interface RouteExecutionRuntimeSettings {
   enabled:boolean;
@@ -97,6 +97,6 @@ export async function runRouteExecution(
   );
   console.log('[RouteExecution] '+JSON.stringify(report.summary));
   if(report.halted)throw new Error('ROUTE_EXECUTION_HALTED_UNKNOWN_RESULT_NO_RETRY');
-  if(optimization.returnJournal){const origins=new Map<string,string>();for(const a of context.collection.aircraft){const o=resolveAircraftOrigin(a,context.collection,optimization.aircraftOrigins,optimization.airlineBases).origin;if(o)origins.set(a.aircraftId,o);}const added=await appendVerifiedKeepRouteDecisions(optimization.returnJournal.directory,optimization.returnJournal.scope,context.candidateData.routeDecisions,context.candidateData.candidates,context.collection.aircraft,origins,optimization.reviewTimeZone);if(added)console.log('[History] Revisoes KEEP verificadas acrescentadas: '+added);}
+  if(optimization.returnJournal){const origins=new Map<string,string>();for(const a of context.collection.aircraft){const o=resolveAircraftOrigin(a,context.collection,optimization.aircraftOrigins,optimization.airlineBases).origin;if(o)origins.set(a.aircraftId,o);}const added=await appendVerifiedKeepRouteDecisions(optimization.returnJournal.directory,optimization.returnJournal.scope,context.candidateData.routeDecisions,context.candidateData.candidates,context.collection.aircraft,origins,optimization.reviewTimeZone);if(added)console.log('[History] Revisoes KEEP verificadas acrescentadas: '+added);const reroutes=await appendConfirmedRerouteReviews(optimization.returnJournal.directory,optimization.returnJournal.scope,context.candidateData.routeDecisions,context.candidateData.candidates,context.collection.aircraft,origins,report,optimization.reviewTimeZone);if(reroutes)console.log('[History] Revisoes REROUTE confirmadas acrescentadas: '+reroutes);}
   return report;
 }
