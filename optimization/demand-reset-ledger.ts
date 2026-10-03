@@ -27,9 +27,11 @@ const valid=(c:Cabins|null|undefined):c is Cabins=>!!c&&CLASSES.every(k=>Number.
 
 export function relativeAgeMinutes(text:string):number|null{
   const s=text.trim().toLowerCase();
-  let m=s.match(/^(\d+) (?:minutes?|mins?) ago$/); if(m)return Number(m[1]);
+  let m=s.match(/^(\d+) (?:seconds?|secs?) ago$/); if(m)return Number(m[1])/60;
+  m=s.match(/^(\d+) (?:minutes?|mins?) ago$/); if(m)return Number(m[1]);
   m=s.match(/^(\d+) (?:hours?|hrs?) ago$/); if(m)return Number(m[1])*60;
   m=s.match(/^(\d+) days? ago$/); if(m)return Number(m[1])*1440;
+  if(s==='a second ago'||s==='1 second ago')return 1/60;
   if(s==='a minute ago'||s==='1 minute ago')return 1;
   if(s==='an hour ago'||s==='1 hour ago')return 60;
   if(s==='a day ago'||s==='1 day ago')return 1440;
@@ -129,7 +131,7 @@ export function historicalRemainingForCandidate(
   let upperBoundFailure:string|null=null;
   if(calibration.resetAgeUpperBoundMinutes!==null){
     const upper=calibration.resetAgeUpperBoundMinutes;
-    if(Number.isSafeInteger(upper)&&upper>0){
+    if(Number.isFinite(upper)&&upper>0){
       let covered=true,pairInside=false,unparseable=false,missing=false;
       for(const a of collection.aircraft){
         const h=a.flightHistory;
@@ -156,7 +158,7 @@ export function historicalRemainingForCandidate(
   // requiring byte-identical boundaries.
   const included=Math.max(...windows.map(w=>w.includedMaxAgeMinutes));
   const excluded=Math.min(...windows.map(w=>w.excludedMinAgeMinutes));
-  if(!Number.isSafeInteger(included)||!Number.isSafeInteger(excluded)||included<0||excluded<=included)
+  if(!Number.isFinite(included)||!Number.isFinite(excluded)||included<0||excluded<=included)
     return {...base,reason:'RESET_WINDOW_GLOBAL_INTERSECTION_EMPTY'};
   const window:DemandResetWindow={
     pairKey:'GLOBAL',
