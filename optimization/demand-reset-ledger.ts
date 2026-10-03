@@ -126,25 +126,30 @@ export function historicalRemainingForCandidate(
     historyCoverageVerified:false,resetWindow:null,reason:'RESET_LEDGER_UNAVAILABLE',comparisonReady:false,mutationAuthorized:false};
   if(!collection.complete||!valid(dailyTotal)||from===to)return base;
   const windows=calibration.windows;
-  if(!windows.length&&calibration.resetAgeUpperBoundMinutes!==null){
+  let upperBoundFailure:string|null=null;
+  if(calibration.resetAgeUpperBoundMinutes!==null){
     const upper=calibration.resetAgeUpperBoundMinutes;
-    if(!Number.isSafeInteger(upper)||upper<=0)return base;
-    for(const a of collection.aircraft){
-      const h=a.flightHistory;
-      if(!h||h.status!=='observed')return {...base,reason:'FLEET_HISTORY_MISSING'};
-      const parsed=h.entries.map(e=>({entry:e,age:relativeAgeMinutes(e.relativeTime)}));
-      if(parsed.some(x=>x.age===null))return {...base,reason:'HISTORY_AGE_UNPARSEABLE'};
-      const ages=parsed.map(x=>x.age!);
-      const lifetimeCovered=!!a.operational&&Number.isSafeInteger(a.operational.cycles)&&a.operational.cycles<=h.entries.length;
-      const oldest=ages.length?Math.max(...ages):null;
-      if(!lifetimeCovered&&(oldest===null||oldest<upper))return {...base,reason:'FLEET_HISTORY_DOES_NOT_COVER_RESET_UPPER_BOUND'};
-      if(parsed.some(x=>x.age!<upper&&key(x.entry.from,x.entry.to)===pairKey&&valid(x.entry.onboard)&&CLASSES.some(k=>x.entry.onboard[k]>0)))
-        return {...base,reason:'PAIR_FLIGHT_INSIDE_RESET_UPPER_BOUND'};
+    if(Number.isSafeInteger(upper)&&upper>0){
+      let covered=true,pairInside=false,unparseable=false,missing=false;
+      for(const a of collection.aircraft){
+        const h=a.flightHistory;
+        if(!h||h.status!=='observed'){missing=true;covered=false;continue;}
+        const parsed=h.entries.map(e=>({entry:e,age:relativeAgeMinutes(e.relativeTime)}));
+        if(parsed.some(x=>x.age===null)){unparseable=true;covered=false;continue;}
+        const ages=parsed.map(x=>x.age!);
+        const lifetimeCovered=!!a.operational&&Number.isSafeInteger(a.operational.cycles)&&a.operational.cycles<=h.entries.length;
+        const oldest=ages.length?Math.max(...ages):null;
+        if(!lifetimeCovered&&(oldest===null||oldest<upper))covered=false;
+        if(parsed.some(x=>x.age!<upper&&key(x.entry.from,x.entry.to)===pairKey&&valid(x.entry.onboard)&&CLASSES.some(k=>x.entry.onboard[k]>0)))
+          pairInside=true;
+      }
+      if(covered&&!pairInside)return {...base,status:'verified',consumedSinceReset:zero(),remaining:{...dailyTotal},historyCoverageVerified:true,
+        reason:'NO_PAIR_FLIGHT_WITHIN_VERIFIED_RESET_UPPER_BOUND'};
+      upperBoundFailure=missing?'FLEET_HISTORY_MISSING':unparseable?'HISTORY_AGE_UNPARSEABLE':
+        pairInside?'PAIR_FLIGHT_INSIDE_RESET_UPPER_BOUND':'FLEET_HISTORY_DOES_NOT_COVER_RESET_UPPER_BOUND';
     }
-    return {...base,status:'verified',consumedSinceReset:zero(),remaining:{...dailyTotal},historyCoverageVerified:true,
-      reason:'NO_PAIR_FLIGHT_WITHIN_VERIFIED_RESET_UPPER_BOUND'};
   }
-  if(!windows.length)return base;
+  if(!windows.length)return {...base,reason:upperBoundFailure||base.reason};
   // Reset time is airline-wide; accept it only when all calibrated pairs agree.
   const signatures=[...new Set(windows.map(w=>w.includedMaxAgeMinutes+':'+w.excludedMinAgeMinutes))];
   if(signatures.length!==1)return {...base,reason:'RESET_WINDOW_NOT_GLOBAL'};
