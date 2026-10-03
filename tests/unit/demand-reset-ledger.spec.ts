@@ -1,5 +1,5 @@
 import { test,expect } from '@playwright/test';
-import { calibrateDemandResetWindows,historicalRemainingForCandidate,relativeAgeMinutes } from '../../optimization/demand-reset-ledger';
+import { calibrateDemandResetWindows,fleetHistoryCoverageDiagnostics,historicalRemainingForCandidate,relativeAgeMinutes } from '../../optimization/demand-reset-ledger';
 import type { AircraftSnapshot, CollectionResult } from '../../demand/types';
 import type { DemandLabelCalibrationReport } from '../../optimization/demand-label-calibration';
 
