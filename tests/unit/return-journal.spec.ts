@@ -327,3 +327,25 @@ test('uncertain price save becomes durable route-wide no-retry quarantine',async
   before:{Y:1000,J:2000,F:3000},desired:{Y:1100,J:2160,F:3180}});
  expect(()=>validateReturnJournal({...saved,events:[...saved.events,{...saved.events.at(-1),eventId:'punc_bad',desired:{Y:-1,J:1,F:1}}]},'company-test',now)).toThrow('JOURNAL_INVALID');
 });
+
+
+test('gross ceiling KEEP persists truthful ceiling evidence without inventing net profit',async()=>{
+ await reviewWithReturnJournal(input(),options(),now);
+ const {appendVerifiedKeepRouteDecisions,validateReturnJournal}=await import('../../optimization/return-journal');
+ const when=new Date('2026-10-07T20:00:00Z');
+ const fleet=[{aircraftId:'1',routeId:'10',from:'GRU',to:'SCL',state:'ready',issue:null}];
+ const ceiling={status:'verified_ceiling',aircraftId:'1',from:'GRU',to:'SCL',grossRevenuePerLeg:200000,grossRevenuePerHour:100000,
+   source:'fresh-current-fares-capacity-direct-duration-ceiling',reason:'CURRENT_ROUTE_100_PERCENT_GROSS_REVENUE_HARD_CEILING_VERIFIED',
+   comparisonReady:false,mutationAuthorized:false};
+ const candidates=[{aircraftId:'1',comparisonReady:true,variableCycleComparison:{
+   status:'keep_current',comparisonReady:true,comparisonBasis:'current_gross_revenue_ceiling',
+   currentGrossRevenueCeiling:ceiling,current:{comparisonReady:false}
+ }}];
+ const decisions=[{aircraftId:'1',decision:'keep_route',selected:null,compared:1,reason:'NO_INSPECTED_CANDIDATE_PROVES_CONSERVATIVE_DOMINANCE'}];
+ expect(await appendVerifiedKeepRouteDecisions(directory,'company-test',decisions,candidates,fleet,new Map([['1','GRU']]),'America/Sao_Paulo',when)).toBe(1);
+ const raw=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
+ expect(raw.entries.at(-1).reviewEvidence.routePerformance).toEqual([{
+   routeId:'10',viable:true,netProfit:null,netProfitPerHour:null,occupancyPercentages:[],grossRevenueCeilingPerHour:100000
+ }]);
+ expect(()=>validateReturnJournal(raw,'company-test',when)).not.toThrow();
+});

@@ -357,6 +357,10 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
   });
   const priorityRanking=rankCandidatePriorities(candidates);
   const routeReadiness=summarizeComparisonReadiness(candidates);
+  for(const candidate of candidates){
+    const readiness=routeReadiness.candidates.find(r=>r.aircraftId===candidate.aircraftId&&r.from===candidate.from&&r.to===candidate.to);
+    candidate.comparisonReady=readiness?.comparisonReady===true;
+  }
   const routeDecisions=[...new Set(candidates.map(c=>c.aircraftId))].map(aircraftId=>planVariableRouteDecision(
     aircraftId,
     candidates.filter(c=>c.aircraftId===aircraftId).map(c=>({

@@ -7,7 +7,7 @@ import { reviewDay } from './review-schedule';
 import type { AircraftSnapshot, CollectionResult } from '../demand/types';
 
 type CompletedDecision = 'would_reroute' | 'keep_route' | 'hold';
-interface RoutePerformanceEvidence { routeId:string; viable:boolean; netProfit:number|null; netProfitPerHour:number|null; occupancyPercentages:number[] }
+interface RoutePerformanceEvidence { routeId:string; viable:boolean; netProfit:number|null; netProfitPerHour:number|null; occupancyPercentages:number[]; grossRevenueCeilingPerHour?:number }
 interface Entry { aircraftId: string; origin: string; flightId: string; reviewedAt: string; decision: CompletedDecision;
   reviewEvidence?: { trigger:'return'|'daily'; reviewedRouteId:string; selectedRouteId:string|null; result:CompletedDecision; routePerformance:RoutePerformanceEvidence[] } }
 export interface FlightHistoryAnchorEvent { eventId:string; type:'flight-history-anchor'; aircraftId:string; registration:string; observedAt:string; cycles:number; rows:Array<{relativeTime:string;from:string;to:string;co2Quotas:number;onboard:{Y:number;J:number;F:number};fuelLbs:number;revenue:number}> }
@@ -37,9 +37,14 @@ const validOrigin = (v: unknown): v is string => typeof v === 'string' && /^[A-Z
 const key = (e: Pick<Entry, 'aircraftId' | 'origin' | 'flightId'>) => JSON.stringify([e.aircraftId, e.origin, e.flightId]);
 const validPerformance=(v:unknown):v is RoutePerformanceEvidence=>{
   if(!v||typeof v!=='object')return false;const x=v as RoutePerformanceEvidence;
-  return Object.keys(x).sort().join(',')==='netProfit,netProfitPerHour,occupancyPercentages,routeId,viable'&&validId(x.routeId)&&typeof x.viable==='boolean'&&
-    (x.netProfit===null||Number.isFinite(x.netProfit))&&(x.netProfitPerHour===null||Number.isFinite(x.netProfitPerHour))&&Array.isArray(x.occupancyPercentages)&&
-    x.occupancyPercentages.length<=2&&x.occupancyPercentages.every(n=>Number.isFinite(n)&&n>=0&&n<=100);
+  const keys=Object.keys(x).sort().join(',');
+  if(!['netProfit,netProfitPerHour,occupancyPercentages,routeId,viable',
+    'grossRevenueCeilingPerHour,netProfit,netProfitPerHour,occupancyPercentages,routeId,viable'].includes(keys))return false;
+  return validId(x.routeId)&&typeof x.viable==='boolean'&&
+    (x.netProfit===null||Number.isFinite(x.netProfit))&&(x.netProfitPerHour===null||Number.isFinite(x.netProfitPerHour))&&
+    (x.grossRevenueCeilingPerHour===undefined||(Number.isFinite(x.grossRevenueCeilingPerHour)&&x.grossRevenueCeilingPerHour>0))&&
+    Array.isArray(x.occupancyPercentages)&&x.occupancyPercentages.length<=2&&
+    x.occupancyPercentages.every(n=>Number.isFinite(n)&&n>=0&&n<=100);
 };
 const validReviewEvidence=(v:unknown,decision:CompletedDecision)=>{
   if(!v||typeof v!=='object')return false;const x=v as NonNullable<Entry['reviewEvidence']>;
@@ -269,9 +274,56 @@ export async function appendConfirmedRerouteReviews(directory:string,scope:strin
 }
 export async function appendVerifiedKeepRouteDecisions(directory:string,scope:string,decisions:any[],candidates:any[],fleet:any[],origins:ReadonlyMap<string,string>,reviewTimeZone:string,now=new Date()):Promise<number>{
  if(!validId(scope)||!Number.isFinite(now.getTime())||!Array.isArray(decisions)||!Array.isArray(candidates)||!Array.isArray(fleet))throw new Error('JOURNAL_CONFIG_INVALID');
- const root=resolve(directory);await mkdir(root,{recursive:true});return withRunLock(async()=>{const filename=join(root,'return-journal.json');let data:Journal;try{data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);}catch{throw new Error('JOURNAL_UNAVAILABLE: historico de revisao bloqueado.');}
- let added=0;for(const d of decisions){if(d?.decision!=='keep_route'||d?.selected!==null||!Number.isSafeInteger(d?.compared)||d.compared<1||d.reason!=='NO_INSPECTED_CANDIDATE_PROVES_CONSERVATIVE_DOMINANCE')continue;const matches=fleet.filter(a=>a?.aircraftId===d.aircraftId);if(matches.length!==1)continue;const a=matches[0],origin=origins.get(a.aircraftId);if(!origin||a.state!=='ready'||a.issue||a.from!==origin||!validId(a.routeId))continue;const comparable=candidates.filter(c=>c?.aircraftId===a.aircraftId&&c?.comparisonReady===true&&c?.variableCycleComparison?.comparisonReady===true&&c.variableCycleComparison.status==='keep_current'&&c?.variableCycleComparison?.current?.comparisonReady===true);if(comparable.length!==d.compared)continue;const current=comparable.map(c=>c.variableCycleComparison.current);if(current.some(x=>x.aircraftId!==a.aircraftId||x.from!==a.from||x.to!==a.to||!Number.isFinite(x.recurringCycleProfit?.expected)||!Number.isFinite(x.recurringCycleProfitPerHour?.expected)))continue;const profit=current[0].recurringCycleProfit.expected,perHour=current[0].recurringCycleProfitPerHour.expected;if(current.some(x=>x.recurringCycleProfit.expected!==profit||x.recurringCycleProfitPerHour.expected!==perHour))continue;const reviewDate=reviewDay(now,reviewTimeZone);if(data.entries.some(e=>e.aircraftId===a.aircraftId&&e.origin===origin&&reviewDay(new Date(e.reviewedAt),reviewTimeZone)===reviewDate))continue;const day=reviewDate.replace(/-/g,'');const entry:Entry={aircraftId:a.aircraftId,origin,flightId:`daily_${day}`,reviewedAt:now.toISOString(),decision:'keep_route',reviewEvidence:{trigger:'daily',reviewedRouteId:a.routeId,selectedRouteId:null,result:'keep_route',routePerformance:[{routeId:a.routeId,viable:true,netProfit:profit,netProfitPerHour:perHour,occupancyPercentages:[]}]}};if(data.entries.some(e=>key(e)===key(entry)))continue;if(!validReviewEvidence(entry.reviewEvidence,entry.decision))throw new Error('JOURNAL_ROUTE_REVIEW_INVALID');if(data.entries.length>=100000)throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');data.entries.push(entry);added++;}
- if(!added)return 0;const temporary=join(root,`return-journal.${randomUUID()}.tmp`);try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(data,null,2)+'\n');await file.sync();}finally{await file.close();}await rename(temporary,filename);}catch{throw new Error('JOURNAL_SAVE_FAILED: revisao KEEP nao persistida.');}finally{await unlink(temporary).catch(()=>undefined);}return added;},join(root,'.return-journal.lock'));
+ const root=resolve(directory);await mkdir(root,{recursive:true});return withRunLock(async()=>{
+  const filename=join(root,'return-journal.json');let data:Journal;
+  try{data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);}
+  catch{throw new Error('JOURNAL_UNAVAILABLE: historico de revisao bloqueado.');}
+  let added=0;
+  for(const d of decisions){
+   if(d?.decision!=='keep_route'||d?.selected!==null||!Number.isSafeInteger(d?.compared)||d.compared<1||
+      d.reason!=='NO_INSPECTED_CANDIDATE_PROVES_CONSERVATIVE_DOMINANCE')continue;
+   const matches=fleet.filter(a=>a?.aircraftId===d.aircraftId);if(matches.length!==1)continue;
+   const a=matches[0],origin=origins.get(a.aircraftId);
+   if(!origin||a.state!=='ready'||a.issue||a.from!==origin||!validId(a.routeId))continue;
+   const comparable=candidates.filter(c=>c?.aircraftId===a.aircraftId&&c?.comparisonReady===true&&
+     c?.variableCycleComparison?.comparisonReady===true&&c.variableCycleComparison.status==='keep_current');
+   if(comparable.length!==d.compared)continue;
+
+   const usesCeiling=comparable.some(c=>c.variableCycleComparison.comparisonBasis==='current_gross_revenue_ceiling');
+   let performance:RoutePerformanceEvidence|null=null;
+   if(usesCeiling){
+    const ceilings=comparable.map(c=>c.variableCycleComparison.currentGrossRevenueCeiling);
+    if(ceilings.some((x:any)=>x?.status!=='verified_ceiling'||x?.aircraftId!==a.aircraftId||x?.from!==a.from||
+      x?.to!==a.to||!Number.isFinite(x?.grossRevenuePerHour)||x.grossRevenuePerHour<=0))continue;
+    const perHour=ceilings[0].grossRevenuePerHour;
+    if(ceilings.some((x:any)=>x.grossRevenuePerHour!==perHour))continue;
+    performance={routeId:a.routeId,viable:true,netProfit:null,netProfitPerHour:null,
+      occupancyPercentages:[],grossRevenueCeilingPerHour:perHour};
+   }else{
+    const current=comparable.map(c=>c.variableCycleComparison.current);
+    if(current.some((x:any)=>x?.comparisonReady!==true||x?.aircraftId!==a.aircraftId||x?.from!==a.from||x?.to!==a.to||
+      !Number.isFinite(x?.recurringCycleProfit?.expected)||!Number.isFinite(x?.recurringCycleProfitPerHour?.expected)))continue;
+    const profit=current[0].recurringCycleProfit.expected,perHour=current[0].recurringCycleProfitPerHour.expected;
+    if(current.some((x:any)=>x.recurringCycleProfit.expected!==profit||x.recurringCycleProfitPerHour.expected!==perHour))continue;
+    performance={routeId:a.routeId,viable:true,netProfit:profit,netProfitPerHour:perHour,occupancyPercentages:[]};
+   }
+   const reviewDate=reviewDay(now,reviewTimeZone);
+   if(data.entries.some(e=>e.aircraftId===a.aircraftId&&e.origin===origin&&reviewDay(new Date(e.reviewedAt),reviewTimeZone)===reviewDate))continue;
+   const day=reviewDate.replace(/-/g,'');
+   const entry:Entry={aircraftId:a.aircraftId,origin,flightId:`daily_${day}`,reviewedAt:now.toISOString(),decision:'keep_route',
+    reviewEvidence:{trigger:'daily',reviewedRouteId:a.routeId,selectedRouteId:null,result:'keep_route',routePerformance:[performance]}};
+   if(data.entries.some(e=>key(e)===key(entry)))continue;
+   if(!validReviewEvidence(entry.reviewEvidence,entry.decision))throw new Error('JOURNAL_ROUTE_REVIEW_INVALID');
+   if(data.entries.length>=100000)throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');
+   data.entries.push(entry);added++;
+  }
+  if(!added)return 0;
+  const temporary=join(root,`return-journal.${randomUUID()}.tmp`);
+  try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(data,null,2)+'\n');await file.sync();}finally{await file.close();}await rename(temporary,filename);}
+  catch{throw new Error('JOURNAL_SAVE_FAILED: revisao KEEP nao persistida.');}
+  finally{await unlink(temporary).catch(()=>undefined);}
+  return added;
+ },join(root,'.return-journal.lock'));
 }
 export async function appendDemandHoldObservations(directory:string,scope:string,runId:string,report:{entries:any[]},now=new Date()):Promise<number>{
  if(!validId(scope)||!validId(runId)||!Number.isFinite(now.getTime()))throw new Error('JOURNAL_CONFIG_INVALID');const root=resolve(directory);await mkdir(root,{recursive:true});return withRunLock(async()=>{const filename=join(root,'return-journal.json');let data:Journal;try{data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);}catch{throw new Error('JOURNAL_UNAVAILABLE: historico de holds bloqueado.');}const list=data.holdObservations?[...data.holdObservations]:[];let added=0;for(const e of report.entries||[]){if(e?.status!=='held'||e?.demand?.decision!=='hold_insufficient'||!Number.isFinite(e?.demand?.occupancyPercentage))continue;const event:DemandHoldObservation={eventId:`hold_${runId}_${e.aircraftId}_${e.routeId}`,type:'demand-hold',aircraftId:e.aircraftId,routeId:e.routeId,observedAt:now.toISOString(),occupancyPercentage:e.demand.occupancyPercentage,reason:'hold_insufficient'};if(!validHoldObservation(event,now))throw new Error('JOURNAL_HOLD_EVENT_INVALID');if(list.some(x=>x.eventId===event.eventId))continue;list.push(event);added++;}if(!added)return 0;if(list.length>100000)throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');data.holdObservations=list;const temporary=join(root,`return-journal.${randomUUID()}.tmp`);try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(data,null,2)+'\n');await file.sync();}finally{await file.close();}await rename(temporary,filename);}catch{throw new Error('JOURNAL_SAVE_FAILED: historico de holds nao persistido.');}finally{await unlink(temporary).catch(()=>undefined);}return added;},join(root,'.return-journal.lock'));
