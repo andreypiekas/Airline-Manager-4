@@ -71,9 +71,9 @@ test('observed route count bounds pagination and ignores residual Next after all
   const r = await new DemandReader(page, 400).collect();
   expect(r.complete).toBe(true); expect(r.aircraft).toHaveLength(3); expect(r.warnings).not.toContain('PAGINATION_LIMIT');
 });
-test('route lookup never follows pagination beyond the observed route count', async ({ page }) => {
+test('route lookup rejects an unverified pagination control before extra navigation', async ({ page }) => {
   await fixture(page, { pages: 2, staleNext: true });
-  await expect(findFleetRoute(page, { routeId: '999' } as any, 400)).rejects.toThrow('RESEARCH_ROUTE_NOT_FOUND');
+  await expect(findFleetRoute(page, { routeId: '999' } as any, 400)).rejects.toThrow('RESEARCH_PAGINATION_CONTROL_UNVERIFIED');
 });
 test('route page limit is derived only from validated observed totals', () => {
   expect(routePageLimit(34)).toBe(2); expect(routePageLimit(0)).toBe(1);

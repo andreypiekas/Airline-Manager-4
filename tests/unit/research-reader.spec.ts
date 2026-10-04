@@ -6,9 +6,11 @@ import { AircraftSnapshot, CollectionResult } from '../../demand/types';
 import { optimizationConfig } from '../../optimization/report';
 import { researchConfig, researchFleetCandidates, researchQueueRotation, writeRouteResearchReport } from '../../optimization/research-reader';
 
+const TEST_NOW=new Date('2026-10-04T00:00:00Z');
+
 function snapshot(): AircraftSnapshot {
   return {aircraftId:'101',registration:'SYNTHETIC',routeId:'1',routeLabel:'AAA-BBB',from:'AAA',to:'BBB',state:'ready',
-    capacity:{Y:100,J:0,F:0},remaining:{Y:1000,J:100,F:100},dailyTotal:{Y:1000,J:100,F:100},observedAt:new Date().toISOString(),
+    capacity:{Y:100,J:0,F:0},remaining:{Y:1000,J:100,F:100},dailyTotal:{Y:1000,J:100,F:100},observedAt:TEST_NOW.toISOString(),
     operational:{rangeKm:3440,minRunwayFt:7550,flightHours:682,cycles:206,homeBase:null,flightId:null}};
 }
 const settings = optimizationConfig({AIRLINE_BASES_JSON:'["AAA"]'});
@@ -41,7 +43,7 @@ async function fixture(page:Page, options: Record<string,boolean> = {}) {
 
 test('queries eligible aircraft, including second page, and restores a fresh list without mutations',async({page},testInfo)=>{
   await fixture(page,{secondPage:true});
-  const report=await researchFleetCandidates(page,collection(),settings,{...config,maxSuggestions:1});
+  const report=await researchFleetCandidates(page,collection(),settings,{...config,maxSuggestions:1},TEST_NOW);
   expect(report).toMatchObject({uiRestored:true,candidatesComplete:false,comparisonReady:false,mutationAuthorized:false});
   expect(report.aircraft[0]).toMatchObject({status:'observed',result:{quotes:[{from:'AAA',to:'CCC',remainingDemand:null,comparisonReady:false}]}});
   expect(await page.locator('#routeMainList2').isVisible()).toBe(true);
@@ -54,14 +56,14 @@ for(const variant of ['disabled','inflight','incomplete','duplicate','stale'])te
   await fixture(page);const a=snapshot();const data=collection(a);
   if(variant==='away'){a.from='BBB';a.to='AAA'}if(variant==='inflight')a.state='inflight';if(variant==='incomplete')data.complete=false;
   if(variant==='duplicate')data.aircraft.push({...a});if(variant==='stale')a.observedAt='2000-01-01T00:00:00Z';
-  const r=await researchFleetCandidates(page,data,settings,{...config,enabled:variant!=='disabled'});
+  const r=await researchFleetCandidates(page,data,settings,{...config,enabled:variant!=='disabled'},TEST_NOW);
   expect(r.aircraft.every(a=>a.status!=='queued')).toBe(true);expect(await page.evaluate(()=>(window as any).resets)).toBe(0);
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 test('away-from-base aircraft may run only the passive diagnostic probe and never mutate',async({page})=>{
   await fixture(page);
   const a=snapshot();a.from='BBB';a.to='AAA';
-  const r=await researchFleetCandidates(page,collection(a),settings,{...config,maxSuggestions:1});
+  const r=await researchFleetCandidates(page,collection(a),settings,{...config,maxSuggestions:1},TEST_NOW);
   expect(r.aircraft[0].status).toBe('pending_base_return');
   expect(r.diagnosticProbe).toBeNull();
   expect(r.warnings).toContain('DIAGNOSTIC_ROUTE_CONTROL_UNAVAILABLE:101');
@@ -71,25 +73,25 @@ test('away-from-base aircraft may run only the passive diagnostic probe and neve
 
 for(const option of ['badDetails','badPlanner','contextChanged','loadFailure','badPagination','loop'])test(`failure blocks research and restores the list: ${option}`,async({page})=>{
   await fixture(page,{[option]:true,secondPage:option==='badPagination'||option==='loop'});
-  const r=await researchFleetCandidates(page,collection(),settings,{...config,maxSuggestions:1});
+  const r=await researchFleetCandidates(page,collection(),settings,{...config,maxSuggestions:1},TEST_NOW);
   expect(r.aircraft[0].status).toBe('unavailable');expect(r.uiRestored).toBe(true);
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 test('restoration failure stops the remaining research queue',async({page})=>{
   await fixture(page,{restoreFailure:true});const a=snapshot();const data=collection(a);data.aircraft.push({...a,aircraftId:'102',routeId:'2'});
-  const r=await researchFleetCandidates(page,data,settings,{...config,maxSuggestions:1});
+  const r=await researchFleetCandidates(page,data,settings,{...config,maxSuggestions:1},TEST_NOW);
   expect(r.uiRestored).toBe(false);expect(r.warnings).toContain('RESEARCH_LIST_RESTORE_FAILED');expect(r.aircraft[1].status).toBe('deferred_restore_failure');
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 test('bounded research defers extra aircraft and validates settings before clicking',async({page})=>{
   await fixture(page);const data=collection();data.aircraft.push({...snapshot(),aircraftId:'102',routeId:'2'});
-  const r=await researchFleetCandidates(page,data,settings,{...config,maxAircraft:1,maxSuggestions:1});expect(r.aircraft[1].status).toBe('deferred_limit');
+  const r=await researchFleetCandidates(page,data,settings,{...config,maxAircraft:1,maxSuggestions:1},TEST_NOW);expect(r.aircraft[1].status).toBe('deferred_limit');
   for(const env of [{ENABLE_ROUTE_RESEARCH:'yes'},{ROUTE_RESEARCH_MAX_AIRCRAFT:'0'},{ROUTE_RESEARCH_MAX_SUGGESTIONS:'11'}])expect(()=>researchConfig(env)).toThrow('RESEARCH_CONFIG_INVALID');
-  await expect(researchFleetCandidates(page,data,settings,{...config,maxAircraft:0})).rejects.toThrow('RESEARCH_CONFIG_INVALID');
+  await expect(researchFleetCandidates(page,data,settings,{...config,maxAircraft:0},TEST_NOW)).rejects.toThrow('RESEARCH_CONFIG_INVALID');
 });
 
 test('uses the inspected Fleet tab when the main menu would toggle the open popup closed',async({page})=>{
-  await fixture(page,{toggle:true});const r=await researchFleetCandidates(page,collection(),settings,{...config,maxSuggestions:1});
+  await fixture(page,{toggle:true});const r=await researchFleetCandidates(page,collection(),settings,{...config,maxSuggestions:1},TEST_NOW);
   expect(r.aircraft[0].status).toBe('observed');expect(r.uiRestored).toBe(true);expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 
@@ -98,14 +100,14 @@ test('completed daily review is skipped before consuming the bounded research sl
   await fixture(page);
   const dir=await mkdtemp(join(tmpdir(),'am4-research-journal-'));
   try{
-    const now=new Date();
+    const now=TEST_NOW;
     await writeFile(join(dir,'return-journal.json'),JSON.stringify({
       schemaVersion:1,scope:'test-scope',entries:[{
         aircraftId:'101',origin:'AAA',flightId:'daily_test',reviewedAt:now.toISOString(),decision:'keep_route'
       }]
     })+'\n');
     const withJournal={...settings,returnJournal:{directory:dir,scope:'test-scope'}};
-    const r=await researchFleetCandidates(page,collection(),withJournal,{...config,maxAircraft:1,maxSuggestions:1});
+    const r=await researchFleetCandidates(page,collection(),withJournal,{...config,maxAircraft:1,maxSuggestions:1},TEST_NOW);
     expect(r.aircraft[0]).toMatchObject({aircraftId:'101',status:'completed_today'});
     expect(r.warnings).not.toContain('RESEARCH_JOURNAL_UNAVAILABLE');
     expect(await page.evaluate(()=>(window as any).resets)).toBe(0);
@@ -119,7 +121,7 @@ test('unavailable persistent review journal fails route research closed before n
   const dir=await mkdtemp(join(tmpdir(),'am4-research-journal-missing-'));
   try{
     const withJournal={...settings,returnJournal:{directory:dir,scope:'test-scope'}};
-    const r=await researchFleetCandidates(page,collection(),withJournal,{...config,maxAircraft:1,maxSuggestions:1});
+    const r=await researchFleetCandidates(page,collection(),withJournal,{...config,maxAircraft:1,maxSuggestions:1},TEST_NOW);
     expect(r.aircraft[0]).toMatchObject({aircraftId:'101',status:'journal_unavailable'});
     expect(r.warnings).toContain('RESEARCH_JOURNAL_UNAVAILABLE');
     expect(await page.evaluate(()=>(window as any).resets)).toBe(0);
@@ -132,7 +134,7 @@ test('confirmed return after same-day review re-enters bounded route research',a
  await fixture(page);
  const dir=await mkdtemp(join(tmpdir(),'am4-research-return-'));
  try{
-  const now=new Date(),daily=new Date(now.getTime()-60*60*1000).toISOString();
+  const now=TEST_NOW,daily=new Date(now.getTime()-60*60*1000).toISOString();
   const departed=new Date(now.getTime()-30*60*1000).toISOString(),arrived=new Date(now.getTime()-10*60*1000).toISOString();
   const departure={eventId:'dep_return_101',type:'departure',aircraftId:'101',registration:'SYNTHETIC',routeId:'1',from:'BBB',to:'AAA',
    observedAt:departed,result:'departed',demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:100,J:0,F:0},occupancyPercentage:100},
@@ -143,7 +145,7 @@ test('confirmed return after same-day review re-enters bounded route research',a
    entries:[{aircraftId:'101',origin:'AAA',flightId:'daily_old',reviewedAt:daily,decision:'keep_route'}],
    events:[departure,arrival]})+'\n');
   const withJournal={...settings,returnJournal:{directory:dir,scope:'test-scope'}};
-  const r=await researchFleetCandidates(page,collection(),withJournal,{...config,maxAircraft:1,maxSuggestions:1});
+  const r=await researchFleetCandidates(page,collection(),withJournal,{...config,maxAircraft:1,maxSuggestions:1},TEST_NOW);
   expect(r.aircraft[0]).toMatchObject({aircraftId:'101',status:'observed'});
   expect(await page.evaluate(()=>(window as any).researches)).toBe(1);
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
