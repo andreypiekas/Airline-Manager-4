@@ -92,3 +92,13 @@ test('unconfirmed mutation halts without retry',async()=>{
  expect(r.entries[0]).toMatchObject({status:'outcome_unknown',mutationAuthorized:false,reason:'NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT'});
  expect(r.entries[1]).toMatchObject({status:'held',reason:'PREVIOUS_ROUTE_OUTCOME_UNKNOWN'});
 });
+
+
+test('persisted uncertain route quarantine blocks before prepare or reroute',async()=>{
+ const port=new FakePort();let prepares=0;
+ port.prepare=async(expected,target)=>{prepares++;return {aircraft:{...expected},target:{...target}};};
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300,blockedAircraftIds:new Set(['101'])},async()=>{})
+  .run([aircraft()],[decision],[candidate()]);
+ expect(prepares).toBe(0);expect(port.reroutes).toBe(0);
+ expect(r.entries[0]).toMatchObject({status:'held',mutationAuthorized:false,reason:'PERSISTED_UNCERTAIN_ROUTE_BLOCK'});
+});

@@ -33,6 +33,7 @@ export interface RouteExecutionSettings {
   enabled:boolean;
   maxReroutes:number;
   maxAgeSeconds:number;
+  blockedAircraftIds?:ReadonlySet<string>;
 }
 
 export interface RouteExecutionEntry {
@@ -93,7 +94,9 @@ export class RouteMutationExecutor {
   ){
     if(typeof settings.enabled!=='boolean'||!Number.isSafeInteger(settings.maxReroutes)||
       settings.maxReroutes<1||settings.maxReroutes>5||!Number.isSafeInteger(settings.maxAgeSeconds)||
-      settings.maxAgeSeconds<1||settings.maxAgeSeconds>900)throw new Error('ROUTE_EXECUTION_SETTINGS_INVALID');
+      settings.maxAgeSeconds<1||settings.maxAgeSeconds>900||
+      (settings.blockedAircraftIds!==undefined&&[...settings.blockedAircraftIds].some(id=>!safeId(id))))
+      throw new Error('ROUTE_EXECUTION_SETTINGS_INVALID');
   }
 
   async run(
@@ -138,6 +141,7 @@ export class RouteMutationExecutor {
       report.entries.push(entry);
 
       if(report.halted){entry.reason='PREVIOUS_ROUTE_OUTCOME_UNKNOWN';continue;}
+      if(this.settings.blockedAircraftIds?.has(decision.aircraftId)){entry.reason='PERSISTED_UNCERTAIN_ROUTE_BLOCK';continue;}
       if(this.attemptedAircraft.has(decision.aircraftId)){entry.reason='AIRCRAFT_ALREADY_ATTEMPTED';continue;}
       if(this.attemptedAircraft.size>=this.settings.maxReroutes){entry.reason='ROUTE_EXECUTION_LIMIT';continue;}
       if(!expected||matches.length!==1){entry.reason='FLEET_OR_CANDIDATE_CONTEXT_UNAVAILABLE';continue;}

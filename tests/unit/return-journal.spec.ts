@@ -294,3 +294,20 @@ test('arrival observation stays unavailable after a newer uncertain departure or
  expect(await appendObservedArrivals(directory,'company-test',{complete:true,expectedRoutes:1,warnings:[],aircraft:[{...ready,from:'CCC',to:'AAA'}]} as any,new Date('2026-10-04T11:01:00.000Z'))).toBe(0);
 });
 
+
+
+test('uncertain reroute becomes durable aircraft-wide no-retry quarantine',async()=>{
+ await reviewWithReturnJournal(input(),options(),now);
+ const {appendUncertainRouteMutations,readUnresolvedRouteAircraftIds,validateReturnJournal}=await import('../../optimization/return-journal');
+ const report:any={entries:[{aircraftId:'9',registration:'RISK',previousRouteId:'9001',previousFrom:'AAA',previousTo:'BBB',
+   targetFrom:'AAA',targetTo:'CCC',targetAirportId:'300',confirmedRouteId:null,status:'outcome_unknown',mutationAuthorized:false,
+   reason:'NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT'}]};
+ expect(await appendUncertainRouteMutations(directory,'company-test','777',report,now)).toBe(1);
+ expect(await appendUncertainRouteMutations(directory,'company-test','777',report,now)).toBe(0);
+ expect([...(await readUnresolvedRouteAircraftIds(directory,'company-test',now))]).toEqual(['9']);
+ const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
+ expect(saved.events.at(-1)).toEqual({eventId:'runc_777_9_9001_300',type:'route-uncertain',aircraftId:'9',registration:'RISK',
+   previousRouteId:'9001',previousFrom:'AAA',previousTo:'BBB',targetFrom:'AAA',targetTo:'CCC',targetAirportId:'300',
+   observedAt:now.toISOString(),result:'outcome_unknown',reason:'NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT',sourceRunId:'777'});
+ expect(()=>validateReturnJournal({...saved,events:[...saved.events,{...saved.events.at(-1),eventId:'runc_bad',targetFrom:'BAD!'}]},'company-test',now)).toThrow('JOURNAL_INVALID');
+});

@@ -7,7 +7,7 @@ import { PlaywrightRouteExecutionPort } from './route-playwright-port';
 import { RouteMutationExecutor,type RouteExecutionCandidate,type RouteExecutionReport } from './route-executor';
 import { optimizationConfig } from './report';
 import { resolveAircraftOrigin } from './aircraft-origins';
-import { appendConfirmedRerouteReviews, appendVerifiedKeepRouteDecisions } from './return-journal';
+import { appendConfirmedRerouteReviews, appendUncertainRouteMutations, appendVerifiedKeepRouteDecisions, readUnresolvedRouteAircraftIds } from './return-journal';
 
 export interface RouteExecutionRuntimeSettings {
   enabled:boolean;
@@ -65,6 +65,10 @@ export async function runRouteExecution(
   directory='test-results/demand'
 ){
   const settings=routeExecutionSettings(env),optimization=optimizationConfig(env);
+  if(settings.enabled&&!optimization.returnJournal)throw new Error('ROUTE_EXECUTION_REQUIRES_PERSISTENT_JOURNAL');
+  const blockedAircraftIds=optimization.returnJournal
+    ? await readUnresolvedRouteAircraftIds(optimization.returnJournal.directory,optimization.returnJournal.scope)
+    : new Set<string>();
   await mkdir(directory,{recursive:true});
   const marker=await open(join(directory,'route-execution.started'),'wx');await marker.close();
 
@@ -87,7 +91,7 @@ export async function runRouteExecution(
 
   const executor=new RouteMutationExecutor(
     new PlaywrightRouteExecutionPort(page),
-    settings,
+    {...settings,blockedAircraftIds},
     save
   );
   const report=await executor.run(
@@ -96,7 +100,24 @@ export async function runRouteExecution(
     routeExecutionCandidates(context)
   );
   console.log('[RouteExecution] '+JSON.stringify(report.summary));
+  if(optimization.returnJournal){
+    try{
+      const uncertain=await appendUncertainRouteMutations(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);
+      if(uncertain)console.log('[History] Reroutes incertos bloqueados acrescentados: '+uncertain);
+      const origins=new Map<string,string>();
+      for(const a of context.collection.aircraft){
+        const o=resolveAircraftOrigin(a,context.collection,optimization.aircraftOrigins,optimization.airlineBases).origin;
+        if(o)origins.set(a.aircraftId,o);
+      }
+      const added=await appendVerifiedKeepRouteDecisions(optimization.returnJournal.directory,optimization.returnJournal.scope,context.candidateData.routeDecisions,context.candidateData.candidates,context.collection.aircraft,origins,optimization.reviewTimeZone);
+      if(added)console.log('[History] Revisoes KEEP verificadas acrescentadas: '+added);
+      const reroutes=await appendConfirmedRerouteReviews(optimization.returnJournal.directory,optimization.returnJournal.scope,context.candidateData.routeDecisions,context.candidateData.candidates,context.collection.aircraft,origins,report,optimization.reviewTimeZone);
+      if(reroutes)console.log('[History] Revisoes REROUTE confirmadas acrescentadas: '+reroutes);
+    }catch{
+      if(report.halted)throw new Error('ROUTE_UNKNOWN_QUARANTINE_PERSIST_FAILED_NO_RETRY');
+      throw new Error('ROUTE_HISTORY_PERSIST_FAILED');
+    }
+  }
   if(report.halted)throw new Error('ROUTE_EXECUTION_HALTED_UNKNOWN_RESULT_NO_RETRY');
-  if(optimization.returnJournal){const origins=new Map<string,string>();for(const a of context.collection.aircraft){const o=resolveAircraftOrigin(a,context.collection,optimization.aircraftOrigins,optimization.airlineBases).origin;if(o)origins.set(a.aircraftId,o);}const added=await appendVerifiedKeepRouteDecisions(optimization.returnJournal.directory,optimization.returnJournal.scope,context.candidateData.routeDecisions,context.candidateData.candidates,context.collection.aircraft,origins,optimization.reviewTimeZone);if(added)console.log('[History] Revisoes KEEP verificadas acrescentadas: '+added);const reroutes=await appendConfirmedRerouteReviews(optimization.returnJournal.directory,optimization.returnJournal.scope,context.candidateData.routeDecisions,context.candidateData.candidates,context.collection.aircraft,origins,report,optimization.reviewTimeZone);if(reroutes)console.log('[History] Revisoes REROUTE confirmadas acrescentadas: '+reroutes);}
   return report;
 }
