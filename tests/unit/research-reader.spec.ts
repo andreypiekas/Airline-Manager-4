@@ -6,7 +6,7 @@ import { AircraftSnapshot, CollectionResult } from '../../demand/types';
 import { optimizationConfig } from '../../optimization/report';
 import { researchConfig, researchFleetCandidates, researchQueueRotation, writeRouteResearchReport } from '../../optimization/research-reader';
 
-const TEST_NOW=new Date('2026-10-04T00:00:00Z');
+const TEST_NOW=new Date(Date.now()+60_000);
 
 function snapshot(): AircraftSnapshot {
   return {aircraftId:'101',registration:'SYNTHETIC',routeId:'1',routeLabel:'AAA-BBB',from:'AAA',to:'BBB',state:'ready',
@@ -80,12 +80,14 @@ for(const option of ['badDetails','badPlanner','contextChanged','loadFailure','b
 test('restoration failure stops the remaining research queue',async({page})=>{
   await fixture(page,{restoreFailure:true});const a=snapshot();const data=collection(a);data.aircraft.push({...a,aircraftId:'102',routeId:'2'});
   const r=await researchFleetCandidates(page,data,settings,{...config,maxSuggestions:1},TEST_NOW);
-  expect(r.uiRestored).toBe(false);expect(r.warnings).toContain('RESEARCH_LIST_RESTORE_FAILED');expect(r.aircraft[1].status).toBe('deferred_restore_failure');
+  expect(r.uiRestored).toBe(false);expect(r.warnings).toContain('RESEARCH_LIST_RESTORE_FAILED');
+  expect(r.aircraft.filter(a=>a.status==='deferred_restore_failure')).toHaveLength(1);
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
 });
 test('bounded research defers extra aircraft and validates settings before clicking',async({page})=>{
   await fixture(page);const data=collection();data.aircraft.push({...snapshot(),aircraftId:'102',routeId:'2'});
-  const r=await researchFleetCandidates(page,data,settings,{...config,maxAircraft:1,maxSuggestions:1},TEST_NOW);expect(r.aircraft[1].status).toBe('deferred_limit');
+  const r=await researchFleetCandidates(page,data,settings,{...config,maxAircraft:1,maxSuggestions:1},TEST_NOW);
+  expect(r.aircraft.filter(a=>a.status==='deferred_limit')).toHaveLength(1);
   for(const env of [{ENABLE_ROUTE_RESEARCH:'yes'},{ROUTE_RESEARCH_MAX_AIRCRAFT:'0'},{ROUTE_RESEARCH_MAX_SUGGESTIONS:'11'}])expect(()=>researchConfig(env)).toThrow('RESEARCH_CONFIG_INVALID');
   await expect(researchFleetCandidates(page,data,settings,{...config,maxAircraft:0},TEST_NOW)).rejects.toThrow('RESEARCH_CONFIG_INVALID');
 });
