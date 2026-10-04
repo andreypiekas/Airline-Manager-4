@@ -6,7 +6,7 @@ import {executionEnvironment} from '../demand/execute-run';
 import {Commodity,planPurchase,supplyConfig} from './policy';
 import {SupplyPort} from './port';
 import {optimizationConfig} from '../optimization/report';
-import {appendSupplyObservation,validateReturnJournal} from '../optimization/return-journal';
+import {appendSupplyObservation,appendUncertainSupplyOperation,unresolvedSupplyKinds,validateReturnJournal} from '../optimization/return-journal';
 import {adaptiveSupplyCap} from './adaptive-policy';
 import {calendarReference,loadReference,type FuelCalendar} from '../optimization/reference-data';
 export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv=process.env,directory='test-results/demand',port=new SupplyPort(page)){
@@ -14,6 +14,7 @@ export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv
  if(!dryRun)executionEnvironment({...readDemandConfig(env),dryRun:false},env);
  await mkdir(directory,{recursive:true});
  const journal=optimization.returnJournal?validateReturnJournal(JSON.parse(await readFile(join(optimization.returnJournal.directory,'return-journal.json'),'utf8')),optimization.returnJournal.scope,new Date()):{schemaVersion:1 as const,scope:'disabled',entries:[]};
+ const blockedSupplyKinds=unresolvedSupplyKinds(journal);
  const adaptive={fuel:adaptiveSupplyCap(journal,'fuel',config.maxPrice.fuel),co2:adaptiveSupplyCap(journal,'co2',config.maxPrice.co2)};
  const effectiveConfig={...config,maxPrice:{fuel:adaptive.fuel.effectiveMax,co2:adaptive.co2.effectiveMax}};
  const now=new Date(),local=new Date(now.getTime()-180*60000),monthLength=new Date(Date.UTC(local.getUTCFullYear(),local.getUTCMonth()+1,0)).getUTCDate();
@@ -31,7 +32,9 @@ export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv
  await save();if(!config.enabled)return report;
  try {
   for(const kind of ['fuel','co2'] as const){
-   const entry:any={kind,status:'reading',reason:'PENDING',before:null,plan:null};report.entries.push(entry);await save();
+   const entry:any={kind,status:'reading',reason:'PENDING',before:null,plan:null};report.entries.push(entry);
+   if(!dryRun&&blockedSupplyKinds.has(kind)){entry.status='skipped';entry.reason='PERSISTED_UNCERTAIN_SUPPLY_BLOCK';await save();continue;}
+   await save();
    await port.open(kind);entry.before=await port.snapshot(kind);
    if(!dryRun&&optimization.returnJournal){await appendSupplyObservation(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',kind,entry.before);}
    entry.plan=planPurchase(entry.before,kind,effectiveConfig);
@@ -56,7 +59,12 @@ export async function runSupplies(page:Page,dryRun:boolean,env:NodeJS.ProcessEnv
    entry.reason=entry.status==='attempting'?'OUTCOME_UNKNOWN_NO_RETRY:'+code:'READ_OR_VALIDATION_FAILED:'+code;
    entry.status=entry.status==='attempting'?'unknown':'unavailable';
   }
-  report.halted=true;await save();throw Error('SUPPLY_HALTED_SEE_REPORT_NO_RETRY:'+code);
+  report.halted=true;await save();
+  if(entry?.status==='unknown'&&!dryRun&&optimization.returnJournal){
+   try{await appendUncertainSupplyOperation(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',entry);}
+   catch{entry.quarantinePersistence='failed';await save();throw Error('SUPPLY_UNKNOWN_QUARANTINE_PERSIST_FAILED_NO_RETRY');}
+  }
+  throw Error('SUPPLY_HALTED_SEE_REPORT_NO_RETRY:'+code);
  }
  console.log('[Supplies] '+JSON.stringify(report.entries.map(({kind,status,reason})=>({kind,status,reason}))));
  return report;

@@ -211,3 +211,27 @@ test('stitched history rejects identity overlap when relative-age evidence is in
  const stitched=buildConservativeFlightHistoryStitch([previous,current]);
  expect(stitched).toMatchObject({status:'unavailable',linksVerified:0,stoppedReason:'STITCH_OVERLAP_AGE_INCONSISTENT',comparisonReady:false,mutationAuthorized:false});
 });
+
+
+test('uncertain supply mutation becomes a durable per-commodity no-retry quarantine',async()=>{
+ await reviewWithReturnJournal(input(),options(),now);
+ const {appendUncertainSupplyOperation,readUnresolvedSupplyKinds,validateReturnJournal}=await import('../../optimization/return-journal');
+ const entry:any={kind:'co2',status:'unknown',reason:'OUTCOME_UNKNOWN_NO_RETRY:SUPPLY_PRICE_ROLLOVER',before:{pricePer1000:117},plan:{quantity:1396108},quotedCost:163345};
+ expect(await appendUncertainSupplyOperation(directory,'company-test','133',entry,now)).toBe(true);
+ expect(await appendUncertainSupplyOperation(directory,'company-test','133',entry,now)).toBe(false);
+ const kinds=await readUnresolvedSupplyKinds(directory,'company-test',now);
+ expect([...kinds]).toEqual(['co2']);
+ const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
+ expect(saved.events.at(-1)).toEqual({eventId:'sunc_133_co2',type:'supply-uncertain',kind:'co2',observedAt:now.toISOString(),result:'outcome_unknown',reason:'OUTCOME_UNKNOWN_NO_RETRY:SUPPLY_PRICE_ROLLOVER',sourceRunId:'133',pricePer1000:117,quantity:1396108,quotedCost:163345});
+ expect(()=>validateReturnJournal({...saved,events:[...saved.events,{...saved.events.at(-1),eventId:'sunc_bad',quantity:0}]},'company-test',now)).toThrow('JOURNAL_INVALID');
+});
+
+test('supply quarantine is independent per commodity and cannot be inferred from passive observations',async()=>{
+ await reviewWithReturnJournal(input(),options(),now);
+ const {appendSupplyObservation,appendUncertainSupplyOperation,readUnresolvedSupplyKinds}=await import('../../optimization/return-journal');
+ expect(await appendSupplyObservation(directory,'company-test','200','fuel',{pricePer1000:100,holding:1,remainingCapacity:2,balance:3},now)).toBe(true);
+ expect([...(await readUnresolvedSupplyKinds(directory,'company-test',now))]).toEqual([]);
+ const entry:any={kind:'fuel',status:'unknown',reason:'OUTCOME_UNKNOWN_NO_RETRY:SUPPLY_OUTCOME_UNKNOWN',before:{pricePer1000:100},plan:{quantity:1000},quotedCost:100};
+ expect(await appendUncertainSupplyOperation(directory,'company-test','200',entry,now)).toBe(true);
+ expect([...(await readUnresolvedSupplyKinds(directory,'company-test',now))]).toEqual(['fuel']);
+});
