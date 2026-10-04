@@ -7,13 +7,13 @@ import { departureControlShape } from '../../demand/departure-control-evidence';
 
 const snapshot=(change:Partial<AircraftSnapshot>={}):AircraftSnapshot=>({aircraftId:'1',registration:'TEST',routeId:'10',routeLabel:'AAA - GRU',from:'AAA',to:'GRU',state:'ready',capacity:{Y:100,J:0,F:0},remaining:{Y:100,J:0,F:0},dailyTotal:{Y:1000,J:100,F:100},observedAt:new Date().toISOString(),...change});
 const collection=(a:AircraftSnapshot[],complete=true):CollectionResult=>({aircraft:a,complete,expectedRoutes:a.length,warnings:[]});
-function setup(options:{initial?:CollectionResult;fresh?:CollectionResult;prepared?:AircraftSnapshot;confirmed?:AircraftSnapshot|null;dryRun?:boolean;limit?:number;prepareFail?:boolean;clickFail?:boolean;collectFail?:boolean;saveFail?:boolean;mutationDeadlineEpochMs?:number;blockedDepartureKeys?:ReadonlySet<string>}={}) {
+function setup(options:{initial?:CollectionResult;fresh?:CollectionResult;prepared?:AircraftSnapshot;confirmed?:AircraftSnapshot|null;dryRun?:boolean;limit?:number;prepareFail?:boolean;clickFail?:boolean;collectFail?:boolean;saveFail?:boolean;mutationDeadlineEpochMs?:number;blockedDepartureKeys?:ReadonlySet<string>;fuelHoldingLbsAtRunStart?:number}={}) {
   let reads=0,clicks=0;const saved:ExecutionReport[]=[];
   const port:DeparturePort={collect:async()=>{reads++;if(options.collectFail&&reads>1)throw Error('loading');return reads===1?options.initial??collection([snapshot()]):options.fresh??collection([snapshot()]);},
     prepare:async a=>{if(options.prepareFail)throw Error('unverified');return options.prepared??snapshot(a);},
     depart:async()=>{clicks++;if(options.clickFail)throw Error('timeout');},
     confirm:async a=>options.confirmed===null?null:options.confirmed??snapshot({...a,state:'inflight',onboard:{Y:88,J:0,F:0},timing:flightCountdownObservation(a.aircraftId,a.routeId,'01:00:00',new Date().toISOString())})};
-  const executor=new IndividualDepartureExecutor(port,readDemandConfig({}),{dryRun:options.dryRun??false,maxDepartures:options.limit??1,aircraftOrigins:new Map(),airlineBases:['GRU'],mutationDeadlineEpochMs:options.mutationDeadlineEpochMs,blockedDepartureKeys:options.blockedDepartureKeys},async r=>{if(options.saveFail&&r.entries.some(e=>e.status==='attempting'))throw Error('disk');saved.push(JSON.parse(JSON.stringify(r)));});
+  const executor=new IndividualDepartureExecutor(port,readDemandConfig({}),{dryRun:options.dryRun??false,maxDepartures:options.limit??1,aircraftOrigins:new Map(),airlineBases:['GRU'],mutationDeadlineEpochMs:options.mutationDeadlineEpochMs,blockedDepartureKeys:options.blockedDepartureKeys,fuelHoldingLbsAtRunStart:options.fuelHoldingLbsAtRunStart},async r=>{if(options.saveFail&&r.entries.some(e=>e.status==='attempting'))throw Error('disk');saved.push(JSON.parse(JSON.stringify(r)));});
   return {executor,saved,clicks:()=>clicks};
 }
 test('persist intent before exactly one native click and confirm onboard separately from demand coverage',async()=>{
@@ -64,3 +64,43 @@ test('run time budget holds before mutation and never creates an uncertain resul
 
 
 test('persisted uncertain departure quarantine blocks before any click',async()=>{const s=setup({blockedDepartureKeys:new Set(['1:10'])});const r=await s.executor.run();expect(s.clicks()).toBe(0);expect(r.entries[0].reason).toBe('PERSISTED_UNCERTAIN_DEPARTURE_BLOCK');expect(r.summary).toMatchObject({held:1,unknown:0});});
+
+
+test('verified historical fuel evidence blocks a departure before the click when run stock is insufficient',async()=>{
+ const history=(fuelLbs:number)=>({status:'observed' as const,observedAt:new Date().toISOString(),entries:[0,1,2].map(i=>({relativeTime:`${i+1} hours ago`,from:i%2?'GRU':'AAA',to:i%2?'AAA':'GRU',co2Quotas:100,onboard:{Y:80,J:0,F:0},fuelLbs,revenue:1000}))});
+ const a=snapshot({flightHistory:history(59928)});
+ const s=setup({initial:collection([a]),fresh:collection([a]),prepared:a,fuelHoldingLbsAtRunStart:20040});
+ const r=await s.executor.run();
+ expect(s.clicks()).toBe(0);
+ expect(r.entries[0]).toMatchObject({status:'held',reason:'FUEL_STOCK_INSUFFICIENT_BY_VERIFIED_HISTORY',resourceEvidence:{fuelAvailableBefore:20040,verifiedRouteFuelLbs:59928,matchingHistorySamples:3,trackingComplete:true}});
+});
+
+test('confirmed departures debit only uniquely verified historical fuel and protect later aircraft',async()=>{
+ const history=(from:string,to:string,fuelLbs:number)=>({status:'observed' as const,observedAt:new Date().toISOString(),entries:[0,1,2].map(i=>({relativeTime:`${i+1} hours ago`,from:i%2?to:from,to:i%2?from:to,co2Quotas:100,onboard:{Y:80,J:0,F:0},fuelLbs,revenue:1000}))});
+ const one=snapshot({flightHistory:history('AAA','GRU',9781)});
+ const two=snapshot({aircraftId:'2',routeId:'11',from:'BBB',to:'GRU',routeLabel:'BBB - GRU',flightHistory:history('BBB','GRU',59928)});
+ const list=collection([one,two]);let reads=0,clicks=0;
+ const port:DeparturePort={
+  collect:async()=>{reads++;return list;},
+  prepare:async a=>a.aircraftId==='1'?one:two,
+  depart:async()=>{clicks++;},
+  confirm:async a=>snapshot({...a,state:'inflight',onboard:{Y:80,J:0,F:0},timing:flightCountdownObservation(a.aircraftId,a.routeId,'01:00:00',new Date().toISOString())})
+ };
+ const executor=new IndividualDepartureExecutor(port,readDemandConfig({}),{dryRun:false,maxDepartures:2,aircraftOrigins:new Map(),airlineBases:['GRU'],fuelHoldingLbsAtRunStart:29821},async()=>{});
+ const r=await executor.run();
+ expect(clicks).toBe(1);
+ expect(r.entries[0].status).toBe('departed');
+ expect(r.entries[1]).toMatchObject({status:'held',reason:'FUEL_STOCK_INSUFFICIENT_BY_VERIFIED_HISTORY',resourceEvidence:{fuelCommittedBefore:9781,fuelAvailableBefore:20040,verifiedRouteFuelLbs:59928}});
+});
+
+test('missing historical fuel does not claim a shortage, but makes later run-local tracking fail closed',async()=>{
+ const one=snapshot();
+ const two=snapshot({aircraftId:'2',routeId:'11',from:'BBB',to:'GRU',routeLabel:'BBB - GRU'});
+ const list=collection([one,two]);let clicks=0;
+ const port:DeparturePort={collect:async()=>list,prepare:async a=>a,depart:async()=>{clicks++;},confirm:async a=>snapshot({...a,state:'inflight',onboard:{Y:80,J:0,F:0},timing:flightCountdownObservation(a.aircraftId,a.routeId,'01:00:00',new Date().toISOString())})};
+ const executor=new IndividualDepartureExecutor(port,readDemandConfig({}),{dryRun:false,maxDepartures:2,aircraftOrigins:new Map(),airlineBases:['GRU'],fuelHoldingLbsAtRunStart:100000},async()=>{});
+ const r=await executor.run();
+ expect(clicks).toBe(1);
+ expect(r.entries[0].status).toBe('departed');
+ expect(r.entries[1].reason).toBe('FUEL_BUDGET_UNVERIFIED_AFTER_PRIOR_DEPARTURE');
+});

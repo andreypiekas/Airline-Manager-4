@@ -1,5 +1,5 @@
 import { Page } from '@playwright/test';
-import { mkdir,open,rename,writeFile } from 'node:fs/promises';
+import { mkdir,open,rename,writeFile,readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { readDemandConfig } from './config';
 import { DemandConfig } from './types';
@@ -8,6 +8,17 @@ import { PlaywrightDeparturePort } from './departure-port';
 import { optimizationConfig } from '../optimization/report';
 import { appendConfirmedDepartures,appendDemandHoldObservations,appendUncertainDepartures,readUnresolvedDepartureKeys } from '../optimization/return-journal';
 import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
+
+async function verifiedFuelHoldingFromRun(directory:string):Promise<number|undefined>{
+  try{
+    const report=JSON.parse(await readFile(join(directory,'supply-report.json'),'utf8'));
+    const fuel=(report?.entries||[]).find((e:any)=>e?.kind==='fuel');
+    if(!fuel||fuel.status==='unknown'||fuel.status==='unavailable')return undefined;
+    const snapshot=fuel.status==='purchased'?fuel.after:fuel.before;
+    const holding=snapshot?.holding;
+    return Number.isSafeInteger(holding)&&holding>=0?holding:undefined;
+  }catch{return undefined;}
+}
 
 export function executionEnvironment(config:DemandConfig,env:NodeJS.ProcessEnv=process.env){
   const maxDepartures=Number(env.DEMAND_MAX_DEPARTURES_PER_RUN||'1');
@@ -41,8 +52,9 @@ export async function runDemandExecution(page:Page,config=readDemandConfig(),env
     ].join('\n'));
   };
   const adaptive=optimization.returnJournal?await loadAdaptiveDemandThresholds(optimization.returnJournal.directory,optimization.returnJournal.scope,config.minPercentage):new Map();
+  const fuelHoldingLbsAtRunStart=!settings.dryRun?await verifiedFuelHoldingFromRun(directory):undefined;
   const report=await new IndividualDepartureExecutor(new PlaywrightDeparturePort(page),config,{...settings,
-    aircraftOrigins:optimization.aircraftOrigins,airlineBases:optimization.airlineBases,blockedDepartureKeys},save,adaptive).run();
+    aircraftOrigins:optimization.aircraftOrigins,airlineBases:optimization.airlineBases,blockedDepartureKeys,fuelHoldingLbsAtRunStart},save,adaptive).run();
   console.log('[IndividualDepartures] '+JSON.stringify(report.summary));
   if(!settings.dryRun&&optimization.returnJournal){
     const held=await appendDemandHoldObservations(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);

@@ -18,11 +18,21 @@ export interface ExecutionSettings {
   /** Absolute deadline after which no new departure mutation may start. */
   mutationDeadlineEpochMs?: number;
   blockedDepartureKeys?: ReadonlySet<string>;
+  /** Verified fuel holding observed in this same run. Used only to block unsafe clicks. */
+  fuelHoldingLbsAtRunStart?: number;
 }
 export interface ExecutionEntry {
   aircraftId: string; registration: string; routeId: string; from: string; to: string;
   status: 'held' | 'would_depart' | 'attempting' | 'departed' | 'outcome_unknown';
   reason: string; demand: DemandDecision | null; actualOnboard: AircraftSnapshot['onboard'];
+  resourceEvidence?: {
+    fuelHoldingLbsAtRunStart:number;
+    fuelCommittedBefore:number;
+    fuelAvailableBefore:number;
+    verifiedRouteFuelLbs:number|null;
+    matchingHistorySamples:number;
+    trackingComplete:boolean;
+  };
 }
 export interface ExecutionReport {
   schemaVersion: 1; dryRun: boolean; scope: 'existing-route-return-legs';
@@ -33,6 +43,17 @@ export interface ExecutionReport {
 const sameContext = (a: AircraftSnapshot,b: AircraftSnapshot) => a.aircraftId === b.aircraftId && a.routeId === b.routeId &&
   a.registration === b.registration && a.from === b.from && a.to === b.to && !!a.capacity && !!b.capacity &&
   (['Y','J','F'] as const).every(k=>a.capacity![k]===b.capacity![k]);
+
+const routePairKey=(a:string,b:string)=>[a,b].sort().join(':');
+function verifiedHistoricalFuelRequirement(a:AircraftSnapshot):{fuelLbs:number;samples:number}|null{
+  const history=a.flightHistory;
+  if(!history||history.status!=='observed'||!Array.isArray(history.entries))return null;
+  const pair=routePairKey(a.from,a.to);
+  const matching=history.entries.filter(e=>routePairKey(e.from,e.to)===pair&&Number.isSafeInteger(e.fuelLbs)&&e.fuelLbs>0);
+  if(matching.length<3)return null;
+  const values=[...new Set(matching.map(e=>e.fuelLbs))];
+  return values.length===1?{fuelLbs:values[0],samples:matching.length}:null;
+}
 
 /** No retries, bulk fallback, route mutations or financial modules. A report writer must persist BEFORE the click. */
 export class IndividualDepartureExecutor {
@@ -57,6 +78,10 @@ export class IndividualDepartureExecutor {
       await this.save(report);
     };
     await persist();
+    let fuelCommitted=0;
+    let fuelTrackingComplete=this.settings.fuelHoldingLbsAtRunStart===undefined?false:
+      Number.isSafeInteger(this.settings.fuelHoldingLbsAtRunStart)&&this.settings.fuelHoldingLbsAtRunStart>=0;
+    if(this.settings.fuelHoldingLbsAtRunStart!==undefined&&!fuelTrackingComplete)throw new Error('EXECUTION_FUEL_BUDGET_INVALID');
     let initial: CollectionResult;
     try { initial=await this.port.collect(); } catch { report.halted=true;await persist();throw new Error('EXECUTION_INITIAL_COLLECTION_FAILED'); }
     // Original targets only: an aircraft landing during this run is considered on the NEXT execution.
@@ -89,6 +114,20 @@ export class IndividualDepartureExecutor {
       entry.demand=decision;
       if(decision.decision!=='would_depart'){entry.reason=decision.reason;continue;}
       entry.reason=decision.reason;
+      const fuelEvidence=verifiedHistoricalFuelRequirement(fresh);
+      if(!this.settings.dryRun&&this.settings.fuelHoldingLbsAtRunStart!==undefined){
+        const available=Math.max(0,this.settings.fuelHoldingLbsAtRunStart-fuelCommitted);
+        entry.resourceEvidence={
+          fuelHoldingLbsAtRunStart:this.settings.fuelHoldingLbsAtRunStart,
+          fuelCommittedBefore:fuelCommitted,
+          fuelAvailableBefore:available,
+          verifiedRouteFuelLbs:fuelEvidence?.fuelLbs??null,
+          matchingHistorySamples:fuelEvidence?.samples??0,
+          trackingComplete:fuelTrackingComplete
+        };
+        if(!fuelTrackingComplete){entry.reason='FUEL_BUDGET_UNVERIFIED_AFTER_PRIOR_DEPARTURE';continue;}
+        if(fuelEvidence&&available<fuelEvidence.fuelLbs){entry.reason='FUEL_STOCK_INSUFFICIENT_BY_VERIFIED_HISTORY';continue;}
+      }
       if(this.settings.dryRun){
         this.attemptedAircraft.add(fresh.aircraftId);this.attemptedRoutes.add(fresh.routeId);
         entry.status='would_depart';await persist();continue;
@@ -127,6 +166,10 @@ export class IndividualDepartureExecutor {
         if((['Y','J','F'] as const).some(k=>!Number.isSafeInteger(after.onboard![k])||after.onboard![k]<0||after.onboard![k]>after.capacity![k]))
           throw new Error('CONFIRM_ONBOARD_INVALID');
         entry.status='departed';entry.actualOnboard=after.onboard;entry.reason='NATIVE_INFLIGHT_IDENTITY_COUNTDOWN_AND_ONBOARD_CONFIRMED';
+        if(this.settings.fuelHoldingLbsAtRunStart!==undefined){
+          if(fuelEvidence)fuelCommitted+=fuelEvidence.fuelLbs;
+          else fuelTrackingComplete=false;
+        }
       } catch(error) {
         entry.status='outcome_unknown';entry.reason='NO_RETRY_AFTER_CLICK_ATTEMPT:'+code(error);report.halted=true;
       }
