@@ -42,3 +42,14 @@ test('legacy repository limit above hard safety cap is bounded to twenty and rep
 test('explicit manual limit above twenty still fails instead of being silently clamped',()=>{
  expect(()=>resolveDepartureSettings({AM4_INPUT_MAX_DEPARTURES:'21',AM4_REPOSITORY_MAX_DEPARTURES:'30'})).toThrow();
 });
+
+
+test('main workflow skips every game-access step when queued SHA is stale',async()=>{
+ const s=await readFile('.github/workflows/playwright.yml','utf8');
+ expect(s).toContain('name: Verificar SHA atual antes de acessar o jogo');
+ expect(s).toContain('git rev-parse refs/remotes/origin/main');
+ expect(s).toContain('echo "stale=true" >> "$GITHUB_OUTPUT"');
+ expect(s).toContain("if: steps.current_head.outputs.stale != 'true'\n      run: |");
+ expect(s).toContain("if: vars.ENABLE_DEMAND_MANAGER != 'false' && steps.current_head.outputs.stale != 'true'");
+ expect(s.match(/if: steps\.current_head\.outputs\.stale != 'true'/g)?.length).toBeGreaterThanOrEqual(3);
+});

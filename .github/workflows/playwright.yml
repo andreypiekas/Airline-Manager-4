@@ -93,13 +93,26 @@ jobs:
       if: always()
       run: rm -rf test-results/demand
 
+    - name: Verificar SHA atual antes de acessar o jogo
+      id: current_head
+      run: |
+        git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+        MAIN_SHA="$(git rev-parse refs/remotes/origin/main)"
+        echo "main_sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
+        if [ "$MAIN_SHA" != "$GITHUB_SHA" ]; then
+          echo "stale=true" >> "$GITHUB_OUTPUT"
+          echo "::warning::Run obsoleta: $GITHUB_SHA foi substituido por $MAIN_SHA. O jogo nao sera acessado."
+        else
+          echo "stale=false" >> "$GITHUB_OUTPUT"
+        fi
+
     - name: Instalar servidor de tela virtual Xvfb
       # Xvfb fornece uma tela virtual para o navegador
       run: sudo apt-get update && sudo apt-get install -y xvfb
 
     - name: Restaurar registro persistente de retornos
       id: state_restore
-      if: vars.ENABLE_DEMAND_MANAGER != 'false'
+      if: vars.ENABLE_DEMAND_MANAGER != 'false' && steps.current_head.outputs.stale != 'true'
       env:
         GITHUB_TOKEN: ${{ github.token }}
         RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
@@ -108,6 +121,7 @@ jobs:
     # Secrets sao entregues diretamente ao processo, sem gravar senhas em .env.
     - name: Resolver modo e limite de decolagens
       id: departure_settings
+      if: steps.current_head.outputs.stale != 'true'
       env:
         AM4_INPUT_MODE: ${{ inputs.departure_mode || 'production' }}
         AM4_INPUT_EXECUTE: ${{ inputs.departure_mode == 'production' && 'true' || 'false' }}
@@ -118,6 +132,7 @@ jobs:
 
     - name: Executar bot Airline Manager 4
       id: bot
+      if: steps.current_head.outputs.stale != 'true'
       env:
         ENABLE_RETURN_JOURNAL: ${{ inputs.departure_mode == 'simulation' && 'false' || 'true' }}
         RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
