@@ -1,3 +1,6 @@
+export const MUTATION_COMPLETION_RESERVE_MS=240_000;
+export const MUTATION_PHASE_START_MINIMUM_MS=300_000;
+
 export type RunPhaseBudgetReason = 'TIME_BUDGET_AVAILABLE' | 'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PHASE';
 
 export interface RunPhaseBudgetDecision {

@@ -10,7 +10,7 @@ import { routeExecutionSettings, runRouteExecution } from '../optimization/route
 import { withRunLock } from '../utils/run-lock';
 import { loginForReadOnlyCollection } from '../utils/read-only-login';
 import { runInitialUiHealthCheck } from '../utils/ui-health';
-import { evaluateRunPhaseBudget } from '../utils/run-time-budget';
+import { evaluateRunPhaseBudget, MUTATION_PHASE_START_MINIMUM_MS } from '../utils/run-time-budget';
 import { test } from '@playwright/test';
 import { GeneralUtils } from '../utils/general.utils';
 import { FuelUtils } from '../utils/fuel.utils';
@@ -44,9 +44,9 @@ test('All Operations', async ({ page }) => {
       maintenance:180000,
       campaign:120000,
       fleetDemand:180000,
-      routeExecution:180000,
-      ticketPricing:120000,
-      departures:180000,
+      routeExecution:MUTATION_PHASE_START_MINIMUM_MS,
+      ticketPricing:MUTATION_PHASE_START_MINIMUM_MS,
+      departures:MUTATION_PHASE_START_MINIMUM_MS,
     } as const;
     const phaseBudgetDecisions:Array<ReturnType<typeof evaluateRunPhaseBudget>>=[];
     const recordPhaseBudget=()=> {

@@ -1,6 +1,7 @@
 import { AircraftSnapshot, CollectionResult, DemandConfig, DemandDecision } from './types';
 import { DemandManager } from './manager';
 import type { AdaptiveThreshold } from './adaptive-threshold';
+import { MUTATION_COMPLETION_RESERVE_MS } from '../utils/run-time-budget';
 import { resolveAircraftOrigin } from '../optimization/aircraft-origins';
 
 export interface DeparturePort {
@@ -54,8 +55,6 @@ function verifiedHistoricalFuelRequirement(a:AircraftSnapshot):{fuelLbs:number;s
   const values=[...new Set(matching.map(e=>e.fuelLbs))];
   return values.length===1?{fuelLbs:values[0],samples:matching.length}:null;
 }
-
-const MUTATION_COMPLETION_RESERVE_MS=240_000;
 
 /** No retries, bulk fallback, route mutations or financial modules. A report writer must persist BEFORE the click. */
 export class IndividualDepartureExecutor {
