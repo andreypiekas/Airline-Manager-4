@@ -96,6 +96,27 @@ export function relativeAgeMinutes(text:string):number|null{
 }
 
 /**
+ * UI relative ages are coarse labels, not timestamps. Preserve the complete
+ * bucket so reset inference cannot treat "6 hours ago" as exactly 360 minutes.
+ */
+export function relativeAgeIntervalMinutes(text:string):{lower:number;upper:number}|null{
+  const s=text.trim().toLowerCase();
+  let m=s.match(/^(\d+) (?:seconds?|secs?) ago$/);
+  if(m){const n=Number(m[1]);return {lower:n/60,upper:(n+1)/60};}
+  m=s.match(/^(\d+) (?:minutes?|mins?) ago$/);
+  if(m){const n=Number(m[1]);return {lower:n,upper:n+1};}
+  m=s.match(/^(\d+) (?:hours?|hrs?) ago$/);
+  if(m){const n=Number(m[1]);return {lower:n*60,upper:(n+1)*60};}
+  m=s.match(/^(\d+) days? ago$/);
+  if(m){const n=Number(m[1]);return {lower:n*1440,upper:(n+1)*1440};}
+  if(s==='a second ago'||s==='1 second ago')return {lower:1/60,upper:2/60};
+  if(s==='a minute ago'||s==='1 minute ago')return {lower:1,upper:2};
+  if(s==='an hour ago'||s==='1 hour ago')return {lower:60,upper:120};
+  if(s==='a day ago'||s==='1 day ago')return {lower:1440,upper:2880};
+  return null;
+}
+
+/**
  * Calibrates a pair-shared reset boundary from a current route where the live
  * daily-total label and the current remaining demand are both observed.
  * The exact consumed cabins must match a whole prefix of visible flight-history
@@ -115,34 +136,43 @@ export function calibrateDemandResetWindows(
     if(sample.matchesDailyTotal&&sample.matchesRemaining&&eq(consumed,zero())&&current?.flightHistory?.status==='observed'){
       const sameDirection=current.flightHistory.entries.flatMap(h=>{
         if(h.from!==sample.from||h.to!==sample.to||!valid(h.onboard)||CLASSES.every(k=>h.onboard[k]===0))return [];
-        const age=relativeAgeMinutes(h.relativeTime);return age===null?[]:[age];
+        const age=relativeAgeIntervalMinutes(h.relativeTime);return age===null?[]:[age];
       });
       if(sameDirection.length){
-        const newest=Math.min(...sameDirection);
-        if(Number.isFinite(newest)&&newest>0)base.upperBoundSources.push({
-          aircraftId:sample.aircraftId,routeId:sample.routeId,from:sample.from,to:sample.to,newestSameDirectionFlightAgeMinutes:newest
+        // No consumption means reset is newer than the newest same-direction
+        // flight. Its bucket upper edge is the safe reset-age upper bound.
+        const newestUpper=Math.min(...sameDirection.map(x=>x.upper));
+        if(Number.isFinite(newestUpper)&&newestUpper>0)base.upperBoundSources.push({
+          aircraftId:sample.aircraftId,routeId:sample.routeId,from:sample.from,to:sample.to,newestSameDirectionFlightAgeMinutes:newestUpper
         });
       }
     }
     const entries=collection.aircraft.flatMap(a=>(a.flightHistory?.status==='observed'?a.flightHistory.entries:[])
       .filter(h=>key(h.from,h.to)===pairKey)
       .flatMap(h=>{
-        const age=relativeAgeMinutes(h.relativeTime);
-        return age===null||!valid(h.onboard)?[]:[{age,onboard:h.onboard,aircraftId:a.aircraftId}];
+        const age=relativeAgeIntervalMinutes(h.relativeTime);
+        return age===null||!valid(h.onboard)?[]:[{lower:age.lower,upper:age.upper,onboard:h.onboard,aircraftId:a.aircraftId}];
       }));
     if(!entries.length)continue;
-    const buckets=[...new Set(entries.map(e=>e.age))].sort((a,b)=>a-b);
-    let running=zero(),matched:number|null=null;
-    for(const age of buckets){
-      for(const e of entries.filter(x=>x.age===age))running=add(running,e.onboard);
-      if(eq(running,consumed)){matched=age;break;}
+    const bucketLowers=[...new Set(entries.map(e=>e.lower))].sort((a,b)=>a-b);
+    let running=zero(),matchedLower:number|null=null;
+    for(const lower of bucketLowers){
+      for(const e of entries.filter(x=>x.lower===lower))running=add(running,e.onboard);
+      if(eq(running,consumed)){matchedLower=lower;break;}
       if(CLASSES.some(k=>running[k]>consumed[k]))break;
     }
-    if(matched===null)continue;
-    const older=buckets.find(x=>x>matched);
-    if(older===undefined)continue;
-    const sourceAircraftIds=[...new Set(entries.filter(e=>e.age<=matched).map(e=>e.aircraftId))].sort();
-    base.windows.push({pairKey,includedMaxAgeMinutes:matched,excludedMinAgeMinutes:older,consumed,observedAt:sample.observedAt,sourceAircraftIds});
+    if(matchedLower===null)continue;
+    const olderLower=bucketLowers.find(x=>x>matchedLower);
+    if(olderLower===undefined)continue;
+    const olderEntries=entries.filter(x=>x.lower===olderLower);
+    const excludedUpper=Math.max(...olderEntries.map(x=>x.upper));
+    if(!Number.isFinite(excludedUpper)||excludedUpper<=matchedLower)continue;
+    const sourceAircraftIds=[...new Set(entries.filter(e=>e.lower<=matchedLower).map(e=>e.aircraftId))].sort();
+    // The matched bucket proves only a lower bound on reset age; the first
+    // excluded bucket proves only an upper bound. Everything between remains
+    // ambiguous and historicalRemainingForCandidate already rejects pair
+    // flights crossing that gap.
+    base.windows.push({pairKey,includedMaxAgeMinutes:matchedLower,excludedMinAgeMinutes:excludedUpper,consumed,observedAt:sample.observedAt,sourceAircraftIds});
   }
   const unique=new Map<string,DemandResetWindow>();
   for(const w of base.windows){
