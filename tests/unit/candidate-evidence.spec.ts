@@ -58,3 +58,33 @@ test('candidate reconstruction can consume only a verified live-anchored stitche
  const r=candidateDemandEvidence({...quote,dailyDemand:{Y:100,J:20,F:5}},collection(a),now,300,calibration,[stitch]);
  expect(r).toMatchObject({status:'historical_pair_reconstructed',remaining:{Y:80,J:18,F:5},comparisonReady:false,reason:'HISTORICAL_PAIR_LEDGER_VERIFIED'});
 });
+
+
+test('reverse-only live route can bound a separately verified historical pair reconstruction',()=>{
+ const a=aircraft('1',true);
+ a.flightHistory={status:'observed',observedAt:now.toISOString(),source:'inspected-aircraft-flight-history',complete:false,
+  entries:[{relativeTime:'4 hours ago',from:'XAP',to:'GRU',registrationLabel:'SYNTHETIC',co2Quotas:0,onboard:{Y:20,J:2,F:0},fuelLbs:1,revenue:1}],
+  comparisonReady:false,mutationAuthorized:false};
+ const calibration:any={status:'upper_bound_only',windows:[],resetAgeUpperBoundMinutes:120,upperBoundSources:[],warnings:[],
+  comparisonReady:false,mutationAuthorized:false};
+ const r=candidateDemandEvidence({...quote,dailyDemand:{Y:150,J:30,F:5}},collection(a),now,300,calibration);
+ expect(r).toMatchObject({
+  status:'historical_pair_reconstructed_reverse_observed',
+  remaining:{Y:100,J:20,F:0},reverseRemaining:{Y:100,J:20,F:0},
+  reason:'HISTORICAL_PAIR_LEDGER_VERIFIED_WITH_REVERSE_LIVE_BOUND',
+  comparisonReady:false,demandNetOfOtherAircraft:false,
+  historical:{status:'verified',remaining:{Y:150,J:30,F:5}}
+ });
+});
+
+test('reverse-only live route remains blocked when historical pair reconstruction is not verified',()=>{
+ const a=aircraft('1',true);
+ a.flightHistory={status:'observed',observedAt:now.toISOString(),source:'inspected-aircraft-flight-history',complete:false,
+  entries:[{relativeTime:'30 minutes ago',from:'XAP',to:'GRU',registrationLabel:'SYNTHETIC',co2Quotas:0,onboard:{Y:20,J:2,F:0},fuelLbs:1,revenue:1}],
+  comparisonReady:false,mutationAuthorized:false};
+ const calibration:any={status:'upper_bound_only',windows:[],resetAgeUpperBoundMinutes:120,upperBoundSources:[],warnings:[],
+  comparisonReady:false,mutationAuthorized:false};
+ expect(candidateDemandEvidence({...quote,dailyDemand:{Y:150,J:30,F:5}},collection(a),now,300,calibration)).toMatchObject({
+  status:'reverse_direction_only',remaining:null,reverseRemaining:{Y:100,J:20,F:0},reason:'REVERSE_DIRECTION_SHARING_UNCONFIRMED'
+ });
+});

@@ -37,6 +37,21 @@ export function candidateDemandEvidence(quote: CandidateQuote, collection: Colle
     return group.length?{Y:Math.min(...group.map(s=>s.remaining.Y)),J:Math.min(...group.map(s=>s.remaining.J)),F:Math.min(...group.map(s=>s.remaining.F))}:null;
   };
   result.remaining=minimum(quote.from); result.reverseRemaining=minimum(quote.to);
+  if(!result.remaining&&result.reverseRemaining&&resetCalibration){
+    const historical=historicalRemainingForCandidate(quote.from,quote.to,quote.dailyDemand,collection,resetCalibration,stitches);
+    if(historical?.status==='verified'&&historical.remaining){
+      // A reverse live reading is an independent conservative upper bound on
+      // the pair reconstruction. Never let history claim more than the live
+      // opposite direction already exposes.
+      const bounded:Cabins={
+        Y:Math.min(historical.remaining.Y,result.reverseRemaining.Y),
+        J:Math.min(historical.remaining.J,result.reverseRemaining.J),
+        F:Math.min(historical.remaining.F,result.reverseRemaining.F)
+      };
+      return {...result,status:'historical_pair_reconstructed_reverse_observed',remaining:{...bounded},reverseRemaining:{...bounded},
+        reason:'HISTORICAL_PAIR_LEDGER_VERIFIED_WITH_REVERSE_LIVE_BOUND',historical};
+    }
+  }
   result.status=result.remaining?'direction_observed':'reverse_direction_only';
   result.reason=result.remaining?'OBSERVED_BEFORE_FUTURE_RESERVATIONS':'REVERSE_DIRECTION_SHARING_UNCONFIRMED';
   return result;
