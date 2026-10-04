@@ -84,7 +84,7 @@ const sameTargetEvidence=(a:RouteExecutionCandidate,b:RouteExecutionCandidate)=>
 const sanitizedPrepareDiagnostic=(error:unknown)=>{
   const message=error instanceof Error?error.message:'';
   if(/^[A-Z][A-Z0-9_]{2,100}$/.test(message))return message;
-  if(/timeout/i.test(message))return 'PLAYWRIGHT_TIMEOUT';
+  if(/timeout|timed\s*out/i.test(message))return 'PLAYWRIGHT_TIMEOUT';
   return 'UNCLASSIFIED_PREPARE_FAILURE';
 };
 
