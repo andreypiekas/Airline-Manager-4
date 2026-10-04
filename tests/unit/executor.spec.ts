@@ -59,7 +59,7 @@ test('countdown belonging to a different aircraft cannot confirm departure',asyn
 
 test('run time budget holds before mutation and never creates an uncertain result',async()=>{
  const s=setup({mutationDeadlineEpochMs:Date.now()-1});const r=await s.executor.run();
- expect(s.clicks()).toBe(0);expect(r.halted).toBe(false);expect(r.summary).toMatchObject({departed:0,unknown:0,held:1});expect(r.entries[0].reason).toBe('RUN_TIME_BUDGET_EXHAUSTED_BEFORE_MUTATION');
+ expect(s.clicks()).toBe(0);expect(r.halted).toBe(false);expect(r.summary).toMatchObject({departed:0,unknown:0,held:1});expect(r.entries[0].reason).toBe('RUN_TIME_BUDGET_EXHAUSTED_BEFORE_EVALUATION');
 });
 
 

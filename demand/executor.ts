@@ -55,7 +55,7 @@ function verifiedHistoricalFuelRequirement(a:AircraftSnapshot):{fuelLbs:number;s
   return values.length===1?{fuelLbs:values[0],samples:matching.length}:null;
 }
 
-const MUTATION_COMPLETION_RESERVE_MS=90_000;
+const MUTATION_COMPLETION_RESERVE_MS=240_000;
 
 /** No retries, bulk fallback, route mutations or financial modules. A report writer must persist BEFORE the click. */
 export class IndividualDepartureExecutor {
