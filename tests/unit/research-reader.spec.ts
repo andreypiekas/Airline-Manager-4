@@ -19,7 +19,7 @@ function collection(a = snapshot()): CollectionResult {return {aircraft:[a],comp
 
 async function fixture(page:Page, options: Record<string,boolean> = {}) {
   await page.route('**/*',r=>r.abort());
-  await page.setContent(`<div id="mapRoutes" onclick="hideAllWhenClick();menuFleet('Routes');">Fleet</div><div id="routeAction"><div id="routesContainer"></div></div><div id="detailsAction" style="display:none"></div><div id="flightInfoContainer" style="display:none"></div><div id="newRouteInfo" style="display:none"></div><script>
+  await page.setContent(`<button>Routes (${options.secondPage?2:1})</button><div id="mapRoutes" onclick="hideAllWhenClick();menuFleet('Routes');">Fleet</div><div id="routeAction"><div id="routesContainer"></div></div><div id="detailsAction" style="display:none"></div><div id="flightInfoContainer" style="display:none"></div><div id="newRouteInfo" style="display:none"></div><script>
   const options=${JSON.stringify(options)}; const intro=0;window.mutations=0;window.researches=0;window.resets=0;
   function playSound(){} function closePop(){document.querySelector('#routeAction').style.display='none';document.querySelector('#detailsAction').style.display='none'}
   function hideAllWhenClick(){}
