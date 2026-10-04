@@ -26,7 +26,7 @@ export class DemandReader {
       await this.page.locator('#routesContainer').waitFor({ state: 'visible', timeout: this.timeout });
       const heading = await this.page.getByRole('button', { name: /^Routes\s*\(\d+\)$/ }).innerText();
       result.expectedRoutes = integerText(heading.match(/\((\d+)\)/)![1]);
-      const maxPages=routePageLimit(result.expectedRoutes);
+      let maxPages=1;
       for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
         const rows = this.page.locator('#routesContainer [id^="routeMainList"]');
         if (result.expectedRoutes > 0) await rows.first().waitFor({ state: 'visible', timeout: this.timeout });
@@ -46,6 +46,7 @@ export class DemandReader {
             onboardText: ((el as HTMLElement).innerText.match(/Onboard:[^\n]*/) || [''])[0].trim(),
             inflight: visible && /Onboard\s*:/.test((el as HTMLElement).innerText) };
         }), AIRCRAFT_DETAILS_CONTROL);
+        if(pageIndex===0)maxPages=routePageLimit(result.expectedRoutes,Math.max(1,cards.length));
         for (const card of cards) {
           if (seenRoutes.has(card.routeId)) throw new Error('PAGINATION_DUPLICATE');
           seenRoutes.add(card.routeId);

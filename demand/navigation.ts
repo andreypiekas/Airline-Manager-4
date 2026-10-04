@@ -33,7 +33,9 @@ export async function findFleetRoute(page: Page, aircraft: AircraftSnapshot, tim
   const matchCount=heading.match(/^Routes\s*\((\d+)\)$/);
   if(!matchCount)throw new Error('RESEARCH_ROUTE_COUNT_UNAVAILABLE');
   const totalRoutes=Number(matchCount[1]);
-  const maxPages=routePageLimit(totalRoutes);
+  const firstPageRows=await page.locator('#routesContainer [id^="routeMainList"]').count();
+  if(totalRoutes>0&&firstPageRows<1)throw new Error('RESEARCH_ROUTE_COUNT_UNAVAILABLE');
+  const maxPages=routePageLimit(totalRoutes,Math.max(1,firstPageRows));
   const seen = new Set<string>();
   for (let index=0; index<maxPages; index++) {
     const rows = page.locator('#routesContainer [id^="routeMainList"]');
