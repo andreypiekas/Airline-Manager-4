@@ -1,5 +1,5 @@
 import { Page } from '@playwright/test';
-import { mkdir,open,rename,writeFile } from 'node:fs/promises';
+import { mkdir,open,readFile,rename,writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { DemandSimulationContext } from '../demand/run';
 import type { Cabins } from '../demand/types';
@@ -7,7 +7,8 @@ import { PlaywrightRouteExecutionPort } from './route-playwright-port';
 import { RouteMutationExecutor,type RouteExecutionCandidate,type RouteExecutionReport } from './route-executor';
 import { optimizationConfig } from './report';
 import { resolveAircraftOrigin } from './aircraft-origins';
-import { appendConfirmedRerouteReviews, appendUncertainRouteMutations, appendVerifiedKeepRouteDecisions, readUnresolvedRouteAircraftIds } from './return-journal';
+import { appendConfirmedRerouteReviews, appendUncertainRouteMutations, appendVerifiedKeepRouteDecisions, readUnresolvedRouteAircraftIds, validateReturnJournal } from './return-journal';
+import { dailyReviewDue } from './review-schedule';
 
 export interface RouteExecutionRuntimeSettings {
   enabled:boolean;
@@ -74,6 +75,19 @@ export async function runRouteExecution(
   const blockedAircraftIds=optimization.returnJournal
     ? await readUnresolvedRouteAircraftIds(optimization.returnJournal.directory,optimization.returnJournal.scope)
     : new Set<string>();
+  const reviewedTodayAircraftIds=new Set<string>();
+  if(optimization.returnJournal){
+    const reviewGateNow=new Date();
+    const journal=validateReturnJournal(
+      JSON.parse(await readFile(join(optimization.returnJournal.directory,'return-journal.json'),'utf8')),
+      optimization.returnJournal.scope,reviewGateNow
+    );
+    for(const aircraft of context.collection.aircraft){
+      const origin=resolveAircraftOrigin(aircraft,context.collection,optimization.aircraftOrigins,optimization.airlineBases).origin;
+      if(origin&&!dailyReviewDue(aircraft.aircraftId,origin,journal,reviewGateNow,optimization.reviewTimeZone))
+        reviewedTodayAircraftIds.add(aircraft.aircraftId);
+    }
+  }
   await mkdir(directory,{recursive:true});
   const marker=await open(join(directory,'route-execution.started'),'wx');await marker.close();
 
@@ -96,7 +110,7 @@ export async function runRouteExecution(
 
   const executor=new RouteMutationExecutor(
     new PlaywrightRouteExecutionPort(page),
-    {...settings,blockedAircraftIds},
+    {...settings,blockedAircraftIds,reviewedTodayAircraftIds},
     save
   );
   const report=await executor.run(

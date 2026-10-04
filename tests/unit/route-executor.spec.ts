@@ -112,3 +112,14 @@ test('expired global deadline holds reroute before mutation and creates no uncer
  expect(prepares).toBe(1);expect(port.reroutes).toBe(0);expect(r.halted).toBe(false);
  expect(r.entries[0]).toMatchObject({status:'held',mutationAuthorized:false,reason:'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_ROUTE_MUTATION'});
 });
+
+
+test('completed daily route review blocks before prepare or reroute',async()=>{
+ const port=new FakePort();let prepares=0;
+ port.prepare=async(expected,target)=>{prepares++;return {aircraft:{...expected},target:{...target}};};
+ const r=await new RouteMutationExecutor(port,{
+   enabled:true,maxReroutes:1,maxAgeSeconds:300,reviewedTodayAircraftIds:new Set(['101'])
+ },async()=>{}).run([aircraft()],[decision],[candidate()]);
+ expect(prepares).toBe(0);expect(port.reroutes).toBe(0);expect(r.halted).toBe(false);
+ expect(r.entries[0]).toMatchObject({status:'held',mutationAuthorized:false,reason:'DAILY_ROUTE_REVIEW_ALREADY_COMPLETED'});
+});
