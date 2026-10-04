@@ -51,27 +51,37 @@ export function planVariableRouteDecision(
   const comparable=candidates.filter(c=>c.comparisonReady&&c.variableCycleComparison.comparisonReady&&
     c.variableCycleComparison.status!=='unavailable'&&c.candidateVariableCycle.status==='verified_interval');
   if(!comparable.length)return {...base,decision:'hold',reason:'NO_VERIFIED_VARIABLE_CYCLE_COMPARISON'};
+  // KEEP means every inspected candidate was actually compared. A partial set
+  // can never prove that the current route should be retained.
+  if(comparable.length!==candidates.length)return {
+    ...base,decision:'hold',compared:comparable.length,
+    reason:'INCOMPLETE_VERIFIED_CANDIDATE_COMPARISON_SET'
+  };
 
-  const dominant=comparable.filter(c=>c.variableCycleComparison.status==='candidate_dominates'&&
+  const economicDominant=comparable.filter(c=>c.variableCycleComparison.status==='candidate_dominates'&&
     finite(c.candidateVariableCycle.recurringCycleProfitPerHour.low)&&
-    finite(c.candidateVariableCycle.firstCycleAfterSetup.low)&&c.candidateVariableCycle.firstCycleAfterSetup.low!>0&&
-    c.routeMutationControl?.nativeClickReady===true&&c.routeMutationControl.endpointVerified===true&&
-    c.routeMutationControl.targetVerified===true&&c.routeMutationControl.aircraftIdMatchesContext===true&&
-    c.routeMutationControl.airportIdMatchesContext===true);
+    finite(c.candidateVariableCycle.firstCycleAfterSetup.low)&&c.candidateVariableCycle.firstCycleAfterSetup.low!>0);
 
-  if(!dominant.length)return {
+  if(!economicDominant.length)return {
     ...base,decision:'keep_route',compared:comparable.length,dominating:0,
     reason:'NO_INSPECTED_CANDIDATE_PROVES_CONSERVATIVE_DOMINANCE'
   };
 
-  dominant.sort((a,b)=>
+  economicDominant.sort((a,b)=>
     b.candidateVariableCycle.recurringCycleProfitPerHour.low!-a.candidateVariableCycle.recurringCycleProfitPerHour.low!||
     b.candidateVariableCycle.firstCycleAfterSetup.low!-a.candidateVariableCycle.firstCycleAfterSetup.low!||
     a.to.localeCompare(b.to)
   );
-  const best=dominant[0];
+  const best=economicDominant[0];
+  const control=best.routeMutationControl;
+  if(!control?.nativeClickReady||!control.endpointVerified||!control.targetVerified||
+    !control.aircraftIdMatchesContext||!control.airportIdMatchesContext)return {
+      ...base,decision:'hold',compared:comparable.length,dominating:economicDominant.length,
+      reason:'BEST_DOMINANT_CANDIDATE_MUTATION_CONTROL_UNVERIFIED'
+    };
+
   return {
-    ...base,decision:'would_reroute',compared:comparable.length,dominating:dominant.length,
+    ...base,decision:'would_reroute',compared:comparable.length,dominating:economicDominant.length,
     selected:{
       from:best.from,to:best.to,airportId:best.airportId,
       conservativeProfitPerHour:best.candidateVariableCycle.recurringCycleProfitPerHour.low!,

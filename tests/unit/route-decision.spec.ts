@@ -30,9 +30,10 @@ test('keeps route when no inspected candidate proves conservative dominance',()=
   expect(r).toMatchObject({decision:'keep_route',compared:2,dominating:0,selected:null});
 });
 
-test('dominant economics without verified native target cannot produce reroute plan',()=>{
+test('dominant economics without verified native target stays HOLD, never KEEP',()=>{
   const r=planVariableRouteDecision('101',[candidate('AAA',1000,'candidate_dominates',false)]);
-  expect(r).toMatchObject({decision:'keep_route',dominating:0,mutationAuthorized:false});
+  expect(r).toMatchObject({decision:'hold',compared:1,dominating:1,selected:null,
+    reason:'BEST_DOMINANT_CANDIDATE_MUTATION_CONTROL_UNVERIFIED',mutationAuthorized:false});
 });
 
 test('incomplete comparison set fails closed',()=>{
@@ -57,4 +58,21 @@ test('HOLD never promotes aggregate route comparison readiness',()=>{
   expect(routeDecisionSetComparisonReady([{...hold,decision:'unavailable'}])).toBe(false);
   expect(routeDecisionSetComparisonReady([{...hold,decision:'keep_route'}])).toBe(true);
   expect(routeDecisionSetComparisonReady([{...hold,decision:'would_reroute'}])).toBe(true);
+});
+
+
+test('partially verified candidate set stays HOLD instead of prematurely KEEP or REROUTE',()=>{
+  const ready=candidate('AAA',1000,'keep_current');
+  const incomplete=candidate('BBB',1500,'candidate_dominates');incomplete.comparisonReady=false;
+  const r=planVariableRouteDecision('101',[ready,incomplete]);
+  expect(r).toMatchObject({decision:'hold',compared:1,dominating:0,selected:null,
+    reason:'INCOMPLETE_VERIFIED_CANDIDATE_COMPARISON_SET',mutationAuthorized:false});
+});
+
+test('best economic dominant must itself have native mutation evidence',()=>{
+  const best=candidate('BBB',1500,'candidate_dominates',false);
+  const second=candidate('AAA',1200,'candidate_dominates',true);
+  const r=planVariableRouteDecision('101',[best,second]);
+  expect(r).toMatchObject({decision:'hold',compared:2,dominating:2,selected:null,
+    reason:'BEST_DOMINANT_CANDIDATE_MUTATION_CONTROL_UNVERIFIED'});
 });
