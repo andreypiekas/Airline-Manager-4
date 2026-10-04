@@ -1,6 +1,7 @@
 import type { AircraftSnapshot, Cabins } from '../demand/types';
 import type { VariableRouteDecision } from './route-decision';
 import type { RouteMutationControlEvidence } from './route-mutation-control';
+import { MUTATION_COMPLETION_RESERVE_MS } from '../utils/run-time-budget';
 
 export interface RouteExecutionCandidate {
   aircraftId:string;
