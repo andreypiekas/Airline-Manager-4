@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { withRunLock } from '../utils/run-lock';
 import { reviewEventId, RouteOptimizer, RoutePlan, RouteReview } from './route-optimizer';
 import { reviewDay } from './review-schedule';
-import type { AircraftSnapshot } from '../demand/types';
+import type { AircraftSnapshot, CollectionResult } from '../demand/types';
 
 type CompletedDecision = 'would_reroute' | 'keep_route' | 'hold';
 interface RoutePerformanceEvidence { routeId:string; viable:boolean; netProfit:number|null; netProfitPerHour:number|null; occupancyPercentages:number[] }
@@ -13,11 +13,12 @@ interface Entry { aircraftId: string; origin: string; flightId: string; reviewed
 export interface FlightHistoryAnchorEvent { eventId:string; type:'flight-history-anchor'; aircraftId:string; registration:string; observedAt:string; cycles:number; rows:Array<{relativeTime:string;from:string;to:string;co2Quotas:number;onboard:{Y:number;J:number;F:number};fuelLbs:number;revenue:number}> }
 export interface UncertainDepartureEvent { eventId:string; type:'departure-uncertain'; aircraftId:string; registration:string; routeId:string; from:string; to:string; observedAt:string; result:'outcome_unknown'; reason:string; sourceRunId:string }
 export interface UncertainSupplyEvent { eventId:string; type:'supply-uncertain'; kind:'fuel'|'co2'; observedAt:string; result:'outcome_unknown'; reason:string; sourceRunId:string; pricePer1000:number; quantity:number; quotedCost:number }
+export interface ArrivalObservationEvent { eventId:string; type:'arrival-observed'; departureEventId:string; aircraftId:string; registration:string; routeId:string; from:string; to:string; departedAt:string; observedAt:string; result:'arrived_observed' }
 export interface DepartureHistoryEvent { eventId:string; type:'departure'; aircraftId:string; registration:string; routeId:string; from:string; to:string; observedAt:string; result:'departed'; demand:{ availableBefore:{Y:number;J:number;F:number}; possiblePassengers:{Y:number;J:number;F:number}; occupancyPercentage:number }; actualOnboard:{Y:number;J:number;F:number} }
 export interface SupplyObservationEvent { eventId:string; type:'supply-observation'; kind:'fuel'|'co2'; observedAt:string; pricePer1000:number; holding:number; remainingCapacity:number; balance:number }
 export interface UiHealthObservation { eventId:string; type:'ui-health'; observedAt:string; status:'healthy'; surfaces:string[] }
 export interface DemandHoldObservation { eventId:string; type:'demand-hold'; aircraftId:string; routeId:string; observedAt:string; occupancyPercentage:number; reason:'hold_insufficient' }
-export interface Journal { schemaVersion: 1; scope: string; entries: Entry[]; events?:Array<DepartureHistoryEvent|FlightHistoryAnchorEvent|UncertainDepartureEvent|UncertainSupplyEvent>; supplyObservations?:SupplyObservationEvent[]; holdObservations?:DemandHoldObservation[]; uiHealthObservations?:UiHealthObservation[] }
+export interface Journal { schemaVersion: 1; scope: string; entries: Entry[]; events?:Array<DepartureHistoryEvent|FlightHistoryAnchorEvent|UncertainDepartureEvent|UncertainSupplyEvent|ArrivalObservationEvent>; supplyObservations?:SupplyObservationEvent[]; holdObservations?:DemandHoldObservation[]; uiHealthObservations?:UiHealthObservation[] }
 export interface JournalOptions {
   /** Durable directory supplied by the caller; ephemeral Actions runners require explicit transport. */
   directory: string;
@@ -212,6 +213,7 @@ const validUncertainDepartureEvent=(v:unknown,now:Date):v is UncertainDepartureE
 export function unresolvedDepartureKeys(journal:Journal):ReadonlySet<string>{return new Set((journal.events||[]).filter((e):e is UncertainDepartureEvent=>e.type==='departure-uncertain').map(e=>e.aircraftId+':'+e.routeId));}
 export async function readUnresolvedDepartureKeys(directory:string,scope:string,now=new Date()):Promise<ReadonlySet<string>>{return unresolvedDepartureKeys(validateReturnJournal(JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8')),scope,now));}
 const validUncertainSupplyEvent=(v:unknown,now:Date):v is UncertainSupplyEvent=>{if(!v||typeof v!=='object')return false;const x=v as UncertainSupplyEvent;return Object.keys(x).sort().join(',')==='eventId,kind,observedAt,pricePer1000,quantity,quotedCost,reason,result,sourceRunId,type'&&validId(x.eventId)&&x.type==='supply-uncertain'&&['fuel','co2'].includes(x.kind)&&typeof x.observedAt==='string'&&Number.isFinite(Date.parse(x.observedAt))&&Date.parse(x.observedAt)<=now.getTime()&&x.result==='outcome_unknown'&&/^[A-Z0-9_:-]{1,160}$/.test(x.reason)&&validId(x.sourceRunId)&&Number.isSafeInteger(x.pricePer1000)&&x.pricePer1000>0&&Number.isSafeInteger(x.quantity)&&x.quantity>0&&Number.isSafeInteger(x.quotedCost)&&x.quotedCost>0;};
+const validArrivalObservationEvent=(v:unknown,now:Date):v is ArrivalObservationEvent=>{if(!v||typeof v!=='object')return false;const x=v as ArrivalObservationEvent;const departed=Date.parse(x.departedAt),observed=Date.parse(x.observedAt);return Object.keys(x).sort().join(',')==='aircraftId,departedAt,departureEventId,eventId,from,observedAt,registration,result,routeId,to,type'&&validId(x.eventId)&&x.type==='arrival-observed'&&validId(x.departureEventId)&&validId(x.aircraftId)&&typeof x.registration==='string'&&x.registration.length>0&&x.registration.length<=100&&validId(x.routeId)&&validOrigin(x.from)&&validOrigin(x.to)&&x.from!==x.to&&typeof x.departedAt==='string'&&typeof x.observedAt==='string'&&Number.isFinite(departed)&&Number.isFinite(observed)&&departed<observed&&observed<=now.getTime()&&x.result==='arrived_observed';};
 export function unresolvedSupplyKinds(journal:Journal):ReadonlySet<'fuel'|'co2'>{return new Set((journal.events||[]).filter((e):e is UncertainSupplyEvent=>e.type==='supply-uncertain').map(e=>e.kind));}
 export async function readUnresolvedSupplyKinds(directory:string,scope:string,now=new Date()):Promise<ReadonlySet<'fuel'|'co2'>>{return unresolvedSupplyKinds(validateReturnJournal(JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8')),scope,now));}
 const validDepartureEvent=(v:unknown,now:Date):v is DepartureHistoryEvent=>{
@@ -239,7 +241,8 @@ export function validateReturnJournal(value: unknown, scope: string, now: Date):
     seen.add(key(e));
   }
   const eventIds=new Set<string>();
-  for(const e of data.events||[]){const type=(e as any)?.type;const ok=type==='departure'?validDepartureEvent(e,now):type==='departure-uncertain'?validUncertainDepartureEvent(e,now):type==='supply-uncertain'?validUncertainSupplyEvent(e,now):type==='flight-history-anchor'?validFlightHistoryAnchor(e,now):false;if(!ok||eventIds.has((e as any).eventId))throw new Error('JOURNAL_INVALID');eventIds.add((e as any).eventId);}
+  for(const e of data.events||[]){const type=(e as any)?.type;const ok=type==='departure'?validDepartureEvent(e,now):type==='departure-uncertain'?validUncertainDepartureEvent(e,now):type==='supply-uncertain'?validUncertainSupplyEvent(e,now):type==='arrival-observed'?validArrivalObservationEvent(e,now):type==='flight-history-anchor'?validFlightHistoryAnchor(e,now):false;if(!ok||eventIds.has((e as any).eventId))throw new Error('JOURNAL_INVALID');eventIds.add((e as any).eventId);}
+  for(const e of data.events||[])if(e.type==='arrival-observed'){const source=(data.events||[]).filter((x):x is DepartureHistoryEvent=>x.type==='departure'&&x.eventId===e.departureEventId);if(source.length!==1)throw new Error('JOURNAL_INVALID');const d=source[0];if(d.aircraftId!==e.aircraftId||d.registration!==e.registration||d.routeId!==e.routeId||d.from!==e.from||d.to!==e.to||d.observedAt!==e.departedAt)throw new Error('JOURNAL_INVALID');}
   const uiIds=new Set<string>();for(const e of data.uiHealthObservations||[]){if(!validUiHealthObservation(e,now)||uiIds.has(e.eventId))throw new Error('JOURNAL_INVALID');uiIds.add(e.eventId);}
   const supplyIds=new Set<string>();for(const e of data.supplyObservations||[]){if(!validSupplyObservation(e,now)||supplyIds.has(e.eventId))throw new Error('JOURNAL_INVALID');supplyIds.add(e.eventId);}
   const holdIds=new Set<string>();for(const e of data.holdObservations||[]){if(!validHoldObservation(e,now)||holdIds.has(e.eventId))throw new Error('JOURNAL_INVALID');holdIds.add(e.eventId);}
@@ -276,6 +279,41 @@ export async function appendUncertainSupplyOperation(directory:string,scope:stri
  const root=resolve(directory);await mkdir(root,{recursive:true});return withRunLock(async()=>{const filename=join(root,'return-journal.json');const data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);const events=data.events?[...data.events]:[];if(events.some(x=>x.eventId===event.eventId))return false;if(events.length>=100000)throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');events.push(event);data.events=events;const temporary=join(root,`return-journal.${randomUUID()}.tmp`);try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(data,null,2)+'\n');await file.sync();}finally{await file.close();}await rename(temporary,filename);}catch{throw new Error('JOURNAL_SAVE_FAILED: quarentena de suprimento incerto nao persistida.');}finally{await unlink(temporary).catch(()=>undefined);}return true;},join(root,'.return-journal.lock'));
 }
 export async function appendUncertainDepartures(directory:string,scope:string,runId:string,report:{entries:any[]},now=new Date()):Promise<number>{if(!validId(scope)||!validId(runId)||!Number.isFinite(now.getTime()))throw new Error('JOURNAL_CONFIG_INVALID');const root=resolve(directory);await mkdir(root,{recursive:true});return withRunLock(async()=>{const filename=join(root,'return-journal.json');const data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);const events=data.events?[...data.events]:[];let added=0;for(const e of report.entries||[]){if(e?.status!=='outcome_unknown'||typeof e.reason!=='string'||!e.reason.startsWith('NO_RETRY_AFTER_CLICK_ATTEMPT:'))continue;const event:UncertainDepartureEvent={eventId:`unc_${runId}_${e.aircraftId}_${e.routeId}`,type:'departure-uncertain',aircraftId:e.aircraftId,registration:e.registration,routeId:e.routeId,from:e.from,to:e.to,observedAt:now.toISOString(),result:'outcome_unknown',reason:e.reason,sourceRunId:runId};if(!validUncertainDepartureEvent(event,now))throw new Error('JOURNAL_UNCERTAIN_DEPARTURE_INVALID');if(events.some(x=>x.eventId===event.eventId))continue;events.push(event);added++;}if(!added)return 0;data.events=events;const temporary=join(root,`return-journal.${randomUUID()}.tmp`);try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(data,null,2)+'\n');await file.sync();}finally{await file.close();}await rename(temporary,filename);}finally{await unlink(temporary).catch(()=>undefined);}return added;},join(root,'.return-journal.lock'));}
+
+/**
+ * Closes only the newest confirmed departure for an aircraft when a later,
+ * unique live snapshot proves it is ready at that departure's destination and
+ * the same route is now reversed. observedAt is the observation time, never an
+ * invented landing timestamp. A newer uncertain departure keeps the chain open.
+ */
+export async function appendObservedArrivals(directory:string,scope:string,collection:CollectionResult,now=new Date()):Promise<number>{
+ if(!validId(scope)||!Number.isFinite(now.getTime())||!collection||!Array.isArray(collection.aircraft))throw new Error('JOURNAL_CONFIG_INVALID');
+ if(!collection.complete)return 0;
+ const root=resolve(directory);await mkdir(root,{recursive:true});
+ return withRunLock(async()=>{
+  const filename=join(root,'return-journal.json');const data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);
+  const events=data.events?[...data.events]:[];const reconciled=new Set(events.filter((e):e is ArrivalObservationEvent=>e.type==='arrival-observed').map(e=>e.departureEventId));
+  const counts=new Map<string,number>();for(const a of collection.aircraft)counts.set(a.aircraftId,(counts.get(a.aircraftId)||0)+1);
+  let added=0;
+  for(const a of collection.aircraft){
+   const observed=Date.parse(a.observedAt);
+   if(counts.get(a.aircraftId)!==1||a.state!=='ready'||a.issue||!validId(a.aircraftId)||!validId(a.routeId)||typeof a.registration!=='string'||!a.registration||
+      !validOrigin(a.from)||!validOrigin(a.to)||a.from===a.to||!Number.isFinite(observed)||observed>now.getTime())continue;
+   const mutations=events.filter((e):e is DepartureHistoryEvent|UncertainDepartureEvent=>(e.type==='departure'||e.type==='departure-uncertain')&&e.aircraftId===a.aircraftId&&Date.parse(e.observedAt)<observed)
+     .sort((x,y)=>Date.parse(x.observedAt)-Date.parse(y.observedAt));
+   const latest=mutations.at(-1);if(!latest||latest.type!=='departure'||reconciled.has(latest.eventId))continue;
+   if(latest.registration!==a.registration||latest.routeId!==a.routeId||a.from!==latest.to||a.to!==latest.from)continue;
+   const event:ArrivalObservationEvent={eventId:`arr_${latest.eventId}`,type:'arrival-observed',departureEventId:latest.eventId,aircraftId:latest.aircraftId,registration:latest.registration,
+     routeId:latest.routeId,from:latest.from,to:latest.to,departedAt:latest.observedAt,observedAt:a.observedAt,result:'arrived_observed'};
+   if(!validArrivalObservationEvent(event,now))throw new Error('JOURNAL_ARRIVAL_EVENT_INVALID');
+   if(events.some(e=>e.eventId===event.eventId))continue;
+   events.push(event);reconciled.add(latest.eventId);added++;
+  }
+  if(!added)return 0;if(events.length>100000)throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');data.events=events;
+  const temporary=join(root,`return-journal.${randomUUID()}.tmp`);try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(data,null,2)+'\n');await file.sync();}finally{await file.close();}await rename(temporary,filename);}
+  catch{throw new Error('JOURNAL_SAVE_FAILED: chegada observada nao persistida.');}finally{await unlink(temporary).catch(()=>undefined);}return added;
+ },join(root,'.return-journal.lock'));
+}
 export async function appendConfirmedDepartures(directory:string,scope:string,runId:string,report:{entries:any[]},now=new Date()):Promise<number>{
   if(!validId(scope)||!validId(runId)||!Number.isFinite(now.getTime()))throw new Error('JOURNAL_CONFIG_INVALID');
   const root=resolve(directory);await mkdir(root,{recursive:true});
