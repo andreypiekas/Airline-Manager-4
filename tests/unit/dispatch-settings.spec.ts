@@ -49,7 +49,10 @@ test('main workflow skips every game-access step when queued SHA is stale',async
  expect(s).toContain('name: Verificar SHA atual antes de acessar o jogo');
  expect(s).toContain('git rev-parse refs/remotes/origin/main');
  expect(s).toContain('echo "stale=true" >> "$GITHUB_OUTPUT"');
- expect(s).toContain("if: steps.current_head.outputs.stale != 'true'\n      run: |");
  expect(s).toContain("if: vars.ENABLE_DEMAND_MANAGER != 'false' && steps.current_head.outputs.stale != 'true'");
+ for(const step of ['Instalar servidor de tela virtual Xvfb','Resolver modo e limite de decolagens','Executar bot Airline Manager 4']){
+  const block=s.slice(s.indexOf('name: '+step),s.indexOf('name: '+step)+800);
+  expect(block).toContain("if: steps.current_head.outputs.stale != 'true'");
+ }
  expect(s.match(/if: steps\.current_head\.outputs\.stale != 'true'/g)?.length).toBeGreaterThanOrEqual(3);
 });
