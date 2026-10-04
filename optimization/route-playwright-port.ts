@@ -6,6 +6,11 @@ import { readOpenCandidateQuoteAfterVerifiedAjax } from './quote-reader';
 import { readRouteMutationControl } from './route-mutation-control';
 import type { RouteExecutionCandidate, RouteExecutionPort } from './route-executor';
 
+export function routePrepareStepTimeout(timeout:number){
+  if(!Number.isSafeInteger(timeout)||timeout<1||timeout>60_000)throw new Error('ROUTE_TIMEOUT_INVALID');
+  return Math.min(timeout,5_000);
+}
+
 const sameCabins=(a:Cabins,b:Cabins)=>CLASSES.every(k=>a[k]===b[k]);
 const sameTarget=(a:RouteExecutionCandidate,b:RouteExecutionCandidate)=>
   a.aircraftId===b.aircraftId&&a.from===b.from&&a.to===b.to&&a.airportId===b.airportId&&
@@ -34,9 +39,15 @@ export class PlaywrightRouteExecutionPort implements RouteExecutionPort {
 
   private async openTarget(expected:AircraftSnapshot,target:RouteExecutionCandidate){
     this.prepared=null;
-    await openFleetList(this.page,this.timeout);
-    await findFleetRoute(this.page,expected,this.timeout);
-    const fresh=await new DemandReader(this.page,this.timeout,true).readReadyAircraftDetails(expected);
+    const timeout=routePrepareStepTimeout(this.timeout);
+    // Several passive locator reads inside the fresh-context verification do not
+    // carry their own timeout. Bound those reads as well so a stale/partial UI
+    // cannot consume the whole workflow deadline before any mutation attempt.
+    this.page.setDefaultTimeout(timeout);
+    try{
+    await openFleetList(this.page,timeout);
+    await findFleetRoute(this.page,expected,timeout);
+    const fresh=await new DemandReader(this.page,timeout,true).readReadyAircraftDetails(expected);
     if(!strictContext(expected,fresh))throw new Error('ROUTE_CURRENT_CONTEXT_CHANGED');
 
     const reroute=this.page.locator('#detailsAction').getByRole('button',{name:/^Reroute$/});
@@ -44,10 +55,10 @@ export class PlaywrightRouteExecutionPort implements RouteExecutionPort {
     const match=callback.match(/^showFlightInfo\(this,(\d+),(\d+),false,true\);closePop\(\);$/);
     if(await reroute.count()!==1||!await reroute.isVisible()||!await reroute.isEnabled()||
       !match||match[1]!==fresh.aircraftId)throw new Error('ROUTE_PLANNER_CONTROL_UNVERIFIED');
-    await reroute.click({timeout:this.timeout});
+    await reroute.click({timeout});
 
     const suggest=this.page.locator('#flightInfoContainer #introSuggest');
-    await suggest.waitFor({state:'visible',timeout:this.timeout});
+    await suggest.waitFor({state:'visible',timeout});
     const suggestCallback=(await suggest.getAttribute('onclick')||'').replace(/\s/g,'');
     const expectedSuggest=`playSound('neutral_click');Ajax('add_airports.php?mode=suggest&id=${fresh.aircraftId}','runme',this,false,true);`;
     if(!suggestCallback.startsWith(expectedSuggest.replace(/\s/g,'')))throw new Error('ROUTE_PLANNER_CONTEXT_UNVERIFIED');
@@ -59,7 +70,7 @@ export class PlaywrightRouteExecutionPort implements RouteExecutionPort {
         return u.pathname.endsWith('/new_route_info.php')&&u.searchParams.get('id')===fresh.aircraftId&&
           u.searchParams.get('airportId')===target.airportId&&u.searchParams.get('ferry')==='0'&&!u.searchParams.has('mode');
       }catch{return false;}
-    },{timeout:this.timeout});
+    },{timeout});
     await this.page.evaluate(({url})=>{
       const trigger=document.querySelector('#introSuggest');
       const ajax=(window as any).Ajax;
@@ -69,7 +80,7 @@ export class PlaywrightRouteExecutionPort implements RouteExecutionPort {
     const response=await responsePromise;
     if(!response.ok())throw new Error('ROUTE_QUOTE_REQUEST_FAILED');
 
-    await this.page.locator('#newRouteInfo').waitFor({state:'visible',timeout:this.timeout});
+    await this.page.locator('#newRouteInfo').waitFor({state:'visible',timeout});
     const read=await readOpenCandidateQuoteAfterVerifiedAjax(this.page,{
       aircraftId:fresh.aircraftId,registration:fresh.registration,airportId:target.airportId,from:target.from,to:target.to
     });
@@ -91,6 +102,12 @@ export class PlaywrightRouteExecutionPort implements RouteExecutionPort {
 
     this.prepared={aircraft:fresh,target:next,routeRegistration};
     return {aircraft:fresh,target:next};
+    } finally {
+      // Playwright's project default is 30s and this repository does not
+      // override it. Restore it so later independent phases keep their normal
+      // read tolerance; only reroute preparation is aggressively bounded.
+      this.page.setDefaultTimeout(30_000);
+    }
   }
 
   async prepare(expected:AircraftSnapshot,target:RouteExecutionCandidate){

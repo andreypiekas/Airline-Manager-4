@@ -1,7 +1,7 @@
 import { test,expect,Page } from '@playwright/test';
 import type { AircraftSnapshot } from '../../demand/types';
 import type { RouteExecutionCandidate } from '../../optimization/route-executor';
-import { PlaywrightRouteExecutionPort } from '../../optimization/route-playwright-port';
+import { PlaywrightRouteExecutionPort, routePrepareStepTimeout } from '../../optimization/route-playwright-port';
 import { inspectRouteMutationHandlerSource } from '../../optimization/route-mutation-control';
 
 const handlerSource=`function() {
@@ -92,4 +92,11 @@ test('changed Create route handler stops before native mutation',async({page})=>
   });
   await expect(port.reroute({...aircraft},target())).rejects.toThrow('ROUTE_CREATE_CONTROL_CHANGED');
   expect(await page.evaluate(()=>(window as any).routeMutations)).toBe(0);
+});
+
+
+test('reroute preparation uses a strict per-operation timeout without reducing shorter configured limits',()=>{
+  expect(routePrepareStepTimeout(15_000)).toBe(5_000);
+  expect(routePrepareStepTimeout(1_000)).toBe(1_000);
+  expect(()=>routePrepareStepTimeout(0)).toThrow('ROUTE_TIMEOUT_INVALID');
 });
