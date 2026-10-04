@@ -26,3 +26,9 @@ test('resolver CLI produces safe Action outputs and explicit operational-mode lo
  const dir=await mkdtemp(join(tmpdir(),'am4-dispatch-'));const target=join(dir,'output');
  try{const log=execFileSync(process.execPath,['scripts/resolve-departure-settings.cjs'],{env:{GITHUB_OUTPUT:target,AM4_REPOSITORY_EXECUTE:'true',AM4_REPOSITORY_MAX_DEPARTURES:'1'},encoding:'utf8'});expect(await readFile(target,'utf8')).toBe('dry_run=false\nmax_departures=1\n');expect(log).toContain('"dryRun":false');expect(log).toContain('variable:EXECUTE_INDIVIDUAL');}finally{await rm(dir,{recursive:true,force:true});}
 });
+
+test('main production workflow forwards the declared departure limit input instead of forcing twenty',async()=>{
+ const s=await readFile('.github/workflows/playwright.yml','utf8');
+ expect(s).toContain('AM4_INPUT_MAX_DEPARTURES: ${{ inputs.max_individual_departures }}');
+ expect(s).not.toContain("AM4_INPUT_MAX_DEPARTURES: '20'");
+});

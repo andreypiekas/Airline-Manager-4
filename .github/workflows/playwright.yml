@@ -111,7 +111,7 @@ jobs:
       env:
         AM4_INPUT_MODE: ${{ inputs.departure_mode || 'production' }}
         AM4_INPUT_EXECUTE: ${{ inputs.departure_mode == 'production' && 'true' || 'false' }}
-        AM4_INPUT_MAX_DEPARTURES: '20'
+        AM4_INPUT_MAX_DEPARTURES: ${{ inputs.max_individual_departures }}
         AM4_REPOSITORY_EXECUTE: ${{ vars.EXECUTE_INDIVIDUAL }}
         AM4_REPOSITORY_MAX_DEPARTURES: ${{ vars.MAX_INDIVIDUAL_DEPARTURES }}
       run: node scripts/resolve-departure-settings.cjs
