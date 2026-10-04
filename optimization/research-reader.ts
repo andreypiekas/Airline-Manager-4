@@ -29,7 +29,7 @@ import { inferGameModeEvidence } from './game-mode-evidence';
 import { reverseLegEquivalentEvidence } from './reverse-leg-equivalence';
 import { calibrateCurrentFareLoadFactor, transferCurrentFareLoadFactor } from './load-factor-calibration';
 import { candidateLoadEnvelope, currentRouteLoadEnvelope } from './route-variable-profit';
-import { compareRouteVariableCycles, conservativeSharedPairRemaining, routeVariableRoundTripInterval } from './route-variable-cycle';
+import { compareRouteVariableCycles, conservativeSharedPairRemaining, currentRouteGrossRevenueCeiling, routeVariableRoundTripInterval } from './route-variable-cycle';
 import { routeProfitModelEvidence } from './route-profit-model';
 import { planVariableRouteDecision, routeDecisionSetComparisonReady } from './route-decision';
 import type { LiveAnchoredFlightHistoryStitchDiagnostic } from './return-journal';
@@ -330,7 +330,9 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
         currentCosts,co2Calibration,market.co2,currentRepairReferenceVerified,0,currentReverseEquivalent,
         currentReservations?.futureCompetitionComplete===true,now,reservationsConfig.maxAgeSeconds
       ):null;
-    const variableCycleComparison=compareRouteVariableCycles(currentVariableCycle,candidateVariableCycle,0);
+    const currentGrossRevenueCeiling=currentQuote&&aircraft?
+      currentRouteGrossRevenueCeiling(currentQuote,aircraft.capacity,aircraft.fares?.current||null,currentReverseEquivalent,now,reservationsConfig.maxAgeSeconds):null;
+    const variableCycleComparison=compareRouteVariableCycles(currentVariableCycle,candidateVariableCycle,0,currentGrossRevenueCeiling);
     const currentKnown=currentQuote&&aircraft&&currentCosts?
       knownContributionLeg(currentQuote,aircraft.capacity,aircraft.remaining,aircraft.fares?.current||null,currentCosts):null;
     const candidateKnown=knownContributionLeg(quote,capacity,reservations.forwardAfterReservations,screening.adjustedFareReference,costScenarios);
@@ -345,7 +347,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     };
     return {aircraftId:quote.aircraftId,airportId:quote.airportId,from:quote.from,to:quote.to,quoteObservedAt:quote.observedAt,
       routeExecutionEvidence,
-      createControl:quote.createControl||null,routeActionDiagnostics:quote.routeActionDiagnostics||[],routeListenerDiagnostics:quote.routeListenerDiagnostics||[],routeMutationControl:quote.routeMutationControl||null,autopriceFunctionEvidence:quote.autopriceFunctionEvidence||null,quoteFieldDiagnostics:quote.quoteFieldDiagnostics||[],routeDirectionEvidence:quote.routeDirectionEvidence||null,routeResponseDiagnostics:quote.routeResponseDiagnostics||null,airportDistance,runwayEvidence,runwayCrossChecked,gameModeEvidence,currentGameModeEvidence,currentAirportDistance,reverseEquivalent,currentReverseEquivalent,loadFactorCalibration,candidateLoadFactor,candidateRepairReferenceVerified,currentRepairReferenceVerified,routeProfitModel,candidateVariableCycle,currentVariableCycle,variableCycleComparison,co2Calibration,demand,screening,priority,knownContributionComparison,roundTrip,reservations,currentReservations,costScenarios,effectiveCosts,modelCostReference:model,costs:{fuelAtObservedMarketPrice:fuel,co2:null,maintenance:null,airportAndOther:null},
+      createControl:quote.createControl||null,routeActionDiagnostics:quote.routeActionDiagnostics||[],routeListenerDiagnostics:quote.routeListenerDiagnostics||[],routeMutationControl:quote.routeMutationControl||null,autopriceFunctionEvidence:quote.autopriceFunctionEvidence||null,quoteFieldDiagnostics:quote.quoteFieldDiagnostics||[],routeDirectionEvidence:quote.routeDirectionEvidence||null,routeResponseDiagnostics:quote.routeResponseDiagnostics||null,airportDistance,runwayEvidence,runwayCrossChecked,gameModeEvidence,currentGameModeEvidence,currentAirportDistance,reverseEquivalent,currentReverseEquivalent,loadFactorCalibration,candidateLoadFactor,candidateRepairReferenceVerified,currentRepairReferenceVerified,routeProfitModel,candidateVariableCycle,currentVariableCycle,currentGrossRevenueCeiling,variableCycleComparison,co2Calibration,demand,screening,priority,knownContributionComparison,roundTrip,reservations,currentReservations,costScenarios,effectiveCosts,modelCostReference:model,costs:{fuelAtObservedMarketPrice:fuel,co2:null,maintenance:null,airportAndOther:null},
       setupFee:quote.routeFee,costsComplete:false,netProfit:null,comparisonReady:false,mutationAuthorized:false,
       missing:['FUTURE_OTHER_AIRCRAFT_RESERVATIONS','REVERSE_LEG_ECONOMICS',
         ...(!(screening.adjustedFareReference&&candidateLoadFactor?.verified)?['EFFECTIVE_FARES_AND_LOAD_FACTOR']:[]),

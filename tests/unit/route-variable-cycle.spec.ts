@@ -2,7 +2,7 @@ import { test,expect } from '@playwright/test';
 import type { CandidateQuote } from '../../optimization/quote-reader';
 import type { Co2CalibrationEvidence } from '../../optimization/co2-calibration';
 import type { ReverseLegEquivalentEvidence } from '../../optimization/reverse-leg-equivalence';
-import { compareRouteVariableCycles,conservativeSharedPairRemaining,routeVariableRoundTripInterval } from '../../optimization/route-variable-cycle';
+import { compareRouteVariableCycles,conservativeSharedPairRemaining,currentRouteGrossRevenueCeiling,routeVariableRoundTripInterval } from '../../optimization/route-variable-cycle';
 
 const now=new Date('2026-10-03T00:00:00Z'),stamp=now.toISOString();
 const quote:CandidateQuote={
@@ -75,4 +75,41 @@ test('overlapping profit intervals keep current route rather than claiming super
   const candidate=routeVariableRoundTripInterval({...quote,to:'CCC',airportId:'3'},{Y:100,J:20,F:10},{Y:300,J:100,F:50},
     {Y:1010,J:2020,F:3030},load,costs,co2,market,true,1000,{...reverse,from:'CCC',to:'AAA'},true,now);
   expect(compareRouteVariableCycles(current,candidate,0)).toMatchObject({status:'keep_current',comparisonReady:true});
+});
+
+
+test('fresh current route gross revenue ceiling proves KEEP without guessing current future demand',()=>{
+  const capacity={Y:100,J:20,F:10},fares={Y:1000,J:2000,F:3000};
+  const ceiling=currentRouteGrossRevenueCeiling(quote,capacity,fares,reverse,now);
+  expect(ceiling).toMatchObject({status:'verified_ceiling',grossRevenuePerLeg:170000,reason:'CURRENT_ROUTE_100_PERCENT_GROSS_REVENUE_HARD_CEILING_VERIFIED'});
+  expect(ceiling.grossRevenuePerHour).toBeCloseTo(170000);
+  const current=routeVariableRoundTripInterval(quote,capacity,{Y:1,J:1,F:1},fares,load,costs,co2,market,true,0,reverse,true,now);
+  expect(current.status).toBe('unavailable');
+  const candidate=routeVariableRoundTripInterval({...quote,to:'CCC',airportId:'3'},capacity,{Y:300,J:100,F:50},
+    {Y:1010,J:2020,F:3030},load,costs,co2,market,true,1000,{...reverse,from:'CCC',to:'AAA'},true,now);
+  const cmp=compareRouteVariableCycles(current,candidate,0,ceiling);
+  expect(cmp).toMatchObject({
+    status:'keep_current',comparisonReady:true,comparisonBasis:'current_gross_revenue_ceiling',
+    reason:'CANDIDATE_LOW_BOUND_DOES_NOT_BEAT_CURRENT_GROSS_REVENUE_HARD_CEILING',mutationAuthorized:false
+  });
+});
+
+test('gross ceiling fallback cannot authorize reroute even when candidate low bound exceeds it',()=>{
+  const capacity={Y:100,J:20,F:10};
+  const ceiling=currentRouteGrossRevenueCeiling(quote,capacity,{Y:100,J:200,F:300},reverse,now);
+  const current=routeVariableRoundTripInterval(quote,capacity,{Y:1,J:1,F:1},{Y:100,J:200,F:300},load,costs,co2,market,true,0,reverse,true,now);
+  const candidate=routeVariableRoundTripInterval({...quote,to:'CCC',airportId:'3'},capacity,{Y:300,J:100,F:50},
+    {Y:5000,J:10000,F:15000},load,costs,co2,market,true,1000,{...reverse,from:'CCC',to:'AAA'},true,now);
+  const cmp=compareRouteVariableCycles(current,candidate,0,ceiling);
+  expect(cmp).toMatchObject({
+    status:'unavailable',comparisonReady:false,comparisonBasis:'current_gross_revenue_ceiling',
+    reason:'GROSS_CEILING_FALLBACK_NEVER_AUTHORIZES_REROUTE_WITHOUT_VERIFIED_CURRENT_CYCLE',mutationAuthorized:false
+  });
+  expect(cmp.deltaPerHour.conservativeLower).toBeGreaterThan(0);
+});
+
+test('gross revenue ceiling fails closed when route evidence is stale or reverse equivalence is absent',()=>{
+  const capacity={Y:100,J:20,F:10},fares={Y:1000,J:2000,F:3000};
+  expect(currentRouteGrossRevenueCeiling({...quote,observedAt:'2026-10-02T00:00:00Z'},capacity,fares,reverse,now).status).toBe('unavailable');
+  expect(currentRouteGrossRevenueCeiling(quote,capacity,fares,null,now).status).toBe('unavailable');
 });

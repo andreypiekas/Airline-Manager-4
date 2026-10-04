@@ -39,8 +39,23 @@ export interface RouteVariableCycleInterval {
   mutationAuthorized:false;
 }
 
+export interface CurrentRouteGrossRevenueCeiling {
+  status:'verified_ceiling'|'unavailable';
+  aircraftId:string;
+  from:string;
+  to:string;
+  grossRevenuePerLeg:number|null;
+  grossRevenuePerHour:number|null;
+  source:'fresh-current-fares-capacity-direct-duration-ceiling';
+  reason:string;
+  comparisonReady:false;
+  mutationAuthorized:false;
+}
+
 export interface RouteVariableCycleComparison {
   status:'candidate_dominates'|'keep_current'|'unavailable';
+  comparisonBasis:'verified_cycle_intervals'|'current_gross_revenue_ceiling'|'unavailable';
+  currentGrossRevenueCeiling:CurrentRouteGrossRevenueCeiling|null;
   current:RouteVariableCycleInterval|null;
   candidate:RouteVariableCycleInterval|null;
   minImprovementPercent:number;
@@ -67,6 +82,43 @@ export function conservativeSharedPairRemaining(forward:Cabins|null,reverse:Cabi
     J:Math.min(forward.J,reverse.J),
     F:Math.min(forward.F,reverse.F)
   };
+}
+
+/**
+ * Hard upper bound for the current route: even with 100% load its net route
+ * profit cannot exceed gross ticket revenue. It is accepted only for a fresh,
+ * verified direct symmetric route. This fallback may prove KEEP, but by itself
+ * never authorizes REROUTE.
+ */
+export function currentRouteGrossRevenueCeiling(
+  quote:CandidateQuote,
+  capacity:Cabins|null,
+  fares:Cabins|null,
+  reverseEquivalent:ReverseLegEquivalentEvidence|null,
+  now=new Date(),
+  maxAgeSeconds=300
+):CurrentRouteGrossRevenueCeiling {
+  const base:CurrentRouteGrossRevenueCeiling={
+    status:'unavailable',aircraftId:quote.aircraftId,from:quote.from,to:quote.to,
+    grossRevenuePerLeg:null,grossRevenuePerHour:null,
+    source:'fresh-current-fares-capacity-direct-duration-ceiling',
+    reason:'CURRENT_GROSS_REVENUE_CEILING_EVIDENCE_INCOMPLETE',comparisonReady:false,mutationAuthorized:false
+  };
+  const age=now.getTime()-Date.parse(quote.observedAt);
+  if(!Number.isSafeInteger(maxAgeSeconds)||maxAgeSeconds<1||!Number.isFinite(age)||age<0||age>maxAgeSeconds*1000||
+    !validCabins(capacity)||!validCabins(fares)||!Number.isSafeInteger(quote.durationSeconds)||quote.durationSeconds<=0||
+    reverseEquivalent?.status!=='verified'||reverseEquivalent.from!==quote.to||reverseEquivalent.to!==quote.from||
+    reverseEquivalent.durationSeconds!==quote.durationSeconds||reverseEquivalent.fuelLbs!==quote.fuelLbs||
+    reverseEquivalent.co2KgPerPaxKm!==quote.co2KgPerPaxKm||reverseEquivalent.costIndex!==quote.costIndex)
+    return base;
+  const active=CLASSES.filter(k=>capacity[k]>0);
+  if(!active.length||!active.every(k=>Number.isSafeInteger(fares[k])&&fares[k]>0))return base;
+  const gross=CLASSES.reduce((sum,k)=>sum+capacity[k]*fares[k],0);
+  const hours=quote.durationSeconds/3600;
+  const perHour=gross/hours;
+  if(!Number.isSafeInteger(gross)||gross<=0||!finite(perHour)||perHour<=0)return base;
+  return {...base,status:'verified_ceiling',grossRevenuePerLeg:gross,grossRevenuePerHour:perHour,
+    reason:'CURRENT_ROUTE_100_PERCENT_GROSS_REVENUE_HARD_CEILING_VERIFIED'};
 }
 
 /**
@@ -144,35 +196,62 @@ export function routeVariableRoundTripInterval(
 export function compareRouteVariableCycles(
   current:RouteVariableCycleInterval|null,
   candidate:RouteVariableCycleInterval|null,
-  minImprovementPercent=0
+  minImprovementPercent=0,
+  currentGrossRevenueCeilingEvidence:CurrentRouteGrossRevenueCeiling|null=null
 ):RouteVariableCycleComparison {
   const base:RouteVariableCycleComparison={
-    status:'unavailable',current,candidate,minImprovementPercent,
+    status:'unavailable',comparisonBasis:'unavailable',currentGrossRevenueCeiling:currentGrossRevenueCeilingEvidence,
+    current,candidate,minImprovementPercent,
     deltaPerHour:{conservativeLower:null,expected:null,optimisticUpper:null},
     requiredCandidateLowPerHour:null,firstCycleCandidateLow:null,
     reason:'VARIABLE_CYCLE_COMPARISON_INCOMPLETE',comparisonReady:false,mutationAuthorized:false
   };
-  if(!finite(minImprovementPercent)||minImprovementPercent<0||minImprovementPercent>100||
-    current?.status!=='verified_interval'||candidate?.status!=='verified_interval'||
-    !current.comparisonReady||!candidate.comparisonReady||
-    current.aircraftId!==candidate.aircraftId||
-    !finite(current.recurringCycleProfitPerHour.low)||!finite(current.recurringCycleProfitPerHour.expected)||
-    !finite(current.recurringCycleProfitPerHour.high)||!finite(candidate.recurringCycleProfitPerHour.low)||
-    !finite(candidate.recurringCycleProfitPerHour.expected)||!finite(candidate.recurringCycleProfitPerHour.high)||
-    !finite(candidate.firstCycleAfterSetup.low))return base;
+  if(!finite(minImprovementPercent)||minImprovementPercent<0||minImprovementPercent>100)return base;
 
-  const currentHigh=current.recurringCycleProfitPerHour.high!;
-  const required=currentHigh+Math.abs(currentHigh)*minImprovementPercent/100;
-  const conservative=candidate.recurringCycleProfitPerHour.low!-currentHigh;
-  const expected=candidate.recurringCycleProfitPerHour.expected!-current.recurringCycleProfitPerHour.expected!;
-  const optimistic=candidate.recurringCycleProfitPerHour.high!-current.recurringCycleProfitPerHour.low!;
-  const dominates=candidate.recurringCycleProfitPerHour.low!>required&&candidate.firstCycleAfterSetup.low!>0;
-  return {
-    ...base,status:dominates?'candidate_dominates':'keep_current',
-    deltaPerHour:{conservativeLower:conservative,expected,optimisticUpper:optimistic},
-    requiredCandidateLowPerHour:required,firstCycleCandidateLow:candidate.firstCycleAfterSetup.low!,
-    reason:dominates?'CANDIDATE_LOW_BOUND_DOMINATES_CURRENT_HIGH_BOUND_AND_FIRST_CYCLE_POSITIVE':
-      'CONSERVATIVE_DOMINANCE_NOT_PROVEN',
-    comparisonReady:true
-  };
+  const exact=current?.status==='verified_interval'&&candidate?.status==='verified_interval'&&
+    current.comparisonReady&&candidate.comparisonReady&&current.aircraftId===candidate.aircraftId&&
+    finite(current.recurringCycleProfitPerHour.low)&&finite(current.recurringCycleProfitPerHour.expected)&&
+    finite(current.recurringCycleProfitPerHour.high)&&finite(candidate.recurringCycleProfitPerHour.low)&&
+    finite(candidate.recurringCycleProfitPerHour.expected)&&finite(candidate.recurringCycleProfitPerHour.high)&&
+    finite(candidate.firstCycleAfterSetup.low);
+  if(exact){
+    const currentHigh=current!.recurringCycleProfitPerHour.high!;
+    const required=currentHigh+Math.abs(currentHigh)*minImprovementPercent/100;
+    const conservative=candidate!.recurringCycleProfitPerHour.low!-currentHigh;
+    const expected=candidate!.recurringCycleProfitPerHour.expected!-current!.recurringCycleProfitPerHour.expected!;
+    const optimistic=candidate!.recurringCycleProfitPerHour.high!-current!.recurringCycleProfitPerHour.low!;
+    const dominates=candidate!.recurringCycleProfitPerHour.low!>required&&candidate!.firstCycleAfterSetup.low!>0;
+    return {
+      ...base,status:dominates?'candidate_dominates':'keep_current',comparisonBasis:'verified_cycle_intervals',
+      deltaPerHour:{conservativeLower:conservative,expected,optimisticUpper:optimistic},
+      requiredCandidateLowPerHour:required,firstCycleCandidateLow:candidate!.firstCycleAfterSetup.low!,
+      reason:dominates?'CANDIDATE_LOW_BOUND_DOMINATES_CURRENT_HIGH_BOUND_AND_FIRST_CYCLE_POSITIVE':
+        'CONSERVATIVE_DOMINANCE_NOT_PROVEN',
+      comparisonReady:true
+    };
+  }
+
+  const ceiling=currentGrossRevenueCeilingEvidence;
+  if(candidate?.status==='verified_interval'&&candidate.comparisonReady&&
+    ceiling?.status==='verified_ceiling'&&ceiling.aircraftId===candidate.aircraftId&&
+    finite(ceiling.grossRevenuePerHour)&&ceiling.grossRevenuePerHour!>0&&
+    finite(candidate.recurringCycleProfitPerHour.low)&&finite(candidate.firstCycleAfterSetup.low)){
+    const required=ceiling.grossRevenuePerHour!+Math.abs(ceiling.grossRevenuePerHour!)*minImprovementPercent/100;
+    const conservative=candidate.recurringCycleProfitPerHour.low!-ceiling.grossRevenuePerHour!;
+    const doesNotProveDominance=candidate.recurringCycleProfitPerHour.low!<=required||candidate.firstCycleAfterSetup.low!<=0;
+    if(doesNotProveDominance)return {
+      ...base,status:'keep_current',comparisonBasis:'current_gross_revenue_ceiling',
+      deltaPerHour:{conservativeLower:conservative,expected:null,optimisticUpper:null},
+      requiredCandidateLowPerHour:required,firstCycleCandidateLow:candidate.firstCycleAfterSetup.low!,
+      reason:'CANDIDATE_LOW_BOUND_DOES_NOT_BEAT_CURRENT_GROSS_REVENUE_HARD_CEILING',
+      comparisonReady:true
+    };
+    return {
+      ...base,comparisonBasis:'current_gross_revenue_ceiling',
+      deltaPerHour:{conservativeLower:conservative,expected:null,optimisticUpper:null},
+      requiredCandidateLowPerHour:required,firstCycleCandidateLow:candidate.firstCycleAfterSetup.low!,
+      reason:'GROSS_CEILING_FALLBACK_NEVER_AUTHORIZES_REROUTE_WITHOUT_VERIFIED_CURRENT_CYCLE'
+    };
+  }
+  return base;
 }
