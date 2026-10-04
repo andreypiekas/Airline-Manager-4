@@ -32,6 +32,7 @@ export interface PricingExecutionReport {
   generatedAt: string;
   completedAt: string | null;
   halted: boolean;
+  phaseHoldReason: string | null;
   summary: { evaluated: number; adjusted: number; unchanged: number; held: number; unknown: number };
   entries: PricingExecutionEntry[];
 }
@@ -79,7 +80,7 @@ export class TicketPricingExecutor {
   async run():Promise<PricingExecutionReport>{
     if(this.used)throw new Error('PRICING_EXECUTION_ALREADY_USED');
     this.used=true;
-    const report:PricingExecutionReport={schemaVersion:1,generatedAt:new Date().toISOString(),completedAt:null,halted:false,
+    const report:PricingExecutionReport={schemaVersion:1,generatedAt:new Date().toISOString(),completedAt:null,halted:false,phaseHoldReason:null,
       summary:{evaluated:0,adjusted:0,unchanged:0,held:0,unknown:0},entries:[]};
     const persist=async()=>{
       report.summary={
@@ -95,8 +96,18 @@ export class TicketPricingExecutor {
     if(!this.settings.enabled){report.completedAt=new Date().toISOString();await persist();return report;}
 
     let initial:CollectionResult;
-    try{initial=await this.port.collect();}catch{report.halted=true;await persist();throw new Error('PRICING_INITIAL_COLLECTION_FAILED');}
-    if(!initial.complete){report.halted=true;await persist();throw new Error('PRICING_INITIAL_COLLECTION_INCOMPLETE');}
+    try{initial=await this.port.collect();}catch{
+      report.phaseHoldReason='PRICING_INITIAL_COLLECTION_FAILED';
+      report.completedAt=new Date().toISOString();await persist();return report;
+    }
+    if(!initial.complete){
+      report.phaseHoldReason='PRICING_INITIAL_COLLECTION_INCOMPLETE';
+      for(const a of initial.aircraft.filter(a=>a.state==='ready'))report.entries.push({
+        aircraftId:a.aircraftId,registration:a.registration,routeId:a.routeId,status:'held',
+        reason:'PRICING_INITIAL_COLLECTION_INCOMPLETE',before:a.fares?.current?{...a.fares.current}:null,desired:null,after:null
+      });
+      report.completedAt=new Date().toISOString();await persist();return report;
+    }
 
     const routeCounts=new Map<string,number>();
     for(const a of initial.aircraft)routeCounts.set(a.routeId,(routeCounts.get(a.routeId)||0)+1);

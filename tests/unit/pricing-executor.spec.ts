@@ -114,3 +114,25 @@ test('expired global deadline holds pricing before Save and creates no uncertain
  expect(port.saves).toHaveLength(0);expect(r.halted).toBe(false);
  expect(r.entries[0]).toMatchObject({status:'held',reason:'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PRICE_SAVE'});
 });
+
+
+test('incomplete initial pricing collection is a safe phase HOLD, not a workflow-fatal error',async()=>{
+ const a=aircraft();
+ const port=new FakePort({...collection([a]),complete:false,warnings:['synthetic incomplete']});
+ const r=await new TicketPricingExecutor(port,{enabled:true,maxAdjustments:5,maxAgeSeconds:300},async()=>{}).run();
+ expect(port.saves).toHaveLength(0);
+ expect(r.halted).toBe(false);
+ expect(r.phaseHoldReason).toBe('PRICING_INITIAL_COLLECTION_INCOMPLETE');
+ expect(r.entries[0]).toMatchObject({status:'held',reason:'PRICING_INITIAL_COLLECTION_INCOMPLETE'});
+ expect(r.summary).toMatchObject({adjusted:0,unknown:0,held:1});
+});
+
+test('failed initial pricing collection is a safe phase HOLD before any Save',async()=>{
+ const port=new FakePort(collection([aircraft()]));
+ port.collect=async()=>{throw new Error('loading');};
+ const r=await new TicketPricingExecutor(port,{enabled:true,maxAdjustments:5,maxAgeSeconds:300},async()=>{}).run();
+ expect(port.saves).toHaveLength(0);
+ expect(r.halted).toBe(false);
+ expect(r.phaseHoldReason).toBe('PRICING_INITIAL_COLLECTION_FAILED');
+ expect(r.summary).toMatchObject({evaluated:0,adjusted:0,unknown:0});
+});

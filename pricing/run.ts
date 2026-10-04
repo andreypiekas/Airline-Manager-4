@@ -43,7 +43,8 @@ export async function runTicketPricingExecution(page:Page,env:NodeJS.ProcessEnv=
     await writeFile(target+'.tmp',JSON.stringify(report,null,2)+'\n');await rename(target+'.tmp',target);
     await writeFile(join(directory,'pricing-execution.md'),[
       '# Tarifas — execucao verificada por rota','',
-      `Avaliadas: ${report.summary.evaluated}; ajustadas: ${report.summary.adjusted}; inalteradas: ${report.summary.unchanged}; retidas: ${report.summary.held}; resultado incerto: ${report.summary.unknown}.`,'',
+      `Avaliadas: ${report.summary.evaluated}; ajustadas: ${report.summary.adjusted}; inalteradas: ${report.summary.unchanged}; retidas: ${report.summary.held}; resultado incerto: ${report.summary.unknown}.`,
+      report.phaseHoldReason?`Fase retida com seguranca: ${safe(report.phaseHoldReason)}.`:'','',
       '| Aeronave | Route ID | Estado | Antes Y/J/F | Alvo Y/J/F | Depois Y/J/F | Motivo |',
       '| --- | --- | --- | --- | --- | --- | --- |',
       ...report.entries.map(e=>`| ${safe(e.registration)} | ${e.routeId} | ${e.status} | ${e.before?Object.values(e.before).join('/'):'—'} | ${e.desired?Object.values(e.desired).join('/'):'—'} | ${e.after?Object.values(e.after).join('/'):'—'} | ${safe(e.reason)} |`),'',
@@ -52,7 +53,7 @@ export async function runTicketPricingExecution(page:Page,env:NodeJS.ProcessEnv=
     ].join('\n'));
   };
   const report=await new TicketPricingExecutor(new PlaywrightPricingPort(page),{...settings,blockedRouteIds},save).run();
-  console.log('[TicketPricing] '+JSON.stringify(report.summary));
+  console.log('[TicketPricing] '+JSON.stringify({...report.summary,phaseHoldReason:report.phaseHoldReason}));
   if(optimization.returnJournal){
     try{
       const uncertain=await appendUncertainPricingMutations(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);

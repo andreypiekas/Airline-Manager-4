@@ -14,7 +14,7 @@ function setup(options:{initial?:CollectionResult;fresh?:CollectionResult;prepar
     depart:async()=>{clicks++;if(options.clickFail)throw Error('timeout');},
     confirm:async a=>options.confirmed===null?null:options.confirmed??snapshot({...a,state:'inflight',onboard:{Y:88,J:0,F:0},timing:flightCountdownObservation(a.aircraftId,a.routeId,'01:00:00',new Date().toISOString())})};
   const executor=new IndividualDepartureExecutor(port,readDemandConfig({}),{dryRun:options.dryRun??false,maxDepartures:options.limit??1,aircraftOrigins:new Map(),airlineBases:['GRU'],mutationDeadlineEpochMs:options.mutationDeadlineEpochMs,blockedDepartureKeys:options.blockedDepartureKeys,fuelHoldingLbsAtRunStart:options.fuelHoldingLbsAtRunStart},async r=>{if(options.saveFail&&r.entries.some(e=>e.status==='attempting'))throw Error('disk');saved.push(JSON.parse(JSON.stringify(r)));});
-  return {executor,saved,clicks:()=>clicks};
+  return {executor,saved,clicks:()=>clicks,reads:()=>reads};
 }
 test('persist intent before exactly one native click and confirm onboard separately from demand coverage',async()=>{
  const s=setup();const r=await s.executor.run();expect(s.clicks()).toBe(1);expect(s.saved.some(r=>r.entries[0]?.status==='attempting')).toBe(true);
@@ -103,4 +103,14 @@ test('missing historical fuel does not claim a shortage, but makes later run-loc
  expect(clicks).toBe(1);
  expect(r.entries[0].status).toBe('departed');
  expect(r.entries[1].reason).toBe('FUEL_BUDGET_UNVERIFIED_AFTER_PRIOR_DEPARTURE');
+});
+
+
+test('completion reserve holds before fresh evaluation and avoids expensive reads near deadline',async()=>{
+ const s=setup({mutationDeadlineEpochMs:Date.now()+60_000});
+ const r=await s.executor.run();
+ expect(s.clicks()).toBe(0);
+ expect(s.reads()).toBe(1); // initial snapshot only; no per-aircraft fresh collection
+ expect(r.halted).toBe(false);
+ expect(r.entries[0]).toMatchObject({status:'held',reason:'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_EVALUATION'});
 });

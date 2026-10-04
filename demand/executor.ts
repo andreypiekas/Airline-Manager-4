@@ -55,6 +55,8 @@ function verifiedHistoricalFuelRequirement(a:AircraftSnapshot):{fuelLbs:number;s
   return values.length===1?{fuelLbs:values[0],samples:matching.length}:null;
 }
 
+const MUTATION_COMPLETION_RESERVE_MS=90_000;
+
 /** No retries, bulk fallback, route mutations or financial modules. A report writer must persist BEFORE the click. */
 export class IndividualDepartureExecutor {
   private used = false;
@@ -94,6 +96,10 @@ export class IndividualDepartureExecutor {
       if(this.settings.blockedDepartureKeys?.has(expected.aircraftId+':'+expected.routeId)){entry.reason='PERSISTED_UNCERTAIN_DEPARTURE_BLOCK';continue;}
       if(this.attemptedAircraft.size>=this.settings.maxDepartures){entry.reason='EXECUTION_LIMIT';continue;}
       if(!initial.complete){entry.reason='INITIAL_COLLECTION_INCOMPLETE';continue;}
+      if(!this.settings.dryRun&&this.settings.mutationDeadlineEpochMs!==undefined&&
+        Date.now()>this.settings.mutationDeadlineEpochMs-MUTATION_COMPLETION_RESERVE_MS){
+        entry.reason='RUN_TIME_BUDGET_EXHAUSTED_BEFORE_EVALUATION';continue;
+      }
       let collection: CollectionResult;
       try { collection=await this.port.collect(); } catch {entry.reason='FRESH_COLLECTION_FAILED';continue;}
       const matches=collection.aircraft.filter(a=>a.aircraftId===expected.aircraftId);
@@ -132,7 +138,8 @@ export class IndividualDepartureExecutor {
         this.attemptedAircraft.add(fresh.aircraftId);this.attemptedRoutes.add(fresh.routeId);
         entry.status='would_depart';await persist();continue;
       }
-      if(this.settings.mutationDeadlineEpochMs!==undefined&&Date.now()>=this.settings.mutationDeadlineEpochMs){
+      if(this.settings.mutationDeadlineEpochMs!==undefined&&
+        Date.now()>this.settings.mutationDeadlineEpochMs-MUTATION_COMPLETION_RESERVE_MS){
         entry.reason='RUN_TIME_BUDGET_EXHAUSTED_BEFORE_MUTATION';continue;
       }
       this.attemptedAircraft.add(fresh.aircraftId);this.attemptedRoutes.add(fresh.routeId);
