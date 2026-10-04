@@ -78,6 +78,8 @@ const sameTargetEvidence=(a:RouteExecutionCandidate,b:RouteExecutionCandidate)=>
   a.fuelLbs===b.fuelLbs&&a.co2KgPerPaxKm===b.co2KgPerPaxKm&&a.routeFee===b.routeFee&&
   sameCabins(a.capacity,b.capacity)&&sameCabins(a.autoFares,b.autoFares);
 
+const ROUTE_COMPLETION_RESERVE_MS=240_000;
+
 const mutationControlReady=(candidate:RouteExecutionCandidate)=>{
   const c=candidate.routeMutationControl;
   return !!c&&c.nativeClickReady&&c.endpointVerified&&c.targetVerified&&c.directRouteVerified&&
@@ -168,6 +170,11 @@ export class RouteMutationExecutor {
         entry.reason='ROUTE_EXECUTION_GUARD_REJECTED';continue;
       }
 
+      if(this.settings.mutationDeadlineEpochMs!==undefined&&
+        Date.now()>this.settings.mutationDeadlineEpochMs-ROUTE_COMPLETION_RESERVE_MS){
+        entry.reason='RUN_TIME_BUDGET_EXHAUSTED_BEFORE_ROUTE_PREPARE';continue;
+      }
+
       let fresh:{aircraft:AircraftSnapshot;target:RouteExecutionCandidate};
       try{fresh=await this.port.prepare(expected,target);}
       catch{entry.reason='ROUTE_EXECUTION_PREPARE_FAILED';continue;}
@@ -178,7 +185,8 @@ export class RouteMutationExecutor {
         entry.reason='ROUTE_EXECUTION_CONTEXT_CHANGED';continue;
       }
 
-      if(this.settings.mutationDeadlineEpochMs!==undefined&&Date.now()>=this.settings.mutationDeadlineEpochMs){
+      if(this.settings.mutationDeadlineEpochMs!==undefined&&
+        Date.now()>this.settings.mutationDeadlineEpochMs-ROUTE_COMPLETION_RESERVE_MS){
         entry.reason='RUN_TIME_BUDGET_EXHAUSTED_BEFORE_ROUTE_MUTATION';continue;
       }
       this.attemptedAircraft.add(expected.aircraftId);

@@ -104,13 +104,22 @@ test('persisted uncertain route quarantine blocks before prepare or reroute',asy
 });
 
 
-test('expired global deadline holds reroute before mutation and creates no uncertain result',async()=>{
+test('expired global deadline holds reroute before prepare and creates no uncertain result',async()=>{
  const port=new FakePort();let prepares=0;
  port.prepare=async(expected,target)=>{prepares++;return {aircraft:{...expected},target:{...target}};};
  const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300,mutationDeadlineEpochMs:Date.now()-1},async()=>{})
   .run([aircraft()],[decision],[candidate()]);
- expect(prepares).toBe(1);expect(port.reroutes).toBe(0);expect(r.halted).toBe(false);
- expect(r.entries[0]).toMatchObject({status:'held',mutationAuthorized:false,reason:'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_ROUTE_MUTATION'});
+ expect(prepares).toBe(0);expect(port.reroutes).toBe(0);expect(r.halted).toBe(false);
+ expect(r.entries[0]).toMatchObject({status:'held',mutationAuthorized:false,reason:'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_ROUTE_PREPARE'});
+});
+
+test('route completion reserve avoids expensive prepare when less than four minutes remain',async()=>{
+ const port=new FakePort();let prepares=0;
+ port.prepare=async(expected,target)=>{prepares++;return {aircraft:{...expected},target:{...target}};};
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300,mutationDeadlineEpochMs:Date.now()+120_000},async()=>{})
+  .run([aircraft()],[decision],[candidate()]);
+ expect(prepares).toBe(0);expect(port.reroutes).toBe(0);expect(r.halted).toBe(false);
+ expect(r.entries[0]).toMatchObject({status:'held',reason:'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_ROUTE_PREPARE'});
 });
 
 
