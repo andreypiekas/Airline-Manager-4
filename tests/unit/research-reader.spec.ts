@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { AircraftSnapshot, CollectionResult } from '../../demand/types';
 import { optimizationConfig } from '../../optimization/report';
-import { researchConfig, researchFleetCandidates, writeRouteResearchReport } from '../../optimization/research-reader';
+import { researchConfig, researchFleetCandidates, researchQueueRotation, writeRouteResearchReport } from '../../optimization/research-reader';
 
 function snapshot(): AircraftSnapshot {
   return {aircraftId:'101',registration:'SYNTHETIC',routeId:'1',routeLabel:'AAA-BBB',from:'AAA',to:'BBB',state:'ready',
@@ -148,4 +148,20 @@ test('confirmed return after same-day review re-enters bounded route research',a
   expect(await page.evaluate(()=>(window as any).researches)).toBe(1);
   expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+
+test('retryable route research queue rotates fairly across half-hour windows',()=>{
+ const items=['A','B','C','D'];
+ const first=researchQueueRotation(items,new Date('2026-10-04T05:00:00Z'));
+ const next=researchQueueRotation(items,new Date('2026-10-04T05:30:00Z'));
+ expect(first.entries).toHaveLength(4);expect(next.entries).toHaveLength(4);
+ expect(new Set(first.entries)).toEqual(new Set(items));expect(new Set(next.entries)).toEqual(new Set(items));
+ expect(next.offset).toBe((first.offset+1)%items.length);
+ expect(next.entries[0]).not.toBe(first.entries[0]);
+});
+
+test('route research queue rotation validates its time window without navigation',()=>{
+ expect(()=>researchQueueRotation([1],new Date('invalid'))).toThrow('RESEARCH_QUEUE_ROTATION_INVALID');
+ expect(()=>researchQueueRotation([1],new Date(),0)).toThrow('RESEARCH_QUEUE_ROTATION_INVALID');
 });

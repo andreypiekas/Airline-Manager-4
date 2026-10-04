@@ -36,6 +36,14 @@ import { validateReturnJournal, type Journal, type LiveAnchoredFlightHistoryStit
 import { dailyReviewDue } from './review-schedule';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
+export function researchQueueRotation<T>(entries:readonly T[],now:Date,windowMinutes=30){
+  if(!Array.isArray(entries)||!Number.isFinite(now.getTime())||!Number.isSafeInteger(windowMinutes)||windowMinutes<1||windowMinutes>1440)
+    throw new Error('RESEARCH_QUEUE_ROTATION_INVALID');
+  if(!entries.length)return {entries:[] as T[],slot:0,offset:0,windowMinutes};
+  const slot=Math.floor(now.getTime()/(windowMinutes*60_000));
+  const offset=slot%entries.length;
+  return {entries:[...entries.slice(offset),...entries.slice(0,offset)],slot,offset,windowMinutes};
+}
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
   const enabled = env.ENABLE_ROUTE_RESEARCH?.trim().toLowerCase() || 'false';
   if (!['true','false'].includes(enabled)) throw new Error('RESEARCH_CONFIG_INVALID');
@@ -49,12 +57,12 @@ export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchCo
 }
 
 /** Observation only: quotes are never converted into complete economic reviews. */
-export async function researchFleetCandidates(page: Page, collection: CollectionResult, optimization: OptimizationConfig, config = researchConfig()) {
+export async function researchFleetCandidates(page: Page, collection: CollectionResult, optimization: OptimizationConfig, config = researchConfig(), now = new Date()) {
   // Validate injected configuration too, before any navigation.
   if (typeof config.enabled !== 'boolean' || !Number.isSafeInteger(config.maxAircraft) || config.maxAircraft < 1 || config.maxAircraft > 10 ||
     !Number.isSafeInteger(config.maxSuggestions) || config.maxSuggestions < 1 || config.maxSuggestions > 10 ||
     !Number.isSafeInteger(config.timeout) || config.timeout < 1 || config.timeout > 30000) throw new Error('RESEARCH_CONFIG_INVALID');
-  const now=new Date();
+  if(!Number.isFinite(now.getTime()))throw new Error('RESEARCH_TIME_INVALID');
   const observations = fleetObservations(collection, optimization.aircraftOrigins, now, optimization.maxAgeSeconds, optimization.airlineBases);
   let reviewJournal:Journal|null=null,reviewJournalAvailable=true;
   if(optimization.returnJournal){
@@ -75,14 +83,16 @@ export async function researchFleetCandidates(page: Page, collection: Collection
     return {aircraftId:a.aircraftId,registration:a.registration,origin:a.operationalOrigin,routeId:a.routeId,status,
       result:null as Awaited<ReturnType<typeof collectOpenRouteSuggestions>> | null};
   });
+  const queued=aircraft.filter(a=>a.status==='queued');
+  const rotation=researchQueueRotation(queued,now);
   const report = {schemaVersion:3,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,
     candidatesComplete:false,comparisonReady:false,collectionComplete:collection.complete,config,uiRestored:true,
+    queueRotation:{eligible:queued.length,slot:rotation.slot,offset:rotation.offset,windowMinutes:rotation.windowMinutes},
     warnings:reviewJournalAvailable?[] as string[]:['RESEARCH_JOURNAL_UNAVAILABLE'],aircraft,
     diagnosticProbe:null as Awaited<ReturnType<typeof probeOpenRouteControl>> | null,
     diagnosticProbes:[] as Awaited<ReturnType<typeof probeOpenRouteControl>>[]};
   let attempted=0;
-  for (const entry of aircraft) {
-    if (entry.status !== 'queued') continue;
+  for (const entry of rotation.entries) {
     if (attempted >= config.maxAircraft) {entry.status='deferred_limit';continue;}
     attempted++;
     try {
