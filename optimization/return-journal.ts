@@ -3,7 +3,7 @@ import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { withRunLock } from '../utils/run-lock';
 import { reviewEventId, RouteOptimizer, RoutePlan, RouteReview } from './route-optimizer';
-import { reviewDay } from './review-schedule';
+import { routeReviewTrigger } from './review-schedule';
 import type { AircraftSnapshot, CollectionResult } from '../demand/types';
 
 type CompletedDecision = 'would_reroute' | 'keep_route' | 'hold';
@@ -270,7 +270,59 @@ export async function appendFlightHistoryAnchors(directory:string,scope:string,r
 }
 export async function appendUiHealthObservation(directory:string,scope:string,observedAt:string,surfaces:string[]):Promise<number>{const now=new Date(observedAt);if(!validId(scope)||!Number.isFinite(now.getTime()))throw new Error('JOURNAL_CONFIG_INVALID');const root=resolve(directory);return withRunLock(async()=>{const filename=join(root,'return-journal.json');const data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);const list=data.uiHealthObservations?[...data.uiHealthObservations]:[];const event:UiHealthObservation={eventId:'ui_'+observedAt.replace(/\D/g,'').slice(0,14),type:'ui-health',observedAt,status:'healthy',surfaces:[...surfaces]};if(!validUiHealthObservation(event,now))throw new Error('JOURNAL_UI_HEALTH_INVALID');if(list.some(x=>x.eventId===event.eventId))return 0;list.push(event);data.uiHealthObservations=list;const temporary=join(root,`return-journal.${randomUUID()}.tmp`);try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(data,null,2)+'\n');await file.sync();}finally{await file.close();}await rename(temporary,filename);}finally{await unlink(temporary).catch(()=>undefined);}return 1;},join(root,'.return-journal.lock'));}
 export async function appendConfirmedRerouteReviews(directory:string,scope:string,decisions:any[],candidates:any[],fleet:any[],origins:ReadonlyMap<string,string>,execution:any,reviewTimeZone:string,now=new Date()):Promise<number>{
- if(!validId(scope)||!Number.isFinite(now.getTime())||!Array.isArray(decisions)||!Array.isArray(candidates)||!Array.isArray(fleet)||!execution||execution.halted===true)throw new Error('JOURNAL_CONFIG_INVALID');const root=resolve(directory);await mkdir(root,{recursive:true});return withRunLock(async()=>{const filename=join(root,'return-journal.json');let data:Journal;try{data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);}catch{throw new Error('JOURNAL_UNAVAILABLE: historico de reroute bloqueado.');}let added=0;for(const d of decisions){if(d?.decision!=='would_reroute'||!d?.selected||!Number.isSafeInteger(d?.compared)||d.compared<1||!Number.isSafeInteger(d?.dominating)||d.dominating<1)continue;const matches=fleet.filter(a=>a?.aircraftId===d.aircraftId);if(matches.length!==1)continue;const a=matches[0],origin=origins.get(a.aircraftId);if(!origin||a.state!=='ready'||a.issue||a.from!==origin||!validId(a.routeId))continue;const done=(execution.entries||[]).filter((e:any)=>e?.aircraftId===a.aircraftId&&e?.status==='rerouted'&&e?.reason==='NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED'&&e.previousRouteId===a.routeId&&e.previousFrom===a.from&&e.previousTo===a.to&&e.targetFrom===d.selected.from&&e.targetTo===d.selected.to&&e.targetAirportId===d.selected.airportId&&validId(e.confirmedRouteId)&&e.confirmedRouteId!==a.routeId);if(done.length!==1)continue;const target=candidates.filter(c=>c?.aircraftId===a.aircraftId&&c?.from===d.selected.from&&c?.to===d.selected.to&&c?.airportId===d.selected.airportId&&c?.comparisonReady===true&&c?.variableCycleComparison?.comparisonReady===true&&c.variableCycleComparison.status==='candidate_dominates'&&c?.variableCycleComparison?.current?.comparisonReady===true&&c?.candidateVariableCycle?.comparisonReady===true);if(target.length!==1)continue;const v=target[0].variableCycleComparison,current=v.current,candidate=target[0].candidateVariableCycle;if(current.aircraftId!==a.aircraftId||current.from!==a.from||current.to!==a.to||candidate.aircraftId!==a.aircraftId||candidate.from!==d.selected.from||candidate.to!==d.selected.to)continue;const nums=[current.recurringCycleProfit?.expected,current.recurringCycleProfitPerHour?.expected,candidate.recurringCycleProfit?.expected,candidate.recurringCycleProfitPerHour?.expected];if(nums.some(n=>!Number.isFinite(n)))continue;const reviewDate=reviewDay(now,reviewTimeZone);if(data.entries.some(e=>e.aircraftId===a.aircraftId&&e.origin===origin&&reviewDay(new Date(e.reviewedAt),reviewTimeZone)===reviewDate))continue;const day=reviewDate.replace(/-/g,'');const entry:Entry={aircraftId:a.aircraftId,origin,flightId:`daily_${day}`,reviewedAt:now.toISOString(),decision:'would_reroute',reviewEvidence:{trigger:'daily',reviewedRouteId:a.routeId,selectedRouteId:done[0].confirmedRouteId,result:'would_reroute',routePerformance:[{routeId:a.routeId,viable:true,netProfit:current.recurringCycleProfit.expected,netProfitPerHour:current.recurringCycleProfitPerHour.expected,occupancyPercentages:[]},{routeId:done[0].confirmedRouteId,viable:true,netProfit:candidate.recurringCycleProfit.expected,netProfitPerHour:candidate.recurringCycleProfitPerHour.expected,occupancyPercentages:[]}]}};if(data.entries.some(e=>key(e)===key(entry)))continue;if(!validReviewEvidence(entry.reviewEvidence,entry.decision))throw new Error('JOURNAL_REROUTE_REVIEW_INVALID');if(data.entries.length>=100000)throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');data.entries.push(entry);added++;}if(!added)return 0;const temporary=join(root,`return-journal.${randomUUID()}.tmp`);try{const file=await open(temporary,'wx',0o600);try{await file.writeFile(JSON.stringify(data,null,2)+'\n');await file.sync();}finally{await file.close();}await rename(temporary,filename);}catch{throw new Error('JOURNAL_SAVE_FAILED: reroute confirmado nao persistido.');}finally{await unlink(temporary).catch(()=>undefined);}return added;},join(root,'.return-journal.lock'));
+ if(!validId(scope)||!Number.isFinite(now.getTime())||!Array.isArray(decisions)||!Array.isArray(candidates)||!Array.isArray(fleet)||!execution||execution.halted===true)throw new Error('JOURNAL_CONFIG_INVALID');
+ const root=resolve(directory);await mkdir(root,{recursive:true});
+ return withRunLock(async()=>{
+  const filename=join(root,'return-journal.json');let data:Journal;
+  try{data=validateReturnJournal(JSON.parse(await readFile(filename,'utf8')),scope,now);}
+  catch{throw new Error('JOURNAL_UNAVAILABLE: historico de reroute bloqueado.');}
+  let added=0;
+  for(const d of decisions){
+   if(d?.decision!=='would_reroute'||!d?.selected||!Number.isSafeInteger(d?.compared)||d.compared<1||
+      !Number.isSafeInteger(d?.dominating)||d.dominating<1)continue;
+   const matches=fleet.filter(a=>a?.aircraftId===d.aircraftId);if(matches.length!==1)continue;
+   const a=matches[0],origin=origins.get(a.aircraftId);
+   if(!origin||a.state!=='ready'||a.issue||a.from!==origin||!validId(a.routeId))continue;
+   const review=routeReviewTrigger(a.aircraftId,origin,data,now,reviewTimeZone);
+   if(!review.due||review.trigger==='none'||!review.flightId)continue;
+
+   const done=(execution.entries||[]).filter((e:any)=>e?.aircraftId===a.aircraftId&&e?.status==='rerouted'&&
+     e?.reason==='NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED'&&e.previousRouteId===a.routeId&&e.previousFrom===a.from&&
+     e.previousTo===a.to&&e.targetFrom===d.selected.from&&e.targetTo===d.selected.to&&e.targetAirportId===d.selected.airportId&&
+     validId(e.confirmedRouteId)&&e.confirmedRouteId!==a.routeId);
+   if(done.length!==1)continue;
+
+   const target=candidates.filter(c=>c?.aircraftId===a.aircraftId&&c?.from===d.selected.from&&c?.to===d.selected.to&&
+     c?.airportId===d.selected.airportId&&c?.comparisonReady===true&&c?.variableCycleComparison?.comparisonReady===true&&
+     c.variableCycleComparison.status==='candidate_dominates'&&c?.variableCycleComparison?.current?.comparisonReady===true&&
+     c?.candidateVariableCycle?.comparisonReady===true);
+   if(target.length!==1)continue;
+
+   const v=target[0].variableCycleComparison,current=v.current,candidate=target[0].candidateVariableCycle;
+   if(current.aircraftId!==a.aircraftId||current.from!==a.from||current.to!==a.to||
+      candidate.aircraftId!==a.aircraftId||candidate.from!==d.selected.from||candidate.to!==d.selected.to)continue;
+   const nums=[current.recurringCycleProfit?.expected,current.recurringCycleProfitPerHour?.expected,
+     candidate.recurringCycleProfit?.expected,candidate.recurringCycleProfitPerHour?.expected];
+   if(nums.some(n=>!Number.isFinite(n)))continue;
+
+   const entry:Entry={aircraftId:a.aircraftId,origin,flightId:review.flightId,reviewedAt:now.toISOString(),decision:'would_reroute',
+    reviewEvidence:{trigger:review.trigger,reviewedRouteId:a.routeId,selectedRouteId:done[0].confirmedRouteId,result:'would_reroute',
+     routePerformance:[
+      {routeId:a.routeId,viable:true,netProfit:current.recurringCycleProfit.expected,netProfitPerHour:current.recurringCycleProfitPerHour.expected,occupancyPercentages:[]},
+      {routeId:done[0].confirmedRouteId,viable:true,netProfit:candidate.recurringCycleProfit.expected,netProfitPerHour:candidate.recurringCycleProfitPerHour.expected,occupancyPercentages:[]}
+     ]}};
+   if(data.entries.some(e=>key(e)===key(entry)))continue;
+   if(!validReviewEvidence(entry.reviewEvidence,entry.decision))throw new Error('JOURNAL_REROUTE_REVIEW_INVALID');
+   if(data.entries.length>=100000)throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');
+   data.entries.push(entry);added++;
+  }
+  if(!added)return 0;
+  const temporary=join(root,`return-journal.${randomUUID()}.tmp`);
+  try{const f=await open(temporary,'wx',0o600);try{await f.writeFile(JSON.stringify(data,null,2)+'\n');await f.sync();}finally{await f.close();}await rename(temporary,filename);}
+  catch{throw new Error('JOURNAL_SAVE_FAILED: reroute confirmado nao persistido.');}
+  finally{await unlink(temporary).catch(()=>undefined);}
+  return added;
+ },join(root,'.return-journal.lock'));
 }
 export async function appendVerifiedKeepRouteDecisions(directory:string,scope:string,decisions:any[],candidates:any[],fleet:any[],origins:ReadonlyMap<string,string>,reviewTimeZone:string,now=new Date()):Promise<number>{
  if(!validId(scope)||!Number.isFinite(now.getTime())||!Array.isArray(decisions)||!Array.isArray(candidates)||!Array.isArray(fleet))throw new Error('JOURNAL_CONFIG_INVALID');
@@ -285,6 +337,8 @@ export async function appendVerifiedKeepRouteDecisions(directory:string,scope:st
    const matches=fleet.filter(a=>a?.aircraftId===d.aircraftId);if(matches.length!==1)continue;
    const a=matches[0],origin=origins.get(a.aircraftId);
    if(!origin||a.state!=='ready'||a.issue||a.from!==origin||!validId(a.routeId))continue;
+   const review=routeReviewTrigger(a.aircraftId,origin,data,now,reviewTimeZone);
+   if(!review.due||review.trigger==='none'||!review.flightId)continue;
    const comparable=candidates.filter(c=>c?.aircraftId===a.aircraftId&&c?.comparisonReady===true&&
      c?.variableCycleComparison?.comparisonReady===true&&c.variableCycleComparison.status==='keep_current');
    if(comparable.length!==d.compared)continue;
@@ -307,11 +361,8 @@ export async function appendVerifiedKeepRouteDecisions(directory:string,scope:st
     if(current.some((x:any)=>x.recurringCycleProfit.expected!==profit||x.recurringCycleProfitPerHour.expected!==perHour))continue;
     performance={routeId:a.routeId,viable:true,netProfit:profit,netProfitPerHour:perHour,occupancyPercentages:[]};
    }
-   const reviewDate=reviewDay(now,reviewTimeZone);
-   if(data.entries.some(e=>e.aircraftId===a.aircraftId&&e.origin===origin&&reviewDay(new Date(e.reviewedAt),reviewTimeZone)===reviewDate))continue;
-   const day=reviewDate.replace(/-/g,'');
-   const entry:Entry={aircraftId:a.aircraftId,origin,flightId:`daily_${day}`,reviewedAt:now.toISOString(),decision:'keep_route',
-    reviewEvidence:{trigger:'daily',reviewedRouteId:a.routeId,selectedRouteId:null,result:'keep_route',routePerformance:[performance]}};
+   const entry:Entry={aircraftId:a.aircraftId,origin,flightId:review.flightId,reviewedAt:now.toISOString(),decision:'keep_route',
+    reviewEvidence:{trigger:review.trigger,reviewedRouteId:a.routeId,selectedRouteId:null,result:'keep_route',routePerformance:[performance]}};
    if(data.entries.some(e=>key(e)===key(entry)))continue;
    if(!validReviewEvidence(entry.reviewEvidence,entry.decision))throw new Error('JOURNAL_ROUTE_REVIEW_INVALID');
    if(data.entries.length>=100000)throw new Error('JOURNAL_FULL: nao descartar historico automaticamente.');

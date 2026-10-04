@@ -140,6 +140,29 @@ test('verified variable KEEP closes daily review without consuming reroute decis
  await reviewWithReturnJournal(input(),options(),now);const {appendVerifiedKeepRouteDecisions}=await import('../../optimization/return-journal');const tomorrow=new Date('2026-10-03T20:00:00Z');const fleet=[{aircraftId:'1',routeId:'10',from:'GRU',to:'SCL',state:'ready',issue:null}];const cycle={aircraftId:'1',from:'GRU',to:'SCL',comparisonReady:true,recurringCycleProfit:{expected:1000},recurringCycleProfitPerHour:{expected:500}};const candidates=[{aircraftId:'1',comparisonReady:true,variableCycleComparison:{status:'keep_current',comparisonReady:true,current:cycle}},{aircraftId:'1',comparisonReady:true,variableCycleComparison:{status:'keep_current',comparisonReady:true,current:cycle}}];const keep=[{aircraftId:'1',decision:'keep_route',selected:null,compared:2,reason:'NO_INSPECTED_CANDIDATE_PROVES_CONSERVATIVE_DOMINANCE'}];expect(await appendVerifiedKeepRouteDecisions(directory,'company-test',keep,candidates,fleet,new Map([['1','GRU']]),'America/Sao_Paulo',tomorrow)).toBe(1);expect(await appendVerifiedKeepRouteDecisions(directory,'company-test',keep,candidates,fleet,new Map([['1','GRU']]),'America/Sao_Paulo',tomorrow)).toBe(0);const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));expect(saved.entries.at(-1)).toMatchObject({aircraftId:'1',origin:'GRU',flightId:'daily_20261003',decision:'keep_route',reviewEvidence:{reviewedRouteId:'10',result:'keep_route'}});const reroute=[{...keep[0],decision:'would_reroute',selected:{from:'GRU',to:'AAA',airportId:'99'}}];expect(await appendVerifiedKeepRouteDecisions(directory,'company-test',reroute,candidates,fleet,new Map([['1','GRU']]),'America/Sao_Paulo',new Date('2026-10-04T20:00:00Z'))).toBe(0);
 });
 
+test('confirmed return after earlier daily KEEP persists a distinct same-day return review',async()=>{
+ const {appendVerifiedKeepRouteDecisions}=await import('../../optimization/return-journal');
+ const when=new Date('2026-10-07T20:00:00Z');
+ const departure={eventId:'dep_return_1',type:'departure',aircraftId:'1',registration:'TEST',routeId:'10',from:'SCL',to:'GRU',
+  observedAt:'2026-10-07T16:00:00Z',result:'departed',
+  demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:100,J:0,F:0},occupancyPercentage:100},actualOnboard:{Y:100,J:0,F:0}};
+ const arrival={eventId:'arr_dep_return_1',type:'arrival-observed',departureEventId:'dep_return_1',aircraftId:'1',registration:'TEST',
+  routeId:'10',from:'SCL',to:'GRU',departedAt:departure.observedAt,observedAt:'2026-10-07T18:00:00Z',result:'arrived_observed'};
+ await mkdir(directory,{recursive:true});
+ await writeFile(join(directory,'return-journal.json'),JSON.stringify({schemaVersion:1,scope:'company-test',
+  entries:[{aircraftId:'1',origin:'GRU',flightId:'daily_20261007',reviewedAt:'2026-10-07T15:00:00Z',decision:'keep_route'}],
+  events:[departure,arrival]})+'\n');
+ const fleet=[{aircraftId:'1',registration:'TEST',routeId:'10',from:'GRU',to:'SCL',state:'ready',issue:null}];
+ const cycle={aircraftId:'1',from:'GRU',to:'SCL',comparisonReady:true,recurringCycleProfit:{expected:1000},recurringCycleProfitPerHour:{expected:500}};
+ const candidates=[{aircraftId:'1',comparisonReady:true,variableCycleComparison:{status:'keep_current',comparisonReady:true,current:cycle}}];
+ const decisions=[{aircraftId:'1',decision:'keep_route',selected:null,compared:1,reason:'NO_INSPECTED_CANDIDATE_PROVES_CONSERVATIVE_DOMINANCE'}];
+ expect(await appendVerifiedKeepRouteDecisions(directory,'company-test',decisions,candidates,fleet,new Map([['1','GRU']]),'America/Sao_Paulo',when)).toBe(1);
+ const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
+ expect(saved.entries.at(-1)).toMatchObject({aircraftId:'1',origin:'GRU',flightId:'arr_dep_return_1',decision:'keep_route',
+  reviewEvidence:{trigger:'return',reviewedRouteId:'10',result:'keep_route'}});
+ expect(await appendVerifiedKeepRouteDecisions(directory,'company-test',decisions,candidates,fleet,new Map([['1','GRU']]),'America/Sao_Paulo',when)).toBe(0);
+});
+
 test('reroute review is persisted only after a fresh confirmed route id',async()=>{
  await reviewWithReturnJournal(input(),options(),now);const {appendConfirmedRerouteReviews}=await import('../../optimization/return-journal');const when=new Date('2026-10-05T20:00:00Z'),fleet=[{aircraftId:'1',routeId:'10',from:'GRU',to:'SCL',state:'ready',issue:null}],current={aircraftId:'1',from:'GRU',to:'SCL',comparisonReady:true,recurringCycleProfit:{expected:1000},recurringCycleProfitPerHour:{expected:500}},candidate={aircraftId:'1',from:'GRU',to:'AAA',comparisonReady:true,recurringCycleProfit:{expected:3000},recurringCycleProfitPerHour:{expected:900}};const decisions=[{aircraftId:'1',decision:'would_reroute',selected:{from:'GRU',to:'AAA',airportId:'99'},compared:1,dominating:1}],candidates=[{aircraftId:'1',from:'GRU',to:'AAA',airportId:'99',comparisonReady:true,variableCycleComparison:{status:'candidate_dominates',comparisonReady:true,current},candidateVariableCycle:candidate}],entry={aircraftId:'1',status:'rerouted',reason:'NATIVE_REROUTE_AND_FRESH_ROUTE_CONFIRMED',previousRouteId:'10',previousFrom:'GRU',previousTo:'SCL',targetFrom:'GRU',targetTo:'AAA',targetAirportId:'99',confirmedRouteId:'20'};expect(await appendConfirmedRerouteReviews(directory,'company-test',decisions,candidates,fleet,new Map([['1','GRU']]),{halted:false,entries:[{...entry,status:'outcome_unknown'}]},'America/Sao_Paulo',when)).toBe(0);expect(await appendConfirmedRerouteReviews(directory,'company-test',decisions,candidates,fleet,new Map([['1','GRU']]),{halted:false,entries:[entry]},'America/Sao_Paulo',when)).toBe(1);const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));expect(saved.entries.at(-1)).toMatchObject({flightId:'daily_20261005',decision:'would_reroute',reviewEvidence:{reviewedRouteId:'10',selectedRouteId:'20',result:'would_reroute'}});
 });

@@ -126,3 +126,26 @@ test('unavailable persistent review journal fails route research closed before n
     expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
   }finally{await rm(dir,{recursive:true,force:true});}
 });
+
+
+test('confirmed return after same-day review re-enters bounded route research',async({page})=>{
+ await fixture(page);
+ const dir=await mkdtemp(join(tmpdir(),'am4-research-return-'));
+ try{
+  const now=new Date(),daily=new Date(now.getTime()-60*60*1000).toISOString();
+  const departed=new Date(now.getTime()-30*60*1000).toISOString(),arrived=new Date(now.getTime()-10*60*1000).toISOString();
+  const departure={eventId:'dep_return_101',type:'departure',aircraftId:'101',registration:'SYNTHETIC',routeId:'1',from:'BBB',to:'AAA',
+   observedAt:departed,result:'departed',demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:100,J:0,F:0},occupancyPercentage:100},
+   actualOnboard:{Y:100,J:0,F:0}};
+  const arrival={eventId:'arr_dep_return_101',type:'arrival-observed',departureEventId:'dep_return_101',aircraftId:'101',
+   registration:'SYNTHETIC',routeId:'1',from:'BBB',to:'AAA',departedAt:departed,observedAt:arrived,result:'arrived_observed'};
+  await writeFile(join(dir,'return-journal.json'),JSON.stringify({schemaVersion:1,scope:'test-scope',
+   entries:[{aircraftId:'101',origin:'AAA',flightId:'daily_old',reviewedAt:daily,decision:'keep_route'}],
+   events:[departure,arrival]})+'\n');
+  const withJournal={...settings,returnJournal:{directory:dir,scope:'test-scope'}};
+  const r=await researchFleetCandidates(page,collection(),withJournal,{...config,maxAircraft:1,maxSuggestions:1});
+  expect(r.aircraft[0]).toMatchObject({aircraftId:'101',status:'observed'});
+  expect(await page.evaluate(()=>(window as any).researches)).toBe(1);
+  expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+ }finally{await rm(dir,{recursive:true,force:true});}
+});
