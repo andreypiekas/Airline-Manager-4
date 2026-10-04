@@ -75,9 +75,9 @@ function effectiveHistory(
   if(!h||h.status!=='observed')return null;
   const rows:EffectiveHistoryRow[]=[];
   for(const e of h.entries){
-    const age=relativeAgeMinutes(e.relativeTime);
+    const age=relativeAgeIntervalMinutes(e.relativeTime);
     if(age===null||!valid(e.onboard))return null;
-    rows.push({from:e.from,to:e.to,onboard:{...e.onboard},ageLowerMinutes:age,ageUpperMinutes:age});
+    rows.push({from:e.from,to:e.to,onboard:{...e.onboard},ageLowerMinutes:age.lower,ageUpperMinutes:age.upper});
   }
   return {rows,stitched:false};
 }

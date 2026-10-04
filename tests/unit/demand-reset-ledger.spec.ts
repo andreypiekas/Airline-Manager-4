@@ -217,7 +217,7 @@ test('stitched history crossing reset boundary or mismatching live identity rema
 test('rounded hour buckets can form a non-empty conservative global reset interval',()=>{
  const collection:CollectionResult={complete:true,expectedRoutes:2,warnings:[],aircraft:[
   ac('1',[e('6 hours ago','AAA','BBB',30,0,0),e('1 day ago','AAA','BBB',1,0,0)]),
-  {...ac('2',[e('4 hours ago','CCC','DDD',20,0,0),e('6 hours ago','CCC','DDD',1,0,0)]),from:'CCC',to:'DDD',routeLabel:'CCC-DDD'}
+  {...ac('2',[e('4 hours ago','CCC','DDD',20,0,0),e('6 hours ago','CCC','DDD',1,0,0),e('8 hours ago','GGG','HHH',1,0,0)]),from:'CCC',to:'DDD',routeLabel:'CCC-DDD'}
  ]};
  const report:DemandLabelCalibrationReport={
   status:'observed',observedAt:stamp,classification:'daily_total',comparisonReady:false,mutationAuthorized:false,uiRestored:true,warnings:[],
