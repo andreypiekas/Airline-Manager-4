@@ -53,6 +53,8 @@ export interface RouteExecutionEntry {
   /** Ephemeral authorization: true only after the fresh pre-mutation context is revalidated. */
   mutationAuthorized:boolean;
   reason:string;
+  /** Sanitized read-only diagnostic; never feeds authorization decisions. */
+  prepareDiagnostic?:string;
 }
 
 export interface RouteExecutionReport {
@@ -78,6 +80,13 @@ const sameTargetEvidence=(a:RouteExecutionCandidate,b:RouteExecutionCandidate)=>
   a.costIndex===b.costIndex&&a.distanceKm===b.distanceKm&&a.durationSeconds===b.durationSeconds&&
   a.fuelLbs===b.fuelLbs&&a.co2KgPerPaxKm===b.co2KgPerPaxKm&&a.routeFee===b.routeFee&&
   sameCabins(a.capacity,b.capacity)&&sameCabins(a.autoFares,b.autoFares);
+
+const sanitizedPrepareDiagnostic=(error:unknown)=>{
+  const message=error instanceof Error?error.message:'';
+  if(/^[A-Z][A-Z0-9_]{2,100}$/.test(message))return message;
+  if(/timeout/i.test(message))return 'PLAYWRIGHT_TIMEOUT';
+  return 'UNCLASSIFIED_PREPARE_FAILURE';
+};
 
 const mutationControlReady=(candidate:RouteExecutionCandidate)=>{
   const c=candidate.routeMutationControl;
@@ -176,7 +185,11 @@ export class RouteMutationExecutor {
 
       let fresh:{aircraft:AircraftSnapshot;target:RouteExecutionCandidate};
       try{fresh=await this.port.prepare(expected,target);}
-      catch{entry.reason='ROUTE_EXECUTION_PREPARE_FAILED';continue;}
+      catch(error){
+        entry.reason='ROUTE_EXECUTION_PREPARE_FAILED';
+        entry.prepareDiagnostic=sanitizedPrepareDiagnostic(error);
+        continue;
+      }
       const freshAge=Date.now()-Date.parse(fresh.target.observedAt);
       if(!sameCurrentContext(expected,fresh.aircraft)||!sameTargetEvidence(target,fresh.target)||
         !fresh.target.comparisonReady||!Number.isFinite(freshAge)||freshAge<0||

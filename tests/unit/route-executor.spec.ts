@@ -132,3 +132,25 @@ test('completed daily route review blocks before prepare or reroute',async()=>{
  expect(prepares).toBe(0);expect(port.reroutes).toBe(0);expect(r.halted).toBe(false);
  expect(r.entries[0]).toMatchObject({status:'held',mutationAuthorized:false,reason:'DAILY_ROUTE_REVIEW_ALREADY_COMPLETED'});
 });
+
+
+test('prepare failure keeps generic HOLD reason while persisting only a sanitized diagnostic',async()=>{
+ const port=new FakePort();
+ port.prepare=async()=>{throw new Error('RESEARCH_ROUTE_NOT_FOUND');};
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async()=>{})
+  .run([aircraft()],[decision],[candidate()]);
+ expect(port.reroutes).toBe(0);
+ expect(r.entries[0]).toMatchObject({
+  status:'held',mutationAuthorized:false,reason:'ROUTE_EXECUTION_PREPARE_FAILED',
+  prepareDiagnostic:'RESEARCH_ROUTE_NOT_FOUND'
+ });
+});
+
+test('arbitrary prepare errors are not copied into persisted route diagnostics',async()=>{
+ const port=new FakePort();
+ port.prepare=async()=>{throw new Error('account-specific selector foo@example.com timed out');};
+ const r=await new RouteMutationExecutor(port,{enabled:true,maxReroutes:1,maxAgeSeconds:300},async()=>{})
+  .run([aircraft()],[decision],[candidate()]);
+ expect(r.entries[0].prepareDiagnostic).toBe('PLAYWRIGHT_TIMEOUT');
+ expect(JSON.stringify(r)).not.toContain('foo@example.com');
+});
