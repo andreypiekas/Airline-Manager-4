@@ -50,14 +50,23 @@ test('valid but incomplete comparison stays as explicit retryable HOLD',()=>{
 });
 
 
-test('HOLD never promotes aggregate route comparison readiness',()=>{
+test('aggregate route comparison readiness requires every inspected decision to be complete',()=>{
   const c=candidate('AAA',1000);c.comparisonReady=false;
   const hold=planVariableRouteDecision('101',[c]);
   expect(hold.decision).toBe('hold');
+  expect(routeDecisionSetComparisonReady([])).toBe(false);
   expect(routeDecisionSetComparisonReady([hold])).toBe(false);
   expect(routeDecisionSetComparisonReady([{...hold,decision:'unavailable'}])).toBe(false);
   expect(routeDecisionSetComparisonReady([{...hold,decision:'keep_route'}])).toBe(true);
   expect(routeDecisionSetComparisonReady([{...hold,decision:'would_reroute'}])).toBe(true);
+  expect(routeDecisionSetComparisonReady([
+    {...hold,aircraftId:'101',decision:'keep_route'},
+    {...hold,aircraftId:'102',decision:'hold'}
+  ])).toBe(false);
+  expect(routeDecisionSetComparisonReady([
+    {...hold,aircraftId:'101',decision:'keep_route'},
+    {...hold,aircraftId:'102',decision:'would_reroute'}
+  ])).toBe(true);
 });
 
 

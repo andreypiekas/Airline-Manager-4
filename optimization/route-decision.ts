@@ -93,5 +93,5 @@ export function planVariableRouteDecision(
 
 /** True only when route economics produced a completed safe decision. HOLD remains retryable and never marks comparison ready. */
 export function routeDecisionSetComparisonReady(decisions:readonly VariableRouteDecision[]):boolean{
-  return decisions.some(d=>d.decision==='keep_route'||d.decision==='would_reroute');
+  return decisions.length>0&&decisions.every(d=>d.decision==='keep_route'||d.decision==='would_reroute');
 }
