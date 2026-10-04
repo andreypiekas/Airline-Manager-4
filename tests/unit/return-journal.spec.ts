@@ -176,3 +176,38 @@ test('journal continuity diagnostics compares only the latest two persisted anch
  const journal:any={schemaVersion:1,scope:'x',entries:[],events:[anchor('hist_1','2026-10-03T18:00:00Z',10,[row('CCC','DDD',70)]),anchor('hist_2','2026-10-03T19:00:00Z',11,[shared1,shared2]),anchor('hist_3','2026-10-03T20:00:00Z',12,[shared1,shared2,row('EEE','FFF',80)])]};
  expect(flightHistoryContinuityDiagnostics(journal)).toEqual([expect.objectContaining({status:'verified_overlap',aircraftId:'1',cycleDelta:1,overlapRows:2,comparisonReady:false,mutationAuthorized:false})]);
 });
+
+
+test('conservative stitched history requires cycle-aligned live-shaped overlap and rebases ages',async()=>{
+ const {buildConservativeFlightHistoryStitch}=await import('../../optimization/return-journal');
+ const row=(age:string,from:string,to:string,revenue:number)=>({relativeTime:age,from,to,co2Quotas:10,onboard:{Y:5,J:0,F:0},fuelLbs:100,revenue});
+ const previous:any={eventId:'hist_prev',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-03T21:00:00Z',cycles:193,rows:[
+   row('14 hours ago','AAA','BBB',100),row('15 hours ago','BBB','AAA',101),row('16 hours ago','AAA','BBB',102),row('17 hours ago','BBB','AAA',103),row('18 hours ago','AAA','BBB',104),row('19 hours ago','BBB','AAA',105),row('20 hours ago','AAA','BBB',106),row('21 hours ago','BBB','AAA',107)
+ ]};
+ const current:any={eventId:'hist_cur',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-04T00:00:00Z',cycles:196,rows:[
+   row('14 hours ago','BBB','AAA',201),row('15 hours ago','AAA','BBB',202),row('16 hours ago','BBB','AAA',203),
+   row('17 hours ago','AAA','BBB',100),row('18 hours ago','BBB','AAA',101),row('19 hours ago','AAA','BBB',102),row('20 hours ago','BBB','AAA',103),row('21 hours ago','AAA','BBB',104)
+ ]};
+ const stitched=buildConservativeFlightHistoryStitch([previous,current]);
+ expect(stitched).toMatchObject({status:'verified_chain',anchorsUsed:2,linksVerified:1,rowsStitched:11,reason:'PERSISTED_FLIGHT_HISTORY_STITCH_VERIFIED',comparisonReady:false,mutationAuthorized:false});
+ expect(stitched.oldestAgeLowerMinutes).toBe(24*60);
+});
+
+test('stitched history rejects overlap whose position disagrees with cycle delta',async()=>{
+ const {buildConservativeFlightHistoryStitch}=await import('../../optimization/return-journal');
+ const row=(age:string,from:string,to:string,revenue:number)=>({relativeTime:age,from,to,co2Quotas:10,onboard:{Y:5,J:0,F:0},fuelLbs:100,revenue});
+ const shared=[row('10 hours ago','AAA','BBB',1),row('11 hours ago','BBB','AAA',2),row('12 hours ago','AAA','BBB',3)];
+ const previous:any={eventId:'hist_prev2',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-03T20:00:00Z',cycles:10,rows:shared};
+ const current:any={eventId:'hist_cur2',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-03T21:00:00Z',cycles:11,rows:shared};
+ const stitched=buildConservativeFlightHistoryStitch([previous,current]);
+ expect(stitched).toMatchObject({status:'unavailable',linksVerified:0,stoppedReason:'STITCH_CYCLE_ALIGNMENT_UNVERIFIED',comparisonReady:false,mutationAuthorized:false});
+});
+
+test('stitched history rejects identity overlap when relative-age evidence is incompatible',async()=>{
+ const {buildConservativeFlightHistoryStitch}=await import('../../optimization/return-journal');
+ const row=(age:string,from:string,to:string,revenue:number)=>({relativeTime:age,from,to,co2Quotas:10,onboard:{Y:5,J:0,F:0},fuelLbs:100,revenue});
+ const previous:any={eventId:'hist_prev3',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-03T20:00:00Z',cycles:10,rows:[row('10 hours ago','AAA','BBB',1),row('11 hours ago','BBB','AAA',2),row('12 hours ago','AAA','BBB',3)]};
+ const current:any={eventId:'hist_cur3',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-03T21:00:00Z',cycles:11,rows:[row('1 hour ago','CCC','DDD',9),row('30 hours ago','AAA','BBB',1),row('31 hours ago','BBB','AAA',2)]};
+ const stitched=buildConservativeFlightHistoryStitch([previous,current]);
+ expect(stitched).toMatchObject({status:'unavailable',linksVerified:0,stoppedReason:'STITCH_OVERLAP_AGE_INCONSISTENT',comparisonReady:false,mutationAuthorized:false});
+});

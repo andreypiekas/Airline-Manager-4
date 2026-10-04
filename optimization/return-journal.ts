@@ -44,11 +44,11 @@ const validReviewEvidence=(v:unknown,decision:CompletedDecision)=>{
 };
 const validCabins=(v:any)=>v&&typeof v==='object'&&Object.keys(v).sort().join(',')==='F,J,Y'&&['Y','J','F'].every(k=>Number.isSafeInteger(v[k])&&v[k]>=0);
 const validFlightHistoryAnchor=(v:unknown,now:Date):v is FlightHistoryAnchorEvent=>{if(!v||typeof v!=='object')return false;const x=v as FlightHistoryAnchorEvent;if(Object.keys(x).sort().join(',')!=='aircraftId,cycles,eventId,observedAt,registration,rows,type'||!validId(x.eventId)||x.type!=='flight-history-anchor'||!validId(x.aircraftId)||typeof x.registration!=='string'||!x.registration||x.registration.length>100||typeof x.observedAt!=='string'||!Number.isFinite(Date.parse(x.observedAt))||Date.parse(x.observedAt)>now.getTime()||!Number.isSafeInteger(x.cycles)||x.cycles<0||!Array.isArray(x.rows)||x.rows.length<1||x.rows.length>8)return false;return x.rows.every(r=>r&&typeof r==='object'&&Object.keys(r).sort().join(',')==='co2Quotas,from,fuelLbs,onboard,relativeTime,revenue,to'&&typeof r.relativeTime==='string'&&r.relativeTime.length>0&&r.relativeTime.length<=40&&validOrigin(r.from)&&validOrigin(r.to)&&r.from!==r.to&&Number.isSafeInteger(r.co2Quotas)&&r.co2Quotas>=0&&validCabins(r.onboard)&&Number.isSafeInteger(r.fuelLbs)&&r.fuelLbs>=0&&Number.isSafeInteger(r.revenue)&&r.revenue>=0);};
-export interface FlightHistoryContinuityDiagnostic { status:'verified_overlap'|'unavailable'; aircraftId:string; previousObservedAt:string|null; currentObservedAt:string|null; cycleDelta:number|null; overlapRows:number; reason:string; comparisonReady:false; mutationAuthorized:false }
+export interface FlightHistoryContinuityDiagnostic { status:'verified_overlap'|'unavailable'; aircraftId:string; previousObservedAt:string|null; currentObservedAt:string|null; cycleDelta:number|null; overlapRows:number; previousStart:number|null; currentStart:number|null; cycleAligned:boolean; reason:string; comparisonReady:false; mutationAuthorized:false }
 const flightHistoryRowIdentity=(r:FlightHistoryAnchorEvent['rows'][number])=>JSON.stringify([r.from,r.to,r.co2Quotas,r.onboard.Y,r.onboard.J,r.onboard.F,r.fuelLbs,r.revenue]);
 /** Read-only evidence that two persisted snapshots contain the same completed flights. Never authorizes demand reconstruction by itself. */
 export function compareFlightHistoryAnchors(previous:FlightHistoryAnchorEvent,current:FlightHistoryAnchorEvent):FlightHistoryContinuityDiagnostic{
- const base:FlightHistoryContinuityDiagnostic={status:'unavailable',aircraftId:current?.aircraftId||'',previousObservedAt:previous?.observedAt||null,currentObservedAt:current?.observedAt||null,cycleDelta:null,overlapRows:0,reason:'ANCHOR_CONTINUITY_UNAVAILABLE',comparisonReady:false,mutationAuthorized:false};
+ const base:FlightHistoryContinuityDiagnostic={status:'unavailable',aircraftId:current?.aircraftId||'',previousObservedAt:previous?.observedAt||null,currentObservedAt:current?.observedAt||null,cycleDelta:null,overlapRows:0,previousStart:null,currentStart:null,cycleAligned:false,reason:'ANCHOR_CONTINUITY_UNAVAILABLE',comparisonReady:false,mutationAuthorized:false};
  if(!previous||!current||previous.type!=='flight-history-anchor'||current.type!=='flight-history-anchor'||previous.aircraftId!==current.aircraftId||previous.registration!==current.registration)return {...base,reason:'ANCHOR_IDENTITY_MISMATCH'};
  const pTime=Date.parse(previous.observedAt),cTime=Date.parse(current.observedAt);if(!Number.isFinite(pTime)||!Number.isFinite(cTime)||cTime<=pTime)return {...base,reason:'ANCHOR_TIME_NOT_MONOTONIC'};
  if(!Number.isSafeInteger(previous.cycles)||!Number.isSafeInteger(current.cycles)||current.cycles<previous.cycles)return {...base,reason:'ANCHOR_CYCLES_NOT_MONOTONIC'};
@@ -58,7 +58,8 @@ export function compareFlightHistoryAnchors(previous:FlightHistoryAnchorEvent,cu
  if(overlap<2)return {...base,cycleDelta,overlapRows:overlap,reason:'ANCHOR_OVERLAP_INSUFFICIENT'};
  const best=alignments.filter(x=>x.length===overlap);
  if(best.length!==1)return {...base,cycleDelta,overlapRows:overlap,reason:'ANCHOR_OVERLAP_ALIGNMENT_AMBIGUOUS'};
- return {...base,status:'verified_overlap',cycleDelta,overlapRows:overlap,reason:'PERSISTED_FLIGHT_ROWS_OVERLAP_VERIFIED'};
+ const alignment=best[0],cycleAligned=alignment.i===0&&alignment.j===cycleDelta;
+ return {...base,status:'verified_overlap',cycleDelta,overlapRows:overlap,previousStart:alignment.i,currentStart:alignment.j,cycleAligned,reason:'PERSISTED_FLIGHT_ROWS_OVERLAP_VERIFIED'};
 }
 export function flightHistoryContinuityDiagnostics(journal:Journal):FlightHistoryContinuityDiagnostic[]{
  const grouped=new Map<string,FlightHistoryAnchorEvent[]>();
@@ -74,6 +75,87 @@ export function flightHistoryContinuityDiagnostics(journal:Journal):FlightHistor
 export async function readFlightHistoryContinuityDiagnostics(directory:string,scope:string,now=new Date()):Promise<FlightHistoryContinuityDiagnostic[]>{
  const journal=validateReturnJournal(JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8')),scope,now);
  return flightHistoryContinuityDiagnostics(journal);
+}
+
+export interface StitchedFlightHistoryRow {
+  from:string;to:string;co2Quotas:number;onboard:{Y:number;J:number;F:number};fuelLbs:number;revenue:number;
+  sourceObservedAt:string;sourceRelativeTime:string;ageLowerMinutes:number;ageUpperMinutes:number;
+}
+export interface FlightHistoryStitchDiagnostic {
+  status:'verified_chain'|'unavailable';aircraftId:string;registration:string|null;anchorsAvailable:number;anchorsUsed:number;linksVerified:number;
+  latestObservedAt:string|null;latestCycles:number|null;rowsStitched:number;oldestAgeLowerMinutes:number|null;oldestAgeUpperMinutes:number|null;
+  stoppedReason:string|null;reason:string;rows:StitchedFlightHistoryRow[];comparisonReady:false;mutationAuthorized:false;
+}
+export function relativeAgeIntervalMinutes(text:string):{lower:number;upper:number}|null{
+ const s=text.trim().toLowerCase();let m=s.match(/^(\d+) (?:seconds?|secs?) ago$/);
+ if(m){const n=Number(m[1]);return {lower:n/60,upper:(n+1)/60};}
+ m=s.match(/^(\d+) (?:minutes?|mins?) ago$/);if(m){const n=Number(m[1]);return {lower:n,upper:n+1};}
+ m=s.match(/^(\d+) (?:hours?|hrs?) ago$/);if(m){const n=Number(m[1]);return {lower:n*60,upper:(n+1)*60};}
+ m=s.match(/^(\d+) days? ago$/);if(m){const n=Number(m[1]);return {lower:n*1440,upper:(n+1)*1440};}
+ if(s==='a second ago'||s==='1 second ago')return {lower:1/60,upper:2/60};
+ if(s==='a minute ago'||s==='1 minute ago')return {lower:1,upper:2};
+ if(s==='an hour ago'||s==='1 hour ago')return {lower:60,upper:120};
+ if(s==='a day ago'||s==='1 day ago')return {lower:1440,upper:2880};
+ return null;
+}
+const intervalsOverlap=(a:{lower:number;upper:number},b:{lower:number;upper:number})=>Math.max(a.lower,b.lower)<=Math.min(a.upper,b.upper);
+const rebasedStitchRow=(r:FlightHistoryAnchorEvent['rows'][number],sourceObservedAt:string,latestObservedAt:string):StitchedFlightHistoryRow|null=>{
+ const interval=relativeAgeIntervalMinutes(r.relativeTime),source=Date.parse(sourceObservedAt),latest=Date.parse(latestObservedAt);
+ if(!interval||!Number.isFinite(source)||!Number.isFinite(latest)||latest<source)return null;
+ const elapsed=(latest-source)/60000;
+ return {from:r.from,to:r.to,co2Quotas:r.co2Quotas,onboard:{...r.onboard},fuelLbs:r.fuelLbs,revenue:r.revenue,
+   sourceObservedAt,sourceRelativeTime:r.relativeTime,ageLowerMinutes:interval.lower+elapsed,ageUpperMinutes:interval.upper+elapsed};
+};
+/**
+ * Builds only a read-only, cryptographically-persisted continuity view. It does not
+ * feed candidate demand yet. A link is accepted only when the unique overlap starts
+ * at the older snapshot's newest row, shifts by exactly the observed cycle delta,
+ * and the coarse relative-age intervals remain compatible after elapsed time.
+ */
+export function buildConservativeFlightHistoryStitch(anchors:FlightHistoryAnchorEvent[]):FlightHistoryStitchDiagnostic{
+ const sorted=[...anchors].sort((a,b)=>Date.parse(a.observedAt)-Date.parse(b.observedAt));
+ const latest=sorted.at(-1);
+ const base:FlightHistoryStitchDiagnostic={status:'unavailable',aircraftId:latest?.aircraftId||'',registration:latest?.registration||null,
+   anchorsAvailable:sorted.length,anchorsUsed:latest?1:0,linksVerified:0,latestObservedAt:latest?.observedAt||null,latestCycles:latest?.cycles??null,
+   rowsStitched:0,oldestAgeLowerMinutes:null,oldestAgeUpperMinutes:null,stoppedReason:null,reason:'STITCH_CONTINUITY_UNAVAILABLE',rows:[],comparisonReady:false,mutationAuthorized:false};
+ if(!latest||sorted.length<2)return base;
+ if(sorted.some(a=>a.aircraftId!==latest.aircraftId||a.registration!==latest.registration))return {...base,reason:'STITCH_IDENTITY_MISMATCH'};
+ const rows:StitchedFlightHistoryRow[]=[];
+ for(const r of latest.rows){const x=rebasedStitchRow(r,latest.observedAt,latest.observedAt);if(!x)return {...base,reason:'STITCH_LATEST_AGE_UNPARSEABLE'};rows.push(x);}
+ let linksVerified=0,anchorsUsed=1,stoppedReason:string|null=null;
+ for(let i=sorted.length-1;i>0;i--){
+   const previous=sorted[i-1],current=sorted[i],link=compareFlightHistoryAnchors(previous,current);
+   if(link.status!=='verified_overlap'){stoppedReason=link.reason;break;}
+   if(!link.cycleAligned||link.previousStart!==0||link.currentStart!==link.cycleDelta){stoppedReason='STITCH_CYCLE_ALIGNMENT_UNVERIFIED';break;}
+   const elapsed=(Date.parse(current.observedAt)-Date.parse(previous.observedAt))/60000;
+   let ageCompatible=true;
+   for(let n=0;n<link.overlapRows;n++){
+     const p=relativeAgeIntervalMinutes(previous.rows[n].relativeTime);
+     const c=relativeAgeIntervalMinutes(current.rows[link.currentStart!+n].relativeTime);
+     if(!p||!c||!Number.isFinite(elapsed)||elapsed<0||!intervalsOverlap({lower:p.lower+elapsed,upper:p.upper+elapsed},c)){ageCompatible=false;break;}
+   }
+   if(!ageCompatible){stoppedReason='STITCH_OVERLAP_AGE_INCONSISTENT';break;}
+   const tail=previous.rows.slice(link.overlapRows);
+   const converted:StitchedFlightHistoryRow[]=[];
+   for(const r of tail){const x=rebasedStitchRow(r,previous.observedAt,latest.observedAt);if(!x){ageCompatible=false;break;}converted.push(x);}
+   if(!ageCompatible){stoppedReason='STITCH_TAIL_AGE_UNPARSEABLE';break;}
+   const last=rows.at(-1);if(last&&converted.some((x,index)=>index===0&&x.ageUpperMinutes<last.ageLowerMinutes)){stoppedReason='STITCH_AGE_ORDER_INCONSISTENT';break;}
+   rows.push(...converted);linksVerified++;anchorsUsed++;
+ }
+ if(!linksVerified)return {...base,rows,rowsStitched:rows.length,stoppedReason,reason:stoppedReason||base.reason};
+ const oldest=rows.reduce((a,b)=>a.ageLowerMinutes>=b.ageLowerMinutes?a:b);
+ return {...base,status:'verified_chain',anchorsUsed,linksVerified,rowsStitched:rows.length,rows,
+   oldestAgeLowerMinutes:oldest.ageLowerMinutes,oldestAgeUpperMinutes:oldest.ageUpperMinutes,stoppedReason,
+   reason:stoppedReason?'PERSISTED_FLIGHT_HISTORY_STITCH_VERIFIED_PARTIAL':'PERSISTED_FLIGHT_HISTORY_STITCH_VERIFIED'};
+}
+export function flightHistoryStitchDiagnostics(journal:Journal):FlightHistoryStitchDiagnostic[]{
+ const grouped=new Map<string,FlightHistoryAnchorEvent[]>();
+ for(const e of journal.events||[])if(e.type==='flight-history-anchor'){const list=grouped.get(e.aircraftId)||[];list.push(e);grouped.set(e.aircraftId,list);}
+ return [...grouped.values()].map(buildConservativeFlightHistoryStitch).sort((a,b)=>a.aircraftId.localeCompare(b.aircraftId));
+}
+export async function readFlightHistoryStitchDiagnostics(directory:string,scope:string,now=new Date()):Promise<FlightHistoryStitchDiagnostic[]>{
+ const journal=validateReturnJournal(JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8')),scope,now);
+ return flightHistoryStitchDiagnostics(journal);
 }
 const validUncertainDepartureEvent=(v:unknown,now:Date):v is UncertainDepartureEvent=>{if(!v||typeof v!=='object')return false;const x=v as UncertainDepartureEvent;return Object.keys(x).sort().join(',')==='aircraftId,eventId,from,observedAt,reason,registration,result,routeId,sourceRunId,to,type'&&validId(x.eventId)&&x.type==='departure-uncertain'&&validId(x.aircraftId)&&typeof x.registration==='string'&&x.registration.length>0&&x.registration.length<=100&&validId(x.routeId)&&validOrigin(x.from)&&validOrigin(x.to)&&x.from!==x.to&&typeof x.observedAt==='string'&&Number.isFinite(Date.parse(x.observedAt))&&Date.parse(x.observedAt)<=now.getTime()&&x.result==='outcome_unknown'&&/^[A-Z0-9_:-]{1,160}$/.test(x.reason)&&validId(x.sourceRunId);};
 export function unresolvedDepartureKeys(journal:Journal):ReadonlySet<string>{return new Set((journal.events||[]).filter((e):e is UncertainDepartureEvent=>e.type==='departure-uncertain').map(e=>e.aircraftId+':'+e.routeId));}

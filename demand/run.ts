@@ -11,7 +11,7 @@ import { DemandReader } from './reader';
 import { writeDemandReport } from './report';
 import { DemandConfig, DemandReport } from './types';
 import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
-import { appendFlightHistoryAnchors, readFlightHistoryContinuityDiagnostics } from '../optimization/return-journal';
+import { appendFlightHistoryAnchors, readFlightHistoryContinuityDiagnostics, readFlightHistoryStitchDiagnostics } from '../optimization/return-journal';
 import { writeFile } from 'node:fs/promises';
 
 export async function runDemandSimulationDetailed(page: Page, config: DemandConfig = readDemandConfig(), reviews: Record<string, RouteReview> = {}) {
@@ -35,6 +35,9 @@ export async function runDemandSimulationDetailed(page: Page, config: DemandConf
     const continuity=await readFlightHistoryContinuityDiagnostics(optimization.returnJournal.directory,optimization.returnJournal.scope);
     await writeFile('test-results/demand/flight-history-continuity.json',JSON.stringify({schemaVersion:1,generatedAt:new Date().toISOString(),diagnostics:continuity},null,2)+'\\n');
     await writeFile('test-results/demand/flight-history-continuity.md',['# Continuidade persistente do Flight History','',...(continuity.length?continuity.map(x=>`- ${x.aircraftId}: ${x.status}; sobreposicao ${x.overlapRows}; delta de ciclos ${x.cycleDelta??'n/d'}; motivo ${x.reason}.`):['Nenhum par de snapshots persistidos disponivel neste run.']),'','_Somente evidencia de continuidade. comparisonReady e mutationAuthorized permanecem false._',''].join('\\n'));
+    const stitches=await readFlightHistoryStitchDiagnostics(optimization.returnJournal.directory,optimization.returnJournal.scope);
+    await writeFile('test-results/demand/flight-history-stitch.json',JSON.stringify({schemaVersion:1,generatedAt:new Date().toISOString(),diagnostics:stitches},null,2)+'\\n');
+    await writeFile('test-results/demand/flight-history-stitch.md',['# Stitched Flight History persistente — diagnostico','',...(stitches.length?stitches.map(x=>`- ${x.aircraftId}: ${x.status}; anchors usados ${x.anchorsUsed}/${x.anchorsAvailable}; links verificados ${x.linksVerified}; linhas compostas ${x.rowsStitched}; idade inferior da linha mais antiga ${x.oldestAgeLowerMinutes??'n/d'} min; motivo ${x.reason}${x.stoppedReason?'; limite '+x.stoppedReason:''}.`):['Nenhuma cadeia persistida disponivel neste run.']),'','_Diagnostico somente leitura. Ainda nao altera remaining demand; comparisonReady e mutationAuthorized permanecem false._',''].join('\\n'));
   }
   if(!candidateData.uiRestored)throw new Error('[Demand] Painel nao restaurado apos consulta; nenhuma operacao autorizada.');
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');
