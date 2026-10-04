@@ -108,11 +108,20 @@ test('persisted uncertain pricing quarantine blocks route before prepare or Save
 });
 
 
-test('expired global deadline holds pricing before Save and creates no uncertain result',async()=>{
- const port=new FakePort(collection([aircraft()]));
+test('expired global deadline holds pricing before prepare and creates no uncertain result',async()=>{
+ const port=new FakePort(collection([aircraft()]));let prepares=0;
+ port.prepare=async expected=>{prepares++;return expected;};
  const r=await new TicketPricingExecutor(port,{enabled:true,maxAdjustments:5,maxAgeSeconds:300,mutationDeadlineEpochMs:Date.now()-1},async()=>{}).run();
- expect(port.saves).toHaveLength(0);expect(r.halted).toBe(false);
- expect(r.entries[0]).toMatchObject({status:'held',reason:'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PRICE_SAVE'});
+ expect(prepares).toBe(0);expect(port.saves).toHaveLength(0);expect(r.halted).toBe(false);
+ expect(r.entries[0]).toMatchObject({status:'held',reason:'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PRICE_PREPARE'});
+});
+
+test('pricing completion reserve avoids expensive prepare when less than four minutes remain',async()=>{
+ const port=new FakePort(collection([aircraft()]));let prepares=0;
+ port.prepare=async expected=>{prepares++;return expected;};
+ const r=await new TicketPricingExecutor(port,{enabled:true,maxAdjustments:5,maxAgeSeconds:300,mutationDeadlineEpochMs:Date.now()+120_000},async()=>{}).run();
+ expect(prepares).toBe(0);expect(port.saves).toHaveLength(0);expect(r.halted).toBe(false);
+ expect(r.entries[0]).toMatchObject({status:'held',reason:'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PRICE_PREPARE'});
 });
 
 

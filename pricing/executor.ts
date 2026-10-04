@@ -50,6 +50,8 @@ const routeSaveVerified = (a:AircraftSnapshot) =>
   a.fares.saveControl.target === 'route' &&
   a.fares.saveControl.targetMatchesContext === true;
 
+const PRICING_COMPLETION_RESERVE_MS=240_000;
+
 function desiredFares(a:AircraftSnapshot, maxAgeSeconds:number, now=new Date()):Record<Cabin,number>|null {
   const plan=planTicketPrices(a,true,now,maxAgeSeconds);
   if(plan.status!=='would_adjust'||!plan.proposed||!a.capacity||!a.fares?.current||!validCurrent(a))return null;
@@ -127,6 +129,10 @@ export class TicketPricingExecutor {
       if(initialPlan.status==='unchanged'){entry.status='unchanged';entry.reason='ALREADY_AT_TARGET';continue;}
       const initialDesired=desiredFares(expected,this.settings.maxAgeSeconds);
       if(!initialDesired){entry.reason='PRICE_PLAN_UNAVAILABLE';continue;}
+      if(this.settings.mutationDeadlineEpochMs!==undefined&&
+        Date.now()>this.settings.mutationDeadlineEpochMs-PRICING_COMPLETION_RESERVE_MS){
+        entry.reason='RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PRICE_PREPARE';continue;
+      }
 
       let fresh:AircraftSnapshot;
       try{fresh=await this.port.prepare(expected);}catch{entry.reason='PRICING_CONTROL_OR_FRESH_DETAILS_UNVERIFIED';continue;}
@@ -136,7 +142,8 @@ export class TicketPricingExecutor {
 
       entry.before=fresh.fares?.current?{...fresh.fares.current}:null;
       entry.desired={...freshDesired};
-      if(this.settings.mutationDeadlineEpochMs!==undefined&&Date.now()>=this.settings.mutationDeadlineEpochMs){
+      if(this.settings.mutationDeadlineEpochMs!==undefined&&
+        Date.now()>this.settings.mutationDeadlineEpochMs-PRICING_COMPLETION_RESERVE_MS){
         entry.reason='RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PRICE_SAVE';continue;
       }
       this.attemptedRoutes.add(fresh.routeId);
