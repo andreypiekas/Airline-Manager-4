@@ -4,8 +4,9 @@ import { FleetUtils } from '../../utils/fleet.utils';
 import { runDemandSimulation } from '../../demand/run';
 import { readDemandConfig } from '../../demand/config';
 import { readFile } from 'node:fs/promises';
+import { findFleetRoute, routePageLimit } from '../../demand/navigation';
 
-interface FixtureOptions { operational?: boolean; missingCabin?: boolean; badDemand?: boolean; wrongIdentity?: boolean; pages?: number; badCount?: boolean; loop?: boolean; missingDetails?: boolean; unknownAuto?: boolean }
+interface FixtureOptions { operational?: boolean; missingCabin?: boolean; badDemand?: boolean; wrongIdentity?: boolean; pages?: number; badCount?: boolean; loop?: boolean; staleNext?: boolean; missingDetails?: boolean; unknownAuto?: boolean }
 async function fixture(page: Page, options: FixtureOptions = {}) {
   await page.route('**/*', route => route.abort()); // Absolutely no game or other network access.
   const errors: string[] = [];
@@ -24,7 +25,7 @@ async function fixture(page: Page, options: FixtureOptions = {}) {
         '<div class="row classPAX '+(id===102?'':'listDepartable')+'" id="routeMainList'+id+'">'+
         '<span class="s-text">AAA - BBB</span><a href="#" onclick="playSound(\'neutral_click\');Ajax(\'fleet_details.php?id='+(id+1000)+'\',\'detailsAction\');if(intro==0) {$(\'#routeAction\').hide();}"><span id="acRegList'+(id+1000)+'">TEST-'+id+'</span> - Test aircraft</a>'+
         (id===102?'Onboard: 40 / 0 / 0':'Demand: 90 / 0 / 0 <button id="listDepart'+id+'" onclick="window.mutations++">Depart</button>')+'</div>').join('')+
-        '<ul class="pagination">'+(index===0&&options.pages===2?'<a href="#" onclick="render('+(options.loop?0:1)+');return false">Next</a>':'')+'</ul>';
+        '<ul class="pagination">'+(options.pages===2&&(index===0||options.staleNext)?'<a href="#" onclick="render('+(options.loop?0:index+1)+');return false">Next</a>':'')+'</ul>';
     }
     const intro=0; function playSound(){} function $(selector){return {hide(){document.querySelector(selector).style.display='none'}}} function Ajax(url){show(Number(url.split('id=')[1])-1000)}
     function show(id) {
@@ -64,6 +65,19 @@ test('reader matches inspected DOM, ignores ticket prices, reads remaining/total
 });
 test('pagination reads every page once', async ({ page }) => {
   await fixture(page, { pages: 2 }); const r = await new DemandReader(page, 400).collect(); expect(r.complete).toBe(true); expect(r.aircraft).toHaveLength(3);
+});
+test('observed route count bounds pagination and ignores residual Next after all routes are collected', async ({ page }) => {
+  await fixture(page, { pages: 2, staleNext: true });
+  const r = await new DemandReader(page, 400).collect();
+  expect(r.complete).toBe(true); expect(r.aircraft).toHaveLength(3); expect(r.warnings).not.toContain('PAGINATION_LIMIT');
+});
+test('route lookup never follows pagination beyond the observed route count', async ({ page }) => {
+  await fixture(page, { pages: 2, staleNext: true });
+  await expect(findFleetRoute(page, { routeId: '999' } as any, 400)).rejects.toThrow('RESEARCH_ROUTE_NOT_FOUND');
+});
+test('route page limit is derived only from validated observed totals', () => {
+  expect(routePageLimit(34)).toBe(2); expect(routePageLimit(0)).toBe(1);
+  expect(() => routePageLimit(-1)).toThrow('ROUTE_PAGE_LIMIT_INVALID');
 });
 for (const options of [{ missingCabin: true }, { badDemand: true }, { wrongIdentity: true }, { missingDetails: true }]) {
   test(`UI loading/structure error fails closed ${JSON.stringify(options)}`, async ({ page }) => {

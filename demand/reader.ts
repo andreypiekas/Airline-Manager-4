@@ -9,6 +9,7 @@ import { flightCountdownObservation } from '../optimization/flight-timing';
 import { departureControlShape } from './departure-control-evidence';
 import { readCurrentRouteFieldDiagnostics } from '../optimization/current-route-diagnostics';
 import { readFlightHistoryEvidence } from '../optimization/flight-history';
+import { routePageLimit } from './navigation';
 
 interface RouteCard {
   routeId: string; aircraftId: string; registration: string; routeLabel: string;
@@ -25,7 +26,8 @@ export class DemandReader {
       await this.page.locator('#routesContainer').waitFor({ state: 'visible', timeout: this.timeout });
       const heading = await this.page.getByRole('button', { name: /^Routes\s*\(\d+\)$/ }).innerText();
       result.expectedRoutes = integerText(heading.match(/\((\d+)\)/)![1]);
-      for (let pageIndex = 0; pageIndex < 100; pageIndex++) {
+      const maxPages=routePageLimit(result.expectedRoutes);
+      for (let pageIndex = 0; pageIndex < maxPages; pageIndex++) {
         const rows = this.page.locator('#routesContainer [id^="routeMainList"]');
         if (result.expectedRoutes > 0) await rows.first().waitFor({ state: 'visible', timeout: this.timeout });
         const cards: RouteCard[] = await rows.evaluateAll((elements, pattern) => elements.map(el => {
@@ -65,10 +67,14 @@ export class DemandReader {
             await this.page.locator('#routeAction').waitFor({ state: 'visible', timeout: this.timeout });
           }
         }
+        if(seenRoutes.size===result.expectedRoutes){
+          result.complete=true;
+          return result;
+        }
         const next = this.page.locator('#routesContainer .pagination').getByRole('link', { name: 'Next', exact: true });
-        if (!(await next.count())) {
-          result.complete = seenRoutes.size === result.expectedRoutes;
-          if (!result.complete) result.warnings.push('ROUTE_COUNT_MISMATCH');
+        if (pageIndex===maxPages-1 || !(await next.count())) {
+          result.complete = false;
+          result.warnings.push('ROUTE_COUNT_MISMATCH');
           return result;
         }
         const firstId = cards[0]?.routeId;
