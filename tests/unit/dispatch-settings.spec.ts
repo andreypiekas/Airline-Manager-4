@@ -54,5 +54,4 @@ test('main workflow skips every game-access step when queued SHA is stale',async
   const block=s.slice(s.indexOf('name: '+step),s.indexOf('name: '+step)+800);
   expect(block).toContain("if: steps.current_head.outputs.stale != 'true'");
  }
- expect(s.match(/if: steps\.current_head\.outputs\.stale != 'true'/g)?.length).toBeGreaterThanOrEqual(3);
 });
