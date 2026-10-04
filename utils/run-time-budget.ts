@@ -1,0 +1,43 @@
+export type RunPhaseBudgetReason = 'TIME_BUDGET_AVAILABLE' | 'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PHASE';
+
+export interface RunPhaseBudgetDecision {
+  phase: string;
+  allowed: boolean;
+  reason: RunPhaseBudgetReason;
+  nowEpochMs: number;
+  phaseDeadlineEpochMs: number;
+  minimumPhaseMs: number;
+  remainingMs: number;
+}
+
+/**
+ * Pure fail-closed budget check. The deadline must already reserve finalization
+ * time for state save/artifacts, so an allowed phase still cannot consume that reserve.
+ */
+export function evaluateRunPhaseBudget(
+  phase: string,
+  nowEpochMs: number,
+  phaseDeadlineEpochMs: number,
+  minimumPhaseMs: number,
+): RunPhaseBudgetDecision {
+  const valid = Boolean(phase.trim())
+    && Number.isFinite(nowEpochMs)
+    && Number.isFinite(phaseDeadlineEpochMs)
+    && Number.isFinite(minimumPhaseMs)
+    && nowEpochMs >= 0
+    && phaseDeadlineEpochMs >= 0
+    && minimumPhaseMs >= 0;
+
+  const remainingMs = valid ? Math.max(0, Math.floor(phaseDeadlineEpochMs - nowEpochMs)) : 0;
+  const allowed = valid && remainingMs >= minimumPhaseMs;
+
+  return {
+    phase,
+    allowed,
+    reason: allowed ? 'TIME_BUDGET_AVAILABLE' : 'RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PHASE',
+    nowEpochMs: valid ? Math.floor(nowEpochMs) : 0,
+    phaseDeadlineEpochMs: valid ? Math.floor(phaseDeadlineEpochMs) : 0,
+    minimumPhaseMs: valid ? Math.floor(minimumPhaseMs) : 0,
+    remainingMs,
+  };
+}

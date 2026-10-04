@@ -10,6 +10,7 @@ import { routeExecutionSettings, runRouteExecution } from '../optimization/route
 import { withRunLock } from '../utils/run-lock';
 import { loginForReadOnlyCollection } from '../utils/read-only-login';
 import { runInitialUiHealthCheck } from '../utils/ui-health';
+import { evaluateRunPhaseBudget } from '../utils/run-time-budget';
 import { test } from '@playwright/test';
 import { GeneralUtils } from '../utils/general.utils';
 import { FuelUtils } from '../utils/fuel.utils';
@@ -32,9 +33,35 @@ test('All Operations', async ({ page }) => {
     pricingExecutionSettings(); // Valida o contexto do ajuste real de tarifas antes do login.
     routeExecutionSettings(); // Valida o contexto de reroute real antes do login.
     const runTimeoutMs=demandConfig.dryRun ? 600000 : 900000;
+    const runStartedEpochMs=Date.now();
     test.setTimeout(runTimeoutMs);
-    // Keep enough time after the last possible click for native response + fresh Fleet confirmation.
-    const departureMutationDeadlineEpochMs=Date.now()+runTimeoutMs-120000;
+    // Keep a hard finalization reserve for fresh confirmations, state save and artifacts.
+    const finalizationReserveMs=120000;
+    const phaseDeadlineEpochMs=runStartedEpochMs+runTimeoutMs-finalizationReserveMs;
+    const departureMutationDeadlineEpochMs=phaseDeadlineEpochMs;
+    const phaseBudgetsMs={
+      supplies:90000,
+      maintenance:180000,
+      campaign:120000,
+      fleetDemand:180000,
+      routeExecution:180000,
+      ticketPricing:120000,
+      departures:180000,
+    } as const;
+    const phaseBudgetDecisions:Array<ReturnType<typeof evaluateRunPhaseBudget>>=[];
+    const recordPhaseBudget=()=> {
+      const dir='test-results/demand';fs.mkdirSync(dir,{recursive:true});
+      const file=path.join(dir,'run-time-budget.json');
+      fs.writeFileSync(file,JSON.stringify({schemaVersion:1,runStartedEpochMs,runTimeoutMs,finalizationReserveMs,phaseDeadlineEpochMs,decisions:phaseBudgetDecisions},null,2)+'\n');
+      const rows=phaseBudgetDecisions.map(d=>`| ${d.phase} | ${d.allowed?'ALLOW':'HOLD'} | ${d.reason} | ${d.remainingMs} | ${d.minimumPhaseMs} |`).join('\n');
+      fs.writeFileSync(path.join(dir,'run-time-budget.md'),`## Orçamento seguro de execução\n\n| Fase | Decisão | Motivo | Restante (ms) | Mínimo (ms) |\n|---|---|---|---:|---:|\n${rows || '| - | - | - | - | - |'}\n`);
+    };
+    const phaseAllowed=(phase:string,minimumPhaseMs:number)=>{
+      const decision=evaluateRunPhaseBudget(phase,Date.now(),phaseDeadlineEpochMs,minimumPhaseMs);
+      phaseBudgetDecisions.push(decision);recordPhaseBudget();
+      if(!decision.allowed) console.warn(`[Budget] ${phase}: ${decision.reason} (remainingMs=${decision.remainingMs}, minimumPhaseMs=${decision.minimumPhaseMs}).`);
+      return decision.allowed;
+    };
 
     const moduleEnabled = (name: string, defaultValue = true) => {
       const raw = (process.env[name] || '').trim().toLowerCase();
@@ -196,10 +223,15 @@ test('All Operations', async ({ page }) => {
     await loginForReadOnlyCollection(page, process.env, 90000);
     await test.step('UI health pre-mutation', async()=>await runInitialUiHealthCheck(page));
 
-    // Mantem o modulo novo de abastecimento e reincorpora as funcoes da fork original.
-    await runSupplies(page, demandConfig.dryRun);
-    await test.step('Manutencao e reparos', runDemandMaintenance);
-    await test.step('Campanhas de marketing', runDemandCampaign);
+    // Mantem o modulo novo de abastecimento e reincorpora as funcoes da fork original,
+    // mas nunca inicia uma fase cara quando ja nao existe janela conservadora para conclui-la.
+    if (phaseAllowed('supplies',phaseBudgetsMs.supplies)) await runSupplies(page, demandConfig.dryRun);
+    if (phaseAllowed('maintenance',phaseBudgetsMs.maintenance)) await test.step('Manutencao e reparos', runDemandMaintenance);
+    if (phaseAllowed('campaign',phaseBudgetsMs.campaign)) await test.step('Campanhas de marketing', runDemandCampaign);
+    if (!phaseAllowed('fleet-demand',phaseBudgetsMs.fleetDemand)) {
+      console.warn('[Budget] Coleta Fleet/Demand nao iniciada; nenhuma fase mutavel posterior sera executada.');
+      return;
+    }
 
     const fleetMenu = page.locator('#mapRoutes');
     if (await fleetMenu.count() !== 1 || !await fleetMenu.isVisible() ||
@@ -227,13 +259,16 @@ test('All Operations', async ({ page }) => {
       throw new Error('[Demand] Fleet/Routes nao abriu apos recuperacao da interface.');
     }
     const simulation = await runDemandSimulationDetailed(page, demandConfig);
-    if (!demandConfig.dryRun && moduleEnabled('ENABLE_ROUTE_EXECUTION', false)) {
+    if (!demandConfig.dryRun && moduleEnabled('ENABLE_ROUTE_EXECUTION', false)
+      && phaseAllowed('route-execution',phaseBudgetsMs.routeExecution)) {
       await test.step('Reroute conservador por aeronave', async () => await runRouteExecution(page, simulation));
     }
-    if (!demandConfig.dryRun && moduleEnabled('ENABLE_TICKET_PRICING_EXECUTION', false)) {
+    if (!demandConfig.dryRun && moduleEnabled('ENABLE_TICKET_PRICING_EXECUTION', false)
+      && phaseAllowed('ticket-pricing',phaseBudgetsMs.ticketPricing)) {
       await test.step('Ajustar tarifas por rota', async () => await runTicketPricingExecution(page));
     }
-    if (!demandConfig.dryRun && moduleEnabled('ENABLE_DEPART')) {
+    if (!demandConfig.dryRun && moduleEnabled('ENABLE_DEPART')
+      && phaseAllowed('departures',phaseBudgetsMs.departures)) {
       await runDemandExecution(page, demandConfig,{...process.env,DEMAND_EXECUTION_MUTATION_DEADLINE_EPOCH_MS:String(departureMutationDeadlineEpochMs)});
     }
     return;

@@ -194,6 +194,9 @@ jobs:
         if [ -f test-results/demand/company-dashboard.md ]; then
           cat test-results/demand/company-dashboard.md >> "$GITHUB_STEP_SUMMARY"
         fi
+        if [ -f test-results/demand/run-time-budget.md ]; then
+          cat test-results/demand/run-time-budget.md >> "$GITHUB_STEP_SUMMARY"
+        fi
         if [ -f test-results/demand/demand-report.md ]; then
           cat test-results/demand/demand-report.md >> "$GITHUB_STEP_SUMMARY"
         fi
