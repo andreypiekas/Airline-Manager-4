@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import { withRunLock } from '../utils/run-lock';
 import { reviewEventId, RouteOptimizer, RoutePlan, RouteReview } from './route-optimizer';
 import { reviewDay } from './review-schedule';
+import type { AircraftSnapshot } from '../demand/types';
 
 type CompletedDecision = 'would_reroute' | 'keep_route' | 'hold';
 interface RoutePerformanceEvidence { routeId:string; viable:boolean; netProfit:number|null; netProfitPerHour:number|null; occupancyPercentages:number[] }
@@ -157,6 +158,55 @@ export function flightHistoryStitchDiagnostics(journal:Journal):FlightHistorySti
 export async function readFlightHistoryStitchDiagnostics(directory:string,scope:string,now=new Date()):Promise<FlightHistoryStitchDiagnostic[]>{
  const journal=validateReturnJournal(JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8')),scope,now);
  return flightHistoryStitchDiagnostics(journal);
+}
+
+export interface LiveAnchoredFlightHistoryStitchDiagnostic extends FlightHistoryStitchDiagnostic {
+ liveAnchorVerified:boolean;
+ persistedAnchorsAvailable:number;
+ currentObservedAt:string|null;
+ currentCycles:number|null;
+}
+const unavailableLiveStitch=(aircraft:AircraftSnapshot,reason:string,persistedAnchorsAvailable=0):LiveAnchoredFlightHistoryStitchDiagnostic=>({
+ status:'unavailable',aircraftId:aircraft.aircraftId||'',registration:aircraft.registration||null,anchorsAvailable:persistedAnchorsAvailable,anchorsUsed:0,linksVerified:0,
+ latestObservedAt:null,latestCycles:null,rowsStitched:0,oldestAgeLowerMinutes:null,oldestAgeUpperMinutes:null,stoppedReason:null,reason,rows:[],
+ comparisonReady:false,mutationAuthorized:false,liveAnchorVerified:false,persistedAnchorsAvailable,currentObservedAt:aircraft.flightHistory?.observedAt||null,currentCycles:aircraft.operational?.cycles??null
+});
+const liveAnchorFromAircraft=(aircraft:AircraftSnapshot,now:Date):FlightHistoryAnchorEvent|null=>{
+ const h=aircraft.flightHistory,cycles=aircraft.operational?.cycles;
+ if(!aircraft.aircraftId||!aircraft.registration||!h||h.status!=='observed'||!Array.isArray(h.entries)||!h.entries.length||
+   !Number.isSafeInteger(cycles)||cycles!<0||!Number.isFinite(Date.parse(h.observedAt))||Date.parse(h.observedAt)>now.getTime())return null;
+ const rows=h.entries.slice(-8).map(r=>({relativeTime:r.relativeTime,from:r.from,to:r.to,co2Quotas:r.co2Quotas,onboard:{...r.onboard},fuelLbs:r.fuelLbs,revenue:r.revenue}));
+ const event:FlightHistoryAnchorEvent={eventId:`live_${aircraft.aircraftId}`,type:'flight-history-anchor',aircraftId:aircraft.aircraftId,registration:aircraft.registration,observedAt:h.observedAt,cycles:cycles!,rows};
+ return validFlightHistoryAnchor(event,now)?event:null;
+};
+const sameAnchorPayload=(a:FlightHistoryAnchorEvent,b:FlightHistoryAnchorEvent)=>a.observedAt===b.observedAt&&a.cycles===b.cycles&&
+ a.rows.length===b.rows.length&&a.rows.every((r,i)=>flightHistoryRowIdentity(r)===flightHistoryRowIdentity(b.rows[i]));
+/**
+ * Extends persisted continuity only when the current live Flight History is itself
+ * a valid newest anchor. This remains diagnostic-only: it cannot authorize route
+ * comparison or mutation and does not alter candidate remaining demand.
+ */
+export function buildLiveAnchoredFlightHistoryStitch(journal:Journal,aircraft:AircraftSnapshot,now=new Date()):LiveAnchoredFlightHistoryStitchDiagnostic{
+ const persisted=(journal.events||[]).filter((e):e is FlightHistoryAnchorEvent=>e.type==='flight-history-anchor'&&e.aircraftId===aircraft.aircraftId&&e.registration===aircraft.registration)
+   .sort((a,b)=>Date.parse(a.observedAt)-Date.parse(b.observedAt));
+ const live=liveAnchorFromAircraft(aircraft,now);
+ if(!live)return unavailableLiveStitch(aircraft,'LIVE_FLIGHT_HISTORY_ANCHOR_UNAVAILABLE',persisted.length);
+ if(persisted.some(a=>Date.parse(a.observedAt)>Date.parse(live.observedAt)))return unavailableLiveStitch(aircraft,'LIVE_ANCHOR_OLDER_THAN_PERSISTED',persisted.length);
+ const sameTime=persisted.filter(a=>a.observedAt===live.observedAt);
+ if(sameTime.some(a=>!sameAnchorPayload(a,live)))return unavailableLiveStitch(aircraft,'LIVE_ANCHOR_CONFLICTS_WITH_PERSISTED',persisted.length);
+ const exact=sameTime.find(a=>sameAnchorPayload(a,live));
+ const older=persisted.filter(a=>Date.parse(a.observedAt)<Date.parse(live.observedAt));
+ const chain=exact?[...older,exact]:[...older,live];
+ const stitched=buildConservativeFlightHistoryStitch(chain);
+ return {...stitched,liveAnchorVerified:true,persistedAnchorsAvailable:persisted.length,currentObservedAt:live.observedAt,currentCycles:live.cycles,
+   reason:stitched.status==='verified_chain'?'LIVE_ANCHORED_FLIGHT_HISTORY_STITCH_VERIFIED':stitched.reason};
+}
+export function liveAnchoredFlightHistoryStitchDiagnostics(journal:Journal,aircraft:AircraftSnapshot[],now=new Date()):LiveAnchoredFlightHistoryStitchDiagnostic[]{
+ return aircraft.map(a=>buildLiveAnchoredFlightHistoryStitch(journal,a,now)).sort((a,b)=>a.aircraftId.localeCompare(b.aircraftId));
+}
+export async function readLiveAnchoredFlightHistoryStitchDiagnostics(directory:string,scope:string,aircraft:AircraftSnapshot[],now=new Date()):Promise<LiveAnchoredFlightHistoryStitchDiagnostic[]>{
+ const journal=validateReturnJournal(JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8')),scope,now);
+ return liveAnchoredFlightHistoryStitchDiagnostics(journal,aircraft,now);
 }
 const validUncertainDepartureEvent=(v:unknown,now:Date):v is UncertainDepartureEvent=>{if(!v||typeof v!=='object')return false;const x=v as UncertainDepartureEvent;return Object.keys(x).sort().join(',')==='aircraftId,eventId,from,observedAt,reason,registration,result,routeId,sourceRunId,to,type'&&validId(x.eventId)&&x.type==='departure-uncertain'&&validId(x.aircraftId)&&typeof x.registration==='string'&&x.registration.length>0&&x.registration.length<=100&&validId(x.routeId)&&validOrigin(x.from)&&validOrigin(x.to)&&x.from!==x.to&&typeof x.observedAt==='string'&&Number.isFinite(Date.parse(x.observedAt))&&Date.parse(x.observedAt)<=now.getTime()&&x.result==='outcome_unknown'&&/^[A-Z0-9_:-]{1,160}$/.test(x.reason)&&validId(x.sourceRunId);};
 export function unresolvedDepartureKeys(journal:Journal):ReadonlySet<string>{return new Set((journal.events||[]).filter((e):e is UncertainDepartureEvent=>e.type==='departure-uncertain').map(e=>e.aircraftId+':'+e.routeId));}

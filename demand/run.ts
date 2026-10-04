@@ -11,7 +11,7 @@ import { DemandReader } from './reader';
 import { writeDemandReport } from './report';
 import { DemandConfig, DemandReport } from './types';
 import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
-import { appendFlightHistoryAnchors, readFlightHistoryContinuityDiagnostics, readFlightHistoryStitchDiagnostics } from '../optimization/return-journal';
+import { appendFlightHistoryAnchors, readFlightHistoryContinuityDiagnostics, readFlightHistoryStitchDiagnostics, readLiveAnchoredFlightHistoryStitchDiagnostics } from '../optimization/return-journal';
 import { writeFile } from 'node:fs/promises';
 
 export async function runDemandSimulationDetailed(page: Page, config: DemandConfig = readDemandConfig(), reviews: Record<string, RouteReview> = {}) {
@@ -38,6 +38,9 @@ export async function runDemandSimulationDetailed(page: Page, config: DemandConf
     const stitches=await readFlightHistoryStitchDiagnostics(optimization.returnJournal.directory,optimization.returnJournal.scope);
     await writeFile('test-results/demand/flight-history-stitch.json',JSON.stringify({schemaVersion:1,generatedAt:new Date().toISOString(),diagnostics:stitches},null,2)+'\n');
     await writeFile('test-results/demand/flight-history-stitch.md',['# Stitched Flight History persistente — diagnostico','',...(stitches.length?stitches.map(x=>`- ${x.aircraftId}: ${x.status}; anchors usados ${x.anchorsUsed}/${x.anchorsAvailable}; links verificados ${x.linksVerified}; linhas compostas ${x.rowsStitched}; idade inferior da linha mais antiga ${x.oldestAgeLowerMinutes??'n/d'} min; motivo ${x.reason}${x.stoppedReason?'; limite '+x.stoppedReason:''}.`):['Nenhuma cadeia persistida disponivel neste run.']),'','_Diagnostico somente leitura. Ainda nao altera remaining demand; comparisonReady e mutationAuthorized permanecem false._',''].join('\n'));
+    const liveStitches=await readLiveAnchoredFlightHistoryStitchDiagnostics(optimization.returnJournal.directory,optimization.returnJournal.scope,collection.aircraft);
+    await writeFile('test-results/demand/flight-history-live-stitch.json',JSON.stringify({schemaVersion:1,generatedAt:new Date().toISOString(),diagnostics:liveStitches},null,2)+'\n');
+    await writeFile('test-results/demand/flight-history-live-stitch.md',['# Stitched Flight History ancorado no snapshot live — diagnostico','',...(liveStitches.length?liveStitches.map(x=>`- ${x.aircraftId}: ${x.status}; live ${x.liveAnchorVerified?'verificado':'indisponivel'}; anchors persistidos ${x.persistedAnchorsAvailable}; usados ${x.anchorsUsed}; links ${x.linksVerified}; linhas ${x.rowsStitched}; idade inferior mais antiga ${x.oldestAgeLowerMinutes??'n/d'} min; motivo ${x.reason}${x.stoppedReason?'; limite '+x.stoppedReason:''}.`):['Nenhuma aeronave disponivel neste run.']),'','_Snapshot live obrigatorio. Diagnostico somente leitura; remaining demand, comparisonReady e mutationAuthorized nao sao alterados._',''].join('\n'));
   }
   if(!candidateData.uiRestored)throw new Error('[Demand] Painel nao restaurado apos consulta; nenhuma operacao autorizada.');
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');
