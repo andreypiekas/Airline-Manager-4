@@ -31,7 +31,7 @@ import { calibrateCurrentFareLoadFactor, transferCurrentFareLoadFactor } from '.
 import { candidateLoadEnvelope, currentRouteLoadEnvelope } from './route-variable-profit';
 import { compareRouteVariableCycles, conservativeSharedPairRemaining, routeVariableRoundTripInterval } from './route-variable-cycle';
 import { routeProfitModelEvidence } from './route-profit-model';
-import { planVariableRouteDecision } from './route-decision';
+import { planVariableRouteDecision, routeDecisionSetComparisonReady } from './route-decision';
 import type { LiveAnchoredFlightHistoryStitchDiagnostic } from './return-journal';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
@@ -366,7 +366,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     }))
   ));
   return {schemaVersion:15,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,
-    comparisonReady:routeDecisions.some(d=>d.decision!=='unavailable'),
+    comparisonReady:routeDecisionSetComparisonReady(routeDecisions),
     uiRestored,screenedOutBeforeModelReference,routeProfitModel,reputation,demandLabelCalibration,demandResetCalibration,flightHistoryCoverage,market,models,modelReads,maintenance,financeHistory,priorityRanking,routeReadiness,routeDecisions,
     warnings:[...warnings,...maintenance.warnings,...financeHistory.warnings],candidates};
 }

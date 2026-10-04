@@ -1,5 +1,5 @@
 import { test,expect } from '@playwright/test';
-import { planVariableRouteDecision, RouteDecisionCandidate } from '../../optimization/route-decision';
+import { planVariableRouteDecision, routeDecisionSetComparisonReady, RouteDecisionCandidate } from '../../optimization/route-decision';
 
 const candidate=(to:string,low:number,status:'candidate_dominates'|'keep_current'='candidate_dominates',control=true):RouteDecisionCandidate=>({
   aircraftId:'101',from:'GRU',to,airportId:to==='AAA'?'1':to==='BBB'?'2':'3',
@@ -46,4 +46,15 @@ test('valid but incomplete comparison stays as explicit retryable HOLD',()=>{
   const c=candidate('AAA',1000);c.comparisonReady=false;
   const r=planVariableRouteDecision('101',[c]);
   expect(r).toMatchObject({decision:'hold',selected:null,compared:0,dominating:0,reason:'NO_VERIFIED_VARIABLE_CYCLE_COMPARISON',mutationAuthorized:false});
+});
+
+
+test('HOLD never promotes aggregate route comparison readiness',()=>{
+  const c=candidate('AAA',1000);c.comparisonReady=false;
+  const hold=planVariableRouteDecision('101',[c]);
+  expect(hold.decision).toBe('hold');
+  expect(routeDecisionSetComparisonReady([hold])).toBe(false);
+  expect(routeDecisionSetComparisonReady([{...hold,decision:'unavailable'}])).toBe(false);
+  expect(routeDecisionSetComparisonReady([{...hold,decision:'keep_route'}])).toBe(true);
+  expect(routeDecisionSetComparisonReady([{...hold,decision:'would_reroute'}])).toBe(true);
 });
