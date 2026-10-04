@@ -311,3 +311,19 @@ test('uncertain reroute becomes durable aircraft-wide no-retry quarantine',async
    observedAt:now.toISOString(),result:'outcome_unknown',reason:'NO_RETRY_AFTER_ROUTE_MUTATION_ATTEMPT',sourceRunId:'777'});
  expect(()=>validateReturnJournal({...saved,events:[...saved.events,{...saved.events.at(-1),eventId:'runc_bad',targetFrom:'BAD!'}]},'company-test',now)).toThrow('JOURNAL_INVALID');
 });
+
+
+test('uncertain price save becomes durable route-wide no-retry quarantine',async()=>{
+ await reviewWithReturnJournal(input(),options(),now);
+ const {appendUncertainPricingMutations,readUnresolvedPricingRouteIds,validateReturnJournal}=await import('../../optimization/return-journal');
+ const report:any={entries:[{aircraftId:'9',registration:'PRICE',routeId:'9001',status:'outcome_unknown',reason:'NO_RETRY_AFTER_PRICE_SAVE_ATTEMPT',
+   before:{Y:1000,J:2000,F:3000},desired:{Y:1100,J:2160,F:3180},after:null}]};
+ expect(await appendUncertainPricingMutations(directory,'company-test','778',report,now)).toBe(1);
+ expect(await appendUncertainPricingMutations(directory,'company-test','778',report,now)).toBe(0);
+ expect([...(await readUnresolvedPricingRouteIds(directory,'company-test',now))]).toEqual(['9001']);
+ const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
+ expect(saved.events.at(-1)).toMatchObject({eventId:'punc_778_9001',type:'pricing-uncertain',aircraftId:'9',routeId:'9001',
+  result:'outcome_unknown',reason:'NO_RETRY_AFTER_PRICE_SAVE_ATTEMPT',sourceRunId:'778',
+  before:{Y:1000,J:2000,F:3000},desired:{Y:1100,J:2160,F:3180}});
+ expect(()=>validateReturnJournal({...saved,events:[...saved.events,{...saved.events.at(-1),eventId:'punc_bad',desired:{Y:-1,J:1,F:1}}]},'company-test',now)).toThrow('JOURNAL_INVALID');
+});

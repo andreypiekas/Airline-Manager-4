@@ -12,6 +12,7 @@ export interface PricingExecutionSettings {
   enabled: boolean;
   maxAdjustments: number;
   maxAgeSeconds: number;
+  blockedRouteIds?: ReadonlySet<string>;
 }
 
 export interface PricingExecutionEntry {
@@ -68,7 +69,9 @@ export class TicketPricingExecutor {
     private readonly saveReport:(report:PricingExecutionReport)=>Promise<void>
   ){
     if(typeof settings.enabled!=='boolean'||!Number.isSafeInteger(settings.maxAdjustments)||settings.maxAdjustments<1||settings.maxAdjustments>20||
-      !Number.isSafeInteger(settings.maxAgeSeconds)||settings.maxAgeSeconds<1)throw new Error('PRICING_EXECUTION_SETTINGS_INVALID');
+      !Number.isSafeInteger(settings.maxAgeSeconds)||settings.maxAgeSeconds<1||
+      (settings.blockedRouteIds!==undefined&&[...settings.blockedRouteIds].some(id=>!/^[1-9]\d*$/.test(id))))
+      throw new Error('PRICING_EXECUTION_SETTINGS_INVALID');
   }
 
   async run():Promise<PricingExecutionReport>{
@@ -101,6 +104,7 @@ export class TicketPricingExecutor {
         status:'held',reason:'DATA_UNAVAILABLE',before:expected.fares?.current?{...expected.fares.current}:null,desired:null,after:null};
       report.entries.push(entry);
       if(report.halted){entry.reason='PREVIOUS_OUTCOME_UNKNOWN';continue;}
+      if(this.settings.blockedRouteIds?.has(expected.routeId)){entry.reason='PERSISTED_UNCERTAIN_PRICING_BLOCK';continue;}
       if(this.attemptedRoutes.has(expected.routeId)){entry.reason='ROUTE_ALREADY_ATTEMPTED';continue;}
       if(this.attemptedRoutes.size>=this.settings.maxAdjustments){entry.reason='PRICING_EXECUTION_LIMIT';continue;}
       if(routeCounts.get(expected.routeId)!==1){entry.reason='ROUTE_SHARED_BY_MULTIPLE_AIRCRAFT';continue;}

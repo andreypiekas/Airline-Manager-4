@@ -97,3 +97,12 @@ test('execution limit prevents more route changes in the same run',async()=>{
   expect(port.saves).toHaveLength(1);
   expect(r.entries[1]).toMatchObject({status:'held',reason:'PRICING_EXECUTION_LIMIT'});
 });
+
+
+test('persisted uncertain pricing quarantine blocks route before prepare or Save',async()=>{
+ const a=aircraft();const port=new FakePort(collection([a]));let prepares=0;
+ port.prepare=async expected=>{prepares++;return expected;};
+ const r=await new TicketPricingExecutor(port,{enabled:true,maxAdjustments:5,maxAgeSeconds:300,blockedRouteIds:new Set(['9001'])},async()=>{}).run();
+ expect(prepares).toBe(0);expect(port.saves).toHaveLength(0);
+ expect(r.entries[0]).toMatchObject({status:'held',reason:'PERSISTED_UNCERTAIN_PRICING_BLOCK'});
+});

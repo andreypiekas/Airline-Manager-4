@@ -3,6 +3,8 @@ import { mkdir, open, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { TicketPricingExecutor, PricingExecutionReport } from './executor';
 import { PlaywrightPricingPort } from './playwright-port';
+import { optimizationConfig } from '../optimization/report';
+import { appendUncertainPricingMutations, readUnresolvedPricingRouteIds } from '../optimization/return-journal';
 
 export interface PricingRunSettings {
   enabled:boolean;
@@ -23,7 +25,11 @@ export function pricingExecutionSettings(env:NodeJS.ProcessEnv=process.env):Pric
 }
 
 export async function runTicketPricingExecution(page:Page,env:NodeJS.ProcessEnv=process.env,directory='test-results/demand'){
-  const settings=pricingExecutionSettings(env);
+  const settings=pricingExecutionSettings(env),optimization=optimizationConfig(env);
+  if(settings.enabled&&!optimization.returnJournal)throw new Error('PRICING_EXECUTION_REQUIRES_PERSISTENT_JOURNAL');
+  const blockedRouteIds=optimization.returnJournal
+    ? await readUnresolvedPricingRouteIds(optimization.returnJournal.directory,optimization.returnJournal.scope)
+    : new Set<string>();
   await mkdir(directory,{recursive:true});
   const marker=await open(join(directory,'pricing-execution.started'),'wx');await marker.close();
   const safe=(s:string)=>s.replace(/[|\r\n<>]/g,' ');
@@ -40,8 +46,17 @@ export async function runTicketPricingExecution(page:Page,env:NodeJS.ProcessEnv=
       'Cada rota e tentada no maximo uma vez por run. Resultado nao confirmado interrompe novas alteracoes e nunca e repetido na mesma execucao.',''
     ].join('\n'));
   };
-  const report=await new TicketPricingExecutor(new PlaywrightPricingPort(page),settings,save).run();
+  const report=await new TicketPricingExecutor(new PlaywrightPricingPort(page),{...settings,blockedRouteIds},save).run();
   console.log('[TicketPricing] '+JSON.stringify(report.summary));
+  if(optimization.returnJournal){
+    try{
+      const uncertain=await appendUncertainPricingMutations(optimization.returnJournal.directory,optimization.returnJournal.scope,env.GITHUB_RUN_ID||'',report);
+      if(uncertain)console.log('[History] Pricings incertos bloqueados acrescentados: '+uncertain);
+    }catch{
+      if(report.halted)throw new Error('PRICING_UNKNOWN_QUARANTINE_PERSIST_FAILED_NO_RETRY');
+      throw new Error('PRICING_HISTORY_PERSIST_FAILED');
+    }
+  }
   if(report.halted)throw new Error('PRICING_EXECUTION_HALTED_UNKNOWN_RESULT_NO_RETRY');
   return report;
 }
