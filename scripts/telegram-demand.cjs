@@ -14,6 +14,8 @@ function importantMessage(dir='test-results/demand',botResult=process.env.BOT_RE
  if(ui?.status==='UI_CHANGE_DETECTED')events.push('UI_CHANGE_DETECTED em superficie critica');
  const unknown=(name,r)=>{const n=r?.summary?.unknown;if(Number.isSafeInteger(n)&&n>0)events.push(name+' com resultado incerto: '+n);if(r?.halted===true)events.push(name+' interrompido por fail-safe');};
  unknown('decolagem',execution);unknown('reroute',route);unknown('pricing',pricing);if(supply?.halted===true)events.push('suprimentos interrompidos por fail-safe');
+ const fuelHeld=(execution?.entries||[]).filter(x=>x?.status==='held'&&x?.reason==='FUEL_STOCK_INSUFFICIENT_BY_VERIFIED_HISTORY').length;
+ if(fuelHeld>0)events.push('decolagens retidas por combustivel insuficiente verificado: '+fuelHeld);
  const rerouted=route?.summary?.rerouted;if(Number.isSafeInteger(rerouted)&&rerouted>0)events.push('rotas alteradas e confirmadas: '+rerouted);
  if(Array.isArray(demand?.decisions)){const exhausted=demand.decisions.filter(x=>x?.decision==='hold_insufficient'&&x?.occupancyPercentage===0).length;if(exhausted>0)events.push('demanda esgotada observada: '+exhausted);}
  const hours=Number(process.env.HOURS_CHECK||'20'),wear=Number(process.env.REPAIR_WEAR||'30');
