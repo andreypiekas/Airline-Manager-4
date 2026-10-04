@@ -235,3 +235,37 @@ test('supply quarantine is independent per commodity and cannot be inferred from
  expect(await appendUncertainSupplyOperation(directory,'company-test','200',entry,now)).toBe(true);
  expect([...(await readUnresolvedSupplyKinds(directory,'company-test',now))]).toEqual(['fuel']);
 });
+
+test('live-anchored stitched history requires the current snapshot to verify the newest continuity link',async()=>{
+ const {buildLiveAnchoredFlightHistoryStitch}=await import('../../optimization/return-journal');
+ const row=(age:string,from:string,to:string,revenue:number)=>({relativeTime:age,from,to,registrationLabel:'FAST',co2Quotas:10,onboard:{Y:5,J:0,F:0},fuelLbs:100,revenue});
+ const strip=(r:any)=>{const {registrationLabel,...rest}=r;return rest;};
+ const persisted:any={eventId:'hist_persisted',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-04T00:00:00Z',cycles:10,rows:[
+   strip(row('10 hours ago','AAA','BBB',100)),strip(row('11 hours ago','BBB','AAA',90)),strip(row('12 hours ago','AAA','BBB',80))
+ ]};
+ const aircraft:any={aircraftId:'1',registration:'FAST',routeId:'10',routeLabel:'AAA-BBB',from:'AAA',to:'BBB',state:'ready',capacity:{Y:10,J:0,F:0},remaining:{Y:100,J:0,F:0},dailyTotal:{Y:100,J:0,F:0},observedAt:'2026-10-04T01:00:00Z',
+   operational:{cycles:11},flightHistory:{status:'observed',observedAt:'2026-10-04T01:00:00Z',entries:[
+     row('10 hours ago','CCC','DDD',110),row('11 hours ago','AAA','BBB',100),row('12 hours ago','BBB','AAA',90),row('13 hours ago','AAA','BBB',80)
+   ]}};
+ const journal:any={schemaVersion:1,scope:'x',entries:[],events:[persisted]};
+ expect(buildLiveAnchoredFlightHistoryStitch(journal,aircraft,new Date('2026-10-04T01:01:00Z'))).toMatchObject({
+   status:'verified_chain',liveAnchorVerified:true,persistedAnchorsAvailable:1,anchorsUsed:2,linksVerified:1,rowsStitched:4,
+   reason:'LIVE_ANCHORED_FLIGHT_HISTORY_STITCH_VERIFIED',comparisonReady:false,mutationAuthorized:false
+ });
+});
+
+test('live-anchored stitched history fails closed on stale or conflicting current evidence',async()=>{
+ const {buildLiveAnchoredFlightHistoryStitch}=await import('../../optimization/return-journal');
+ const row=(age:string,from:string,to:string,revenue:number)=>({relativeTime:age,from,to,registrationLabel:'FAST',co2Quotas:10,onboard:{Y:5,J:0,F:0},fuelLbs:100,revenue});
+ const strip=(r:any)=>{const {registrationLabel,...rest}=r;return rest;};
+ const persisted:any={eventId:'hist_newer',type:'flight-history-anchor',aircraftId:'1',registration:'FAST',observedAt:'2026-10-04T02:00:00Z',cycles:12,rows:[strip(row('10 hours ago','AAA','BBB',100)),strip(row('11 hours ago','BBB','AAA',90))]};
+ const aircraft:any={aircraftId:'1',registration:'FAST',routeId:'10',routeLabel:'AAA-BBB',from:'AAA',to:'BBB',state:'ready',capacity:{Y:10,J:0,F:0},remaining:{Y:100,J:0,F:0},dailyTotal:{Y:100,J:0,F:0},observedAt:'2026-10-04T01:00:00Z',operational:{cycles:11},flightHistory:{status:'observed',observedAt:'2026-10-04T01:00:00Z',entries:[row('10 hours ago','AAA','BBB',100),row('11 hours ago','BBB','AAA',90)]}};
+ expect(buildLiveAnchoredFlightHistoryStitch({schemaVersion:1,scope:'x',entries:[],events:[persisted]} as any,aircraft,new Date('2026-10-04T03:00:00Z'))).toMatchObject({
+   status:'unavailable',liveAnchorVerified:false,reason:'LIVE_ANCHOR_OLDER_THAN_PERSISTED',comparisonReady:false,mutationAuthorized:false
+ });
+ const conflicting={...persisted,observedAt:'2026-10-04T01:00:00Z',cycles:11,rows:[strip(row('10 hours ago','AAA','BBB',999)),strip(row('11 hours ago','BBB','AAA',90))]};
+ expect(buildLiveAnchoredFlightHistoryStitch({schemaVersion:1,scope:'x',entries:[],events:[conflicting]} as any,aircraft,new Date('2026-10-04T03:00:00Z'))).toMatchObject({
+   status:'unavailable',liveAnchorVerified:false,reason:'LIVE_ANCHOR_CONFLICTS_WITH_PERSISTED',comparisonReady:false,mutationAuthorized:false
+ });
+});
+
