@@ -11,13 +11,17 @@ import { DemandReader } from './reader';
 import { writeDemandReport } from './report';
 import { DemandConfig, DemandReport } from './types';
 import { loadAdaptiveDemandThresholds } from './adaptive-threshold';
-import { appendFlightHistoryAnchors, readFlightHistoryContinuityDiagnostics, readFlightHistoryStitchDiagnostics, readLiveAnchoredFlightHistoryStitchDiagnostics } from '../optimization/return-journal';
+import { appendFlightHistoryAnchors, appendObservedArrivals, readFlightHistoryContinuityDiagnostics, readFlightHistoryStitchDiagnostics, readLiveAnchoredFlightHistoryStitchDiagnostics } from '../optimization/return-journal';
 import { writeFile } from 'node:fs/promises';
 
 export async function runDemandSimulationDetailed(page: Page, config: DemandConfig = readDemandConfig(), reviews: Record<string, RouteReview> = {}) {
   const optimization = optimizationConfig();
   const research = researchConfig();
   const collection = await new DemandReader(page, 10000, true).collect();
+  if(optimization.returnJournal){
+    const arrivals=await appendObservedArrivals(optimization.returnJournal.directory,optimization.returnJournal.scope,collection);
+    if(arrivals)console.log('[History] Chegadas observadas acrescentadas: '+arrivals+'.');
+  }
   const adaptive=optimization.returnJournal?await loadAdaptiveDemandThresholds(optimization.returnJournal.directory,optimization.returnJournal.scope,config.minPercentage):new Map();
   const report = new DemandManager({...config,dryRun:true},adaptive).analyze(collection);
   await writeDemandReport(report);

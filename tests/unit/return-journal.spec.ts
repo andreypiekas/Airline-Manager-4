@@ -269,3 +269,28 @@ test('live-anchored stitched history fails closed on stale or conflicting curren
  });
 });
 
+test('confirmed departure is closed only by a later reversed ready snapshot',async()=>{
+ const {appendObservedArrivals}=await import('../../optimization/return-journal');
+ const departedAt='2026-10-04T10:00:00.000Z',observedAt='2026-10-04T11:00:00.000Z',when=new Date('2026-10-04T11:01:00.000Z');
+ const departure={eventId:'dep_900_1_10',type:'departure',aircraftId:'1',registration:'FAST',routeId:'10',from:'AAA',to:'BBB',observedAt:departedAt,result:'departed',
+  demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:10,J:0,F:0},occupancyPercentage:100},actualOnboard:{Y:10,J:0,F:0}};
+ await mkdir(directory,{recursive:true});await writeFile(join(directory,'return-journal.json'),JSON.stringify({schemaVersion:1,scope:'company-test',entries:[],events:[departure]})+'\n');
+ const collection:any={complete:true,expectedRoutes:1,warnings:[],aircraft:[{aircraftId:'1',registration:'FAST',routeId:'10',routeLabel:'BBB-AAA',from:'BBB',to:'AAA',state:'ready',capacity:{Y:10,J:0,F:0},remaining:{Y:100,J:0,F:0},dailyTotal:{Y:100,J:0,F:0},observedAt}]};
+ expect(await appendObservedArrivals(directory,'company-test',collection,when)).toBe(1);
+ expect(await appendObservedArrivals(directory,'company-test',collection,when)).toBe(0);
+ const saved=JSON.parse(await readFile(join(directory,'return-journal.json'),'utf8'));
+ expect(saved.events.at(-1)).toEqual({eventId:'arr_dep_900_1_10',type:'arrival-observed',departureEventId:'dep_900_1_10',aircraftId:'1',registration:'FAST',routeId:'10',from:'AAA',to:'BBB',departedAt,observedAt,result:'arrived_observed'});
+});
+
+test('arrival observation stays unavailable after a newer uncertain departure or mismatched landing context',async()=>{
+ const {appendObservedArrivals}=await import('../../optimization/return-journal');
+ const departure={eventId:'dep_901_1_10',type:'departure',aircraftId:'1',registration:'FAST',routeId:'10',from:'AAA',to:'BBB',observedAt:'2026-10-04T09:00:00.000Z',result:'departed',
+  demand:{availableBefore:{Y:100,J:0,F:0},possiblePassengers:{Y:10,J:0,F:0},occupancyPercentage:100},actualOnboard:{Y:10,J:0,F:0}};
+ const uncertain={eventId:'unc_902_1_10',type:'departure-uncertain',aircraftId:'1',registration:'FAST',routeId:'10',from:'BBB',to:'AAA',observedAt:'2026-10-04T10:00:00.000Z',result:'outcome_unknown',reason:'NO_RETRY_AFTER_CLICK_ATTEMPT:UNCLASSIFIED',sourceRunId:'902'};
+ await mkdir(directory,{recursive:true});await writeFile(join(directory,'return-journal.json'),JSON.stringify({schemaVersion:1,scope:'company-test',entries:[],events:[departure,uncertain]})+'\n');
+ const ready:any={aircraftId:'1',registration:'FAST',routeId:'10',routeLabel:'BBB-AAA',from:'BBB',to:'AAA',state:'ready',capacity:{Y:10,J:0,F:0},remaining:{Y:100,J:0,F:0},dailyTotal:{Y:100,J:0,F:0},observedAt:'2026-10-04T11:00:00.000Z'};
+ expect(await appendObservedArrivals(directory,'company-test',{complete:true,expectedRoutes:1,warnings:[],aircraft:[ready]} as any,new Date('2026-10-04T11:01:00.000Z'))).toBe(0);
+ await writeFile(join(directory,'return-journal.json'),JSON.stringify({schemaVersion:1,scope:'company-test',entries:[],events:[departure]})+'\n');
+ expect(await appendObservedArrivals(directory,'company-test',{complete:true,expectedRoutes:1,warnings:[],aircraft:[{...ready,from:'CCC',to:'AAA'}]} as any,new Date('2026-10-04T11:01:00.000Z'))).toBe(0);
+});
+
