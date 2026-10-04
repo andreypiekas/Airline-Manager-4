@@ -1,5 +1,6 @@
 import { Cabins, CLASSES, CollectionResult } from '../demand/types';
 import type { DemandLabelCalibrationReport } from './demand-label-calibration';
+import type { LiveAnchoredFlightHistoryStitchDiagnostic } from './return-journal';
 
 export interface DemandResetWindow {
   pairKey:string;
@@ -33,6 +34,53 @@ const lifetimeHistoryCovered=(a:CollectionResult['aircraft'][number],visibleEntr
   if(a.state==='inflight')return op.cycles===visibleEntries+1&&valid(a.onboard);
   return a.state==='ready'&&op.cycles===visibleEntries;
 };
+
+
+interface EffectiveHistoryRow {
+  from:string;to:string;onboard:Cabins;ageLowerMinutes:number;ageUpperMinutes:number;
+}
+interface EffectiveHistory {
+  rows:EffectiveHistoryRow[];
+  stitched:boolean;
+}
+function stitchedHistoryForAircraft(
+  a:CollectionResult['aircraft'][number],
+  stitches:readonly LiveAnchoredFlightHistoryStitchDiagnostic[]
+):EffectiveHistory|null{
+  const matches=stitches.filter(s=>s.aircraftId===a.aircraftId);
+  if(matches.length!==1)return null;
+  const s=matches[0],h=a.flightHistory,cycles=a.operational?.cycles;
+  if(s.status!=='verified_chain'||s.liveAnchorVerified!==true||s.registration!==a.registration||
+    !h||h.status!=='observed'||s.currentObservedAt!==h.observedAt||s.latestObservedAt!==h.observedAt||
+    s.currentCycles!==cycles||s.latestCycles!==cycles||!Number.isSafeInteger(cycles)||cycles!<0||
+    !Array.isArray(s.rows)||!s.rows.length)return null;
+  const rows:EffectiveHistoryRow[]=[];
+  for(const r of s.rows){
+    if(!/^[A-Z0-9]{3}$/.test(r.from)||!/^[A-Z0-9]{3}$/.test(r.to)||r.from===r.to||!valid(r.onboard)||
+      !Number.isFinite(r.ageLowerMinutes)||!Number.isFinite(r.ageUpperMinutes)||r.ageLowerMinutes<0||
+      r.ageUpperMinutes<r.ageLowerMinutes)return null;
+    rows.push({from:r.from,to:r.to,onboard:{...r.onboard},ageLowerMinutes:r.ageLowerMinutes,ageUpperMinutes:r.ageUpperMinutes});
+  }
+  const oldestLower=Math.max(...rows.map(r=>r.ageLowerMinutes));
+  if(!Number.isFinite(s.oldestAgeLowerMinutes)||Math.abs(oldestLower-s.oldestAgeLowerMinutes!)>1e-9)return null;
+  return {rows,stitched:true};
+}
+function effectiveHistory(
+  a:CollectionResult['aircraft'][number],
+  stitches:readonly LiveAnchoredFlightHistoryStitchDiagnostic[]
+):EffectiveHistory|null{
+  const stitched=stitchedHistoryForAircraft(a,stitches);
+  if(stitched)return stitched;
+  const h=a.flightHistory;
+  if(!h||h.status!=='observed')return null;
+  const rows:EffectiveHistoryRow[]=[];
+  for(const e of h.entries){
+    const age=relativeAgeMinutes(e.relativeTime);
+    if(age===null||!valid(e.onboard))return null;
+    rows.push({from:e.from,to:e.to,onboard:{...e.onboard},ageLowerMinutes:age,ageUpperMinutes:age});
+  }
+  return {rows,stitched:false};
+}
 
 export function relativeAgeMinutes(text:string):number|null{
   const s=text.trim().toLowerCase();
@@ -110,14 +158,20 @@ export function calibrateDemandResetWindows(
   return base;
 }
 
-export function fleetHistoryCoverageDiagnostics(collection:CollectionResult,calibration:DemandResetCalibration){
+export function fleetHistoryCoverageDiagnostics(
+  collection:CollectionResult,
+  calibration:DemandResetCalibration,
+  stitches:readonly LiveAnchoredFlightHistoryStitchDiagnostic[]=[]
+){
   const requiredExcludedMin=calibration.windows.length?Math.min(...calibration.windows.map(w=>w.excludedMinAgeMinutes)):calibration.resetAgeUpperBoundMinutes;
   return collection.aircraft.map(a=>{
-    const h=a.flightHistory,ages=h?.status==='observed'?h.entries.map(e=>relativeAgeMinutes(e.relativeTime)):[];
-    const parsed=ages.filter((x):x is number=>x!==null),oldestAgeMinutes=parsed.length?Math.max(...parsed):null;
-    const lifetimeCovered=requiredExcludedMin!==null&&h?.status==='observed'?lifetimeHistoryCovered(a,h.entries.length,requiredExcludedMin):false;
-    const coversReset=requiredExcludedMin!==null&&h?.status==='observed'&&ages.every(x=>x!==null)&&(lifetimeCovered||(oldestAgeMinutes!==null&&oldestAgeMinutes>=requiredExcludedMin));
-    return {aircraftId:a.aircraftId,registration:a.registration,state:a.state,cycles:a.operational?.cycles??null,historyStatus:h?.status??'unavailable',visibleEntries:h?.entries.length??0,oldestAgeMinutes,requiredExcludedMin,lifetimeCovered,coversReset};
+    const history=effectiveHistory(a,stitches);
+    const oldestAgeMinutes=history?.rows.length?Math.max(...history.rows.map(r=>r.ageLowerMinutes)):null;
+    const visibleEntries=a.flightHistory?.status==='observed'?a.flightHistory.entries.length:0;
+    const lifetimeCovered=requiredExcludedMin!==null&&a.flightHistory?.status==='observed'?lifetimeHistoryCovered(a,visibleEntries,requiredExcludedMin):false;
+    const coversReset=requiredExcludedMin!==null&&!!history&&(lifetimeCovered||(oldestAgeMinutes!==null&&oldestAgeMinutes>=requiredExcludedMin));
+    return {aircraftId:a.aircraftId,registration:a.registration,state:a.state,cycles:a.operational?.cycles??null,
+      historyStatus:a.flightHistory?.status??'unavailable',visibleEntries,oldestAgeMinutes,requiredExcludedMin,lifetimeCovered,coversReset};
   });
 }
 
@@ -141,7 +195,8 @@ export interface HistoricalRemainingEvidence {
  * the boundary's ambiguous age interval.
  */
 export function historicalRemainingForCandidate(
-  from:string,to:string,dailyTotal:Cabins,collection:CollectionResult,calibration:DemandResetCalibration
+  from:string,to:string,dailyTotal:Cabins,collection:CollectionResult,calibration:DemandResetCalibration,
+  stitches:readonly LiveAnchoredFlightHistoryStitchDiagnostic[]=[]
 ):HistoricalRemainingEvidence{
   const pairKey=key(from,to);
   const base:HistoricalRemainingEvidence={status:'unavailable',pairKey,dailyTotal:{...dailyTotal},consumedSinceReset:null,remaining:null,
@@ -154,15 +209,14 @@ export function historicalRemainingForCandidate(
     if(Number.isFinite(upper)&&upper>0){
       let covered=true,pairInside=false,unparseable=false,missing=false;
       for(const a of collection.aircraft){
-        const h=a.flightHistory;
-        if(!h||h.status!=='observed'){missing=true;covered=false;continue;}
-        const parsed=h.entries.map(e=>({entry:e,age:relativeAgeMinutes(e.relativeTime)}));
-        if(parsed.some(x=>x.age===null)){unparseable=true;covered=false;continue;}
-        const ages=parsed.map(x=>x.age!);
-        const lifetimeCovered=lifetimeHistoryCovered(a,h.entries.length,upper);
-        const oldest=ages.length?Math.max(...ages):null;
+        const history=effectiveHistory(a,stitches);
+        if(!history){missing=true;covered=false;continue;}
+        if(history.rows.some(x=>!Number.isFinite(x.ageLowerMinutes)||!Number.isFinite(x.ageUpperMinutes))){unparseable=true;covered=false;continue;}
+        const visibleEntries=a.flightHistory?.status==='observed'?a.flightHistory.entries.length:0;
+        const lifetimeCovered=a.flightHistory?.status==='observed'&&lifetimeHistoryCovered(a,visibleEntries,upper);
+        const oldest=history.rows.length?Math.max(...history.rows.map(x=>x.ageLowerMinutes)):null;
         if(!lifetimeCovered&&(oldest===null||oldest<upper))covered=false;
-        if(parsed.some(x=>x.age!<upper&&key(x.entry.from,x.entry.to)===pairKey&&valid(x.entry.onboard)&&CLASSES.some(k=>x.entry.onboard[k]>0)))
+        if(history.rows.some(x=>x.ageLowerMinutes<upper&&key(x.from,x.to)===pairKey&&CLASSES.some(k=>x.onboard[k]>0)))
           pairInside=true;
       }
       if(covered&&!pairInside)return {...base,status:'verified',consumedSinceReset:zero(),remaining:{...dailyTotal},historyCoverageVerified:true,
@@ -190,20 +244,18 @@ export function historicalRemainingForCandidate(
   };
   let consumed=zero();
   for(const a of collection.aircraft){
-    const h=a.flightHistory;
-    if(!h||h.status!=='observed')return {...base,resetWindow:window,reason:'FLEET_HISTORY_MISSING'};
-    const parsed=h.entries.map(e=>({entry:e,age:relativeAgeMinutes(e.relativeTime)}));
-    if(parsed.some(x=>x.age===null))return {...base,resetWindow:window,reason:'HISTORY_AGE_UNPARSEABLE'};
-    const ages=parsed.map(x=>x.age!) ;
-    const lifetimeCovered=lifetimeHistoryCovered(a,h.entries.length,excluded);
-    const oldest=ages.length?Math.max(...ages):null;
+    const history=effectiveHistory(a,stitches);
+    if(!history)return {...base,resetWindow:window,reason:'FLEET_HISTORY_MISSING'};
+    const visibleEntries=a.flightHistory?.status==='observed'?a.flightHistory.entries.length:0;
+    const lifetimeCovered=a.flightHistory?.status==='observed'&&lifetimeHistoryCovered(a,visibleEntries,excluded);
+    const oldest=history.rows.length?Math.max(...history.rows.map(x=>x.ageLowerMinutes)):null;
     if(!lifetimeCovered&&(oldest===null||oldest<excluded))return {...base,resetWindow:window,reason:'FLEET_HISTORY_DOES_NOT_COVER_RESET'};
-    if(parsed.some(x=>x.age!>included&&x.age!<excluded&&key(x.entry.from,x.entry.to)===pairKey))
+    if(history.rows.some(x=>key(x.from,x.to)===pairKey&&x.ageUpperMinutes>included&&x.ageLowerMinutes<excluded))
       return {...base,resetWindow:window,reason:'PAIR_FLIGHT_IN_RESET_BOUNDARY_GAP'};
-    for(const x of parsed){
-      if(x.age!<=included&&key(x.entry.from,x.entry.to)===pairKey){
-        if(!valid(x.entry.onboard))return {...base,resetWindow:window,reason:'HISTORY_ONBOARD_INVALID'};
-        consumed=add(consumed,x.entry.onboard);
+    for(const x of history.rows){
+      if(x.ageUpperMinutes<=included&&key(x.from,x.to)===pairKey){
+        if(!valid(x.onboard))return {...base,resetWindow:window,reason:'HISTORY_ONBOARD_INVALID'};
+        consumed=add(consumed,x.onboard);
       }
     }
   }

@@ -171,3 +171,40 @@ test('flight history coverage diagnostics exposes the exact reset blocker withou
  const rows=fleetHistoryCoverageDiagnostics({aircraft:[aircraft],complete:true,expectedRoutes:1,warnings:[]},calibration);
  expect(rows).toEqual([{aircraftId:'1',registration:'FAST',state:'ready',cycles:100,historyStatus:'observed',visibleEntries:1,oldestAgeMinutes:1260,requiredExcludedMin:1440,lifetimeCovered:false,coversReset:false}]);
 });
+
+
+test('live-anchored stitched history may extend reset coverage only with exact current identity and conservative age bounds',()=>{
+ const a=ac('1',[e('2 hours ago','CCC','DDD',20,2,1),e('10 hours ago','AAA','BBB',1,0,0)],100);
+ a.flightHistory!.observedAt=stamp;
+ const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[a]};
+ const calibration={status:'verified' as const,windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:1200,excludedMinAgeMinutes:1260,
+   consumed:{Y:80,J:5,F:3},observedAt:stamp,sourceAircraftIds:['1']}],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
+ const stitch:any={status:'verified_chain',aircraftId:'1',registration:'AC-1',anchorsAvailable:3,anchorsUsed:3,linksVerified:2,
+   latestObservedAt:stamp,latestCycles:100,rowsStitched:3,oldestAgeLowerMinutes:1380,oldestAgeUpperMinutes:1440,stoppedReason:null,
+   reason:'LIVE_ANCHORED_FLIGHT_HISTORY_STITCH_VERIFIED',comparisonReady:false,mutationAuthorized:false,liveAnchorVerified:true,
+   persistedAnchorsAvailable:2,currentObservedAt:stamp,currentCycles:100,rows:[
+    {from:'CCC',to:'DDD',onboard:{Y:20,J:2,F:1},co2Quotas:1,fuelLbs:1,revenue:1,sourceObservedAt:stamp,sourceRelativeTime:'2 hours ago',ageLowerMinutes:120,ageUpperMinutes:180},
+    {from:'AAA',to:'BBB',onboard:{Y:1,J:0,F:0},co2Quotas:1,fuelLbs:1,revenue:1,sourceObservedAt:stamp,sourceRelativeTime:'10 hours ago',ageLowerMinutes:600,ageUpperMinutes:660},
+    {from:'EEE',to:'FFF',onboard:{Y:1,J:0,F:0},co2Quotas:1,fuelLbs:1,revenue:1,sourceObservedAt:stamp,sourceRelativeTime:'23 hours ago',ageLowerMinutes:1380,ageUpperMinutes:1440}
+   ]};
+ const r=historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration,[stitch]);
+ expect(r).toMatchObject({status:'verified',consumedSinceReset:{Y:20,J:2,F:1},remaining:{Y:80,J:18,F:9},historyCoverageVerified:true});
+ expect(fleetHistoryCoverageDiagnostics(collection,calibration,[stitch])[0].coversReset).toBe(true);
+});
+
+test('stitched history crossing reset boundary or mismatching live identity remains fail closed',()=>{
+ const a=ac('1',[e('10 hours ago','AAA','BBB',1,0,0)],100);a.flightHistory!.observedAt=stamp;
+ const collection:CollectionResult={complete:true,expectedRoutes:1,warnings:[],aircraft:[a]};
+ const calibration={status:'verified' as const,windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:1200,excludedMinAgeMinutes:1260,
+   consumed:{Y:1,J:0,F:0},observedAt:stamp,sourceAircraftIds:['1']}],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false as const,mutationAuthorized:false as const};
+ const base:any={status:'verified_chain',aircraftId:'1',registration:'AC-1',anchorsAvailable:2,anchorsUsed:2,linksVerified:1,
+   latestObservedAt:stamp,latestCycles:100,rowsStitched:2,oldestAgeLowerMinutes:1380,oldestAgeUpperMinutes:1440,stoppedReason:null,
+   reason:'LIVE_ANCHORED_FLIGHT_HISTORY_STITCH_VERIFIED',comparisonReady:false,mutationAuthorized:false,liveAnchorVerified:true,
+   persistedAnchorsAvailable:1,currentObservedAt:stamp,currentCycles:100,rows:[
+    {from:'CCC',to:'DDD',onboard:{Y:20,J:2,F:1},co2Quotas:1,fuelLbs:1,revenue:1,sourceObservedAt:stamp,sourceRelativeTime:'boundary',ageLowerMinutes:1190,ageUpperMinutes:1210},
+    {from:'EEE',to:'FFF',onboard:{Y:1,J:0,F:0},co2Quotas:1,fuelLbs:1,revenue:1,sourceObservedAt:stamp,sourceRelativeTime:'old',ageLowerMinutes:1380,ageUpperMinutes:1440}
+   ]};
+ expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration,[base])).toMatchObject({status:'unavailable',reason:'PAIR_FLIGHT_IN_RESET_BOUNDARY_GAP'});
+ expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration,[{...base,registration:'OTHER'}])).toMatchObject({status:'unavailable',reason:'FLEET_HISTORY_DOES_NOT_COVER_RESET'});
+ expect(historicalRemainingForCandidate('CCC','DDD',{Y:100,J:20,F:10},collection,calibration,[base,base])).toMatchObject({status:'unavailable',reason:'FLEET_HISTORY_DOES_NOT_COVER_RESET'});
+});

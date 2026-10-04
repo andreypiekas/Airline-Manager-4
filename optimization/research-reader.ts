@@ -32,6 +32,7 @@ import { candidateLoadEnvelope, currentRouteLoadEnvelope } from './route-variabl
 import { compareRouteVariableCycles, conservativeSharedPairRemaining, routeVariableRoundTripInterval } from './route-variable-cycle';
 import { routeProfitModelEvidence } from './route-profit-model';
 import { planVariableRouteDecision } from './route-decision';
+import type { LiveAnchoredFlightHistoryStitchDiagnostic } from './return-journal';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -156,7 +157,8 @@ export async function writeRouteResearchReport(report: Awaited<ReturnType<typeof
 }
 
 /** Adds available sources without manufacturing a complete RouteReview. */
-export async function collectCandidateData(page:Page,collection:CollectionResult,research:Awaited<ReturnType<typeof researchFleetCandidates>>,minCoveragePercent=80){
+export async function collectCandidateData(page:Page,collection:CollectionResult,research:Awaited<ReturnType<typeof researchFleetCandidates>>,minCoveragePercent=80,
+  liveStitches:readonly LiveAnchoredFlightHistoryStitchDiagnostic[]=[]){
   const reservationsConfig=reservationConfig();
   const quotes=research.aircraft.flatMap(a=>a.result?.quotes||[]);
   const models:ModelCostReference[]=[];const warnings:string[]=[];
@@ -259,13 +261,13 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
     }
   }
   const now=new Date();
-  const flightHistoryCoverage=fleetHistoryCoverageDiagnostics(collection,demandResetCalibration);
+  const flightHistoryCoverage=fleetHistoryCoverageDiagnostics(collection,demandResetCalibration,liveStitches);
   const routeProfitModel=routeProfitModelEvidence();
   const fresh=(stamp:string)=>freshAt(stamp,now);
   const candidates=quotes.map(quote=>{
-    const demand=candidateDemandEvidence(quote,collection,now,reservationsConfig.maxAgeSeconds,demandResetCalibration);
+    const demand=candidateDemandEvidence(quote,collection,now,reservationsConfig.maxAgeSeconds,demandResetCalibration,liveStitches);
     const model=models.find(m=>m.modelId===quote.autopriceReference?.modelId)||null;
-    const reservations=candidateReservationScenario(quote,collection,now,reservationsConfig,demandResetCalibration);
+    const reservations=candidateReservationScenario(quote,collection,now,reservationsConfig,demandResetCalibration,liveStitches);
     const aircraft=collection.aircraft.find(a=>a.aircraftId===quote.aircraftId);
     const capacity=capacityFor(quote,now);
     const screening=screeningByQuote.get(quote)!;
@@ -296,7 +298,7 @@ export async function collectCandidateData(page:Page,collection:CollectionResult
       calibrateCurrentFareLoadFactor(aircraft,currentQuote,currentGameModeEvidence,currentAirportDistance):null;
     const candidateLoadFactor=loadFactorCalibration?
       transferCurrentFareLoadFactor(loadFactorCalibration,quote,capacity,screening.adjustedFareReference,reverseEquivalent.status==='verified'):null;
-    const currentReservations=currentQuote?candidateReservationScenario(currentQuote,collection,now,reservationsConfig,demandResetCalibration):null;
+    const currentReservations=currentQuote?candidateReservationScenario(currentQuote,collection,now,reservationsConfig,demandResetCalibration,liveStitches):null;
     const currentReverseEquivalent=currentQuote&&currentAirportDistance&&currentGameModeEvidence?
       reverseLegEquivalentEvidence(currentQuote,currentAirportDistance,currentGameModeEvidence,currentQuote.routeMutationControl||null):null;
     const currentCosts=currentQuote&&aircraft?candidateCostScenarios(currentQuote,aircraft.capacity,

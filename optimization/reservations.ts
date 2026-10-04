@@ -2,6 +2,7 @@ import { Cabins, CLASSES, CollectionResult } from '../demand/types';
 import { candidateDemandEvidence } from './candidate-evidence';
 import { CandidateQuote } from './quote-reader';
 import type { DemandResetCalibration } from './demand-reset-ledger';
+import type { LiveAnchoredFlightHistoryStitchDiagnostic } from './return-journal';
 
 export interface ReservationConfig {
   nextLegs: number;
@@ -25,7 +26,8 @@ const map = (fn: (k: typeof CLASSES[number]) => number): Cabins => ({Y:fn('Y'),J
  * Each alternative gets its own ledger. Already boarded passengers are never debited again.
  */
 export function candidateReservationScenario(quote: CandidateQuote, collection: CollectionResult,
-  now = new Date(), config = reservationConfig(), resetCalibration: DemandResetCalibration | null = null) {
+  now = new Date(), config = reservationConfig(), resetCalibration: DemandResetCalibration | null = null,
+  stitches: readonly LiveAnchoredFlightHistoryStitchDiagnostic[] = []) {
   // Validate injected settings too; this function performs no navigation or mutations.
   if(!Number.isSafeInteger(config.nextLegs)||config.nextLegs<1||config.nextLegs>20||
     !['airport-pair','directional'].includes(config.poolScope)||!Number.isSafeInteger(config.maxAgeSeconds)||config.maxAgeSeconds<1)
@@ -47,7 +49,7 @@ export function candidateReservationScenario(quote: CandidateQuote, collection: 
         !/^[A-Z0-9]{3}$/.test(a.from) || !/^[A-Z0-9]{3}$/.test(a.to) || a.from===a.to ||
         !['ready','inflight'].includes(a.state) || !a.operational || !fresh(a.observedAt) || !cabins(a.capacity) ||
         a.capacity.Y+a.capacity.J+a.capacity.F<=0)) return {...result,reason:'FLEET_RESERVATIONS_UNVERIFIED'};
-  const evidence = candidateDemandEvidence(quote,collection,now,config.maxAgeSeconds,resetCalibration);
+  const evidence = candidateDemandEvidence(quote,collection,now,config.maxAgeSeconds,resetCalibration,stitches);
   const key = (from:string,to:string) => (config.poolScope==='airport-pair'?[from,to].sort():[from,to]).join(':');
   const forwardKey=key(quote.from,quote.to), reverseKey=key(quote.to,quote.from);
   const pools = new Map<string,Cabins>();

@@ -31,7 +31,10 @@ export async function runDemandSimulationDetailed(page: Page, config: DemandConf
   await writeOptimizationReport(await analyzeOptimizationWithJournal(collection, optimization, reviews));
   const researchReport=await researchFleetCandidates(page, collection, optimization, research);
   await writeRouteResearchReport(researchReport);
-  const candidateData=await collectCandidateData(page,collection,researchReport,optimization.minOccupancy);
+  const liveStitches=optimization.returnJournal
+    ? await readLiveAnchoredFlightHistoryStitchDiagnostics(optimization.returnJournal.directory,optimization.returnJournal.scope,collection.aircraft)
+    : [];
+  const candidateData=await collectCandidateData(page,collection,researchReport,optimization.minOccupancy,liveStitches);
   await writeCandidateDataReport(candidateData);
   if(optimization.returnJournal&&/^[1-9]\d*$/.test(process.env.GITHUB_RUN_ID||'')){
     const anchors=await appendFlightHistoryAnchors(optimization.returnJournal.directory,optimization.returnJournal.scope,process.env.GITHUB_RUN_ID!,collection,candidateData.flightHistoryCoverage);
@@ -42,9 +45,8 @@ export async function runDemandSimulationDetailed(page: Page, config: DemandConf
     const stitches=await readFlightHistoryStitchDiagnostics(optimization.returnJournal.directory,optimization.returnJournal.scope);
     await writeFile('test-results/demand/flight-history-stitch.json',JSON.stringify({schemaVersion:1,generatedAt:new Date().toISOString(),diagnostics:stitches},null,2)+'\n');
     await writeFile('test-results/demand/flight-history-stitch.md',['# Stitched Flight History persistente — diagnostico','',...(stitches.length?stitches.map(x=>`- ${x.aircraftId}: ${x.status}; anchors usados ${x.anchorsUsed}/${x.anchorsAvailable}; links verificados ${x.linksVerified}; linhas compostas ${x.rowsStitched}; idade inferior da linha mais antiga ${x.oldestAgeLowerMinutes??'n/d'} min; motivo ${x.reason}${x.stoppedReason?'; limite '+x.stoppedReason:''}.`):['Nenhuma cadeia persistida disponivel neste run.']),'','_Diagnostico somente leitura. Ainda nao altera remaining demand; comparisonReady e mutationAuthorized permanecem false._',''].join('\n'));
-    const liveStitches=await readLiveAnchoredFlightHistoryStitchDiagnostics(optimization.returnJournal.directory,optimization.returnJournal.scope,collection.aircraft);
     await writeFile('test-results/demand/flight-history-live-stitch.json',JSON.stringify({schemaVersion:1,generatedAt:new Date().toISOString(),diagnostics:liveStitches},null,2)+'\n');
-    await writeFile('test-results/demand/flight-history-live-stitch.md',['# Stitched Flight History ancorado no snapshot live — diagnostico','',...(liveStitches.length?liveStitches.map(x=>`- ${x.aircraftId}: ${x.status}; live ${x.liveAnchorVerified?'verificado':'indisponivel'}; anchors persistidos ${x.persistedAnchorsAvailable}; usados ${x.anchorsUsed}; links ${x.linksVerified}; linhas ${x.rowsStitched}; idade inferior mais antiga ${x.oldestAgeLowerMinutes??'n/d'} min; motivo ${x.reason}${x.stoppedReason?'; limite '+x.stoppedReason:''}.`):['Nenhuma aeronave disponivel neste run.']),'','_Snapshot live obrigatorio. Diagnostico somente leitura; remaining demand, comparisonReady e mutationAuthorized nao sao alterados._',''].join('\n'));
+    await writeFile('test-results/demand/flight-history-live-stitch.md',['# Stitched Flight History ancorado no snapshot live — diagnostico','',...(liveStitches.length?liveStitches.map(x=>`- ${x.aircraftId}: ${x.status}; live ${x.liveAnchorVerified?'verificado':'indisponivel'}; anchors persistidos ${x.persistedAnchorsAvailable}; usados ${x.anchorsUsed}; links ${x.linksVerified}; linhas ${x.rowsStitched}; idade inferior mais antiga ${x.oldestAgeLowerMinutes??'n/d'} min; motivo ${x.reason}${x.stoppedReason?'; limite '+x.stoppedReason:''}.`):['Nenhuma aeronave disponivel neste run.']),'','_Snapshot live obrigatorio. Cadeias verificadas podem complementar somente a cobertura historica do ledger de demanda; o stitch continua com comparisonReady=false e mutationAuthorized=false e nunca autoriza reroute isoladamente._',''].join('\n'));
   }
   if(!candidateData.uiRestored)throw new Error('[Demand] Painel nao restaurado apos consulta; nenhuma operacao autorizada.');
   if (!report.collectionComplete) throw new Error('[Demand] Coleta incompleta. Relatorio salvo; nenhuma decolagem autorizada.');

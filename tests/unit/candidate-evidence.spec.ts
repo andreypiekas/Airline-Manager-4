@@ -39,3 +39,22 @@ test('incomplete collection and expired quote block enrichment',()=>{
  expect(candidateDemandEvidence(quote,{...collection(aircraft()),complete:false},now).status).toBe('unavailable');
  expect(candidateDemandEvidence({...quote,observedAt:'2000-01-01T00:00:00Z'},collection(aircraft()),now).status).toBe('unavailable');
 });
+
+
+test('candidate reconstruction can consume only a verified live-anchored stitched coverage overlay',()=>{
+ const a=aircraft();a.to='BSB';a.operational!.cycles=20;
+ a.flightHistory={status:'observed',observedAt:now.toISOString(),source:'inspected-aircraft-flight-history',complete:false,
+   entries:[{relativeTime:'2 hours ago',from:'GRU',to:'XAP',registrationLabel:'X',co2Quotas:0,onboard:{Y:20,J:2,F:0},fuelLbs:1,revenue:1}],
+   comparisonReady:false,mutationAuthorized:false};
+ const calibration:any={status:'verified',windows:[{pairKey:'AAA:BBB',includedMaxAgeMinutes:1200,excludedMinAgeMinutes:1260,
+   consumed:{Y:1,J:0,F:0},observedAt:now.toISOString(),sourceAircraftIds:['1']}],resetAgeUpperBoundMinutes:null,upperBoundSources:[],warnings:[],comparisonReady:false,mutationAuthorized:false};
+ const stitch:any={status:'verified_chain',aircraftId:'1',registration:'SYNTHETIC',anchorsAvailable:2,anchorsUsed:2,linksVerified:1,
+   latestObservedAt:now.toISOString(),latestCycles:20,rowsStitched:2,oldestAgeLowerMinutes:1380,oldestAgeUpperMinutes:1440,stoppedReason:null,
+   reason:'LIVE_ANCHORED_FLIGHT_HISTORY_STITCH_VERIFIED',comparisonReady:false,mutationAuthorized:false,liveAnchorVerified:true,
+   persistedAnchorsAvailable:1,currentObservedAt:now.toISOString(),currentCycles:20,rows:[
+    {from:'GRU',to:'XAP',onboard:{Y:20,J:2,F:0},co2Quotas:1,fuelLbs:1,revenue:1,sourceObservedAt:now.toISOString(),sourceRelativeTime:'2 hours ago',ageLowerMinutes:120,ageUpperMinutes:180},
+    {from:'AAA',to:'BBB',onboard:{Y:1,J:0,F:0},co2Quotas:1,fuelLbs:1,revenue:1,sourceObservedAt:now.toISOString(),sourceRelativeTime:'23 hours ago',ageLowerMinutes:1380,ageUpperMinutes:1440}
+   ]};
+ const r=candidateDemandEvidence({...quote,dailyDemand:{Y:100,J:20,F:5}},collection(a),now,300,calibration,[stitch]);
+ expect(r).toMatchObject({status:'historical_pair_reconstructed',remaining:{Y:80,J:18,F:5},comparisonReady:false,reason:'HISTORICAL_PAIR_LEDGER_VERIFIED'});
+});

@@ -1,10 +1,12 @@
 import { Cabins, CLASSES, CollectionResult } from '../demand/types';
 import { CandidateQuote } from './quote-reader';
 import { DemandResetCalibration, historicalRemainingForCandidate } from './demand-reset-ledger';
+import type { LiveAnchoredFlightHistoryStitchDiagnostic } from './return-journal';
 
 /** Observations are not reservations, forecasts, or a complete economic review. */
 export function candidateDemandEvidence(quote: CandidateQuote, collection: CollectionResult, now = new Date(), maxAgeSeconds = 300,
-  resetCalibration: DemandResetCalibration | null = null) {
+  resetCalibration: DemandResetCalibration | null = null,
+  stitches: readonly LiveAnchoredFlightHistoryStitchDiagnostic[] = []) {
   const result = {status:'unavailable',remaining:null as Cabins|null,reverseRemaining:null as Cabins|null,
     sources:[] as {aircraftId:string;routeId:string;from:string;to:string;observedAt:string;remaining:Cabins}[],
     demandNetOfOtherAircraft:false,comparisonReady:false,reason:''};
@@ -15,7 +17,7 @@ export function candidateDemandEvidence(quote: CandidateQuote, collection: Colle
   }
   const matches=collection.aircraft.filter(a=>a.from===quote.from&&a.to===quote.to||a.from===quote.to&&a.to===quote.from);
   if(!matches.length){
-    const historical=resetCalibration?historicalRemainingForCandidate(quote.from,quote.to,quote.dailyDemand,collection,resetCalibration):null;
+    const historical=resetCalibration?historicalRemainingForCandidate(quote.from,quote.to,quote.dailyDemand,collection,resetCalibration,stitches):null;
     if(historical?.status==='verified'&&historical.remaining){
       return {...result,status:'historical_pair_reconstructed',remaining:{...historical.remaining},reverseRemaining:{...historical.remaining},
         reason:'HISTORICAL_PAIR_LEDGER_VERIFIED',historical};
