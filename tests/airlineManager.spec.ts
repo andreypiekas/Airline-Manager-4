@@ -261,11 +261,11 @@ test('All Operations', async ({ page }) => {
     const simulation = await runDemandSimulationDetailed(page, demandConfig);
     if (!demandConfig.dryRun && moduleEnabled('ENABLE_ROUTE_EXECUTION', false)
       && phaseAllowed('route-execution',phaseBudgetsMs.routeExecution)) {
-      await test.step('Reroute conservador por aeronave', async () => await runRouteExecution(page, simulation));
+      await test.step('Reroute conservador por aeronave', async () => await runRouteExecution(page, simulation,{...process.env,ROUTE_EXECUTION_MUTATION_DEADLINE_EPOCH_MS:String(phaseDeadlineEpochMs)}));
     }
     if (!demandConfig.dryRun && moduleEnabled('ENABLE_TICKET_PRICING_EXECUTION', false)
       && phaseAllowed('ticket-pricing',phaseBudgetsMs.ticketPricing)) {
-      await test.step('Ajustar tarifas por rota', async () => await runTicketPricingExecution(page));
+      await test.step('Ajustar tarifas por rota', async () => await runTicketPricingExecution(page,{...process.env,TICKET_PRICING_MUTATION_DEADLINE_EPOCH_MS:String(phaseDeadlineEpochMs)}));
     }
     if (!demandConfig.dryRun && moduleEnabled('ENABLE_DEPART')
       && phaseAllowed('departures',phaseBudgetsMs.departures)) {

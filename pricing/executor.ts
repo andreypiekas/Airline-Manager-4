@@ -12,6 +12,7 @@ export interface PricingExecutionSettings {
   enabled: boolean;
   maxAdjustments: number;
   maxAgeSeconds: number;
+  mutationDeadlineEpochMs?: number;
   blockedRouteIds?: ReadonlySet<string>;
 }
 
@@ -70,6 +71,7 @@ export class TicketPricingExecutor {
   ){
     if(typeof settings.enabled!=='boolean'||!Number.isSafeInteger(settings.maxAdjustments)||settings.maxAdjustments<1||settings.maxAdjustments>20||
       !Number.isSafeInteger(settings.maxAgeSeconds)||settings.maxAgeSeconds<1||
+      (settings.mutationDeadlineEpochMs!==undefined&&(!Number.isSafeInteger(settings.mutationDeadlineEpochMs)||settings.mutationDeadlineEpochMs<=0))||
       (settings.blockedRouteIds!==undefined&&[...settings.blockedRouteIds].some(id=>!/^[1-9]\d*$/.test(id))))
       throw new Error('PRICING_EXECUTION_SETTINGS_INVALID');
   }
@@ -123,6 +125,9 @@ export class TicketPricingExecutor {
 
       entry.before=fresh.fares?.current?{...fresh.fares.current}:null;
       entry.desired={...freshDesired};
+      if(this.settings.mutationDeadlineEpochMs!==undefined&&Date.now()>=this.settings.mutationDeadlineEpochMs){
+        entry.reason='RUN_TIME_BUDGET_EXHAUSTED_BEFORE_PRICE_SAVE';continue;
+      }
       this.attemptedRoutes.add(fresh.routeId);
       entry.status='attempting';
       entry.reason='NATIVE_ROUTE_SAVE_PREPARED';

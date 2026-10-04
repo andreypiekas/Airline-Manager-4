@@ -13,14 +13,18 @@ export interface RouteExecutionRuntimeSettings {
   enabled:boolean;
   maxReroutes:number;
   maxAgeSeconds:number;
+  mutationDeadlineEpochMs?:number;
 }
 
 export function routeExecutionSettings(env:NodeJS.ProcessEnv=process.env):RouteExecutionRuntimeSettings{
   const raw=(env.ENABLE_ROUTE_EXECUTION||'false').trim().toLowerCase();
   const maxReroutes=Number((env.ROUTE_MAX_REROUTES_PER_RUN||'1').trim());
   const maxAgeSeconds=Number((env.DEMAND_MAX_AGE_SECONDS||'300').trim());
+  const deadlineRaw=(env.ROUTE_EXECUTION_MUTATION_DEADLINE_EPOCH_MS||'').trim();
+  const mutationDeadlineEpochMs=deadlineRaw?Number(deadlineRaw):undefined;
   if(!['true','false'].includes(raw)||!Number.isSafeInteger(maxReroutes)||maxReroutes<1||maxReroutes>5||
-    !Number.isSafeInteger(maxAgeSeconds)||maxAgeSeconds<1||maxAgeSeconds>900)
+    !Number.isSafeInteger(maxAgeSeconds)||maxAgeSeconds<1||maxAgeSeconds>900||
+    (mutationDeadlineEpochMs!==undefined&&(!Number.isSafeInteger(mutationDeadlineEpochMs)||mutationDeadlineEpochMs<=0)))
     throw new Error('ROUTE_EXECUTION_CONFIG_INVALID');
   const enabled=raw==='true';
   if(enabled&&(
@@ -30,7 +34,7 @@ export function routeExecutionSettings(env:NodeJS.ProcessEnv=process.env):RouteE
     (env.DEMAND_DRY_RUN||'').trim().toLowerCase()!=='false'||
     (env.ENABLE_ROUTE_OPTIMIZER||'true').trim().toLowerCase()!=='true'
   ))throw new Error('ROUTE_REAL_EXECUTION_CONTEXT_INVALID_OR_RERUN');
-  return {enabled,maxReroutes,maxAgeSeconds};
+  return {enabled,maxReroutes,maxAgeSeconds,...(mutationDeadlineEpochMs===undefined?{}:{mutationDeadlineEpochMs})};
 }
 
 function validCabins(v:unknown):v is Cabins{
@@ -66,6 +70,7 @@ export async function runRouteExecution(
 ){
   const settings=routeExecutionSettings(env),optimization=optimizationConfig(env);
   if(settings.enabled&&!optimization.returnJournal)throw new Error('ROUTE_EXECUTION_REQUIRES_PERSISTENT_JOURNAL');
+  if(settings.enabled&&settings.mutationDeadlineEpochMs===undefined)throw new Error('ROUTE_EXECUTION_REQUIRES_MUTATION_DEADLINE');
   const blockedAircraftIds=optimization.returnJournal
     ? await readUnresolvedRouteAircraftIds(optimization.returnJournal.directory,optimization.returnJournal.scope)
     : new Set<string>();

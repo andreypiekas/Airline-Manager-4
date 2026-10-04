@@ -33,6 +33,7 @@ export interface RouteExecutionSettings {
   enabled:boolean;
   maxReroutes:number;
   maxAgeSeconds:number;
+  mutationDeadlineEpochMs?:number;
   blockedAircraftIds?:ReadonlySet<string>;
 }
 
@@ -95,6 +96,7 @@ export class RouteMutationExecutor {
     if(typeof settings.enabled!=='boolean'||!Number.isSafeInteger(settings.maxReroutes)||
       settings.maxReroutes<1||settings.maxReroutes>5||!Number.isSafeInteger(settings.maxAgeSeconds)||
       settings.maxAgeSeconds<1||settings.maxAgeSeconds>900||
+      (settings.mutationDeadlineEpochMs!==undefined&&(!Number.isSafeInteger(settings.mutationDeadlineEpochMs)||settings.mutationDeadlineEpochMs<=0))||
       (settings.blockedAircraftIds!==undefined&&[...settings.blockedAircraftIds].some(id=>!safeId(id))))
       throw new Error('ROUTE_EXECUTION_SETTINGS_INVALID');
   }
@@ -173,6 +175,9 @@ export class RouteMutationExecutor {
         entry.reason='ROUTE_EXECUTION_CONTEXT_CHANGED';continue;
       }
 
+      if(this.settings.mutationDeadlineEpochMs!==undefined&&Date.now()>=this.settings.mutationDeadlineEpochMs){
+        entry.reason='RUN_TIME_BUDGET_EXHAUSTED_BEFORE_ROUTE_MUTATION';continue;
+      }
       this.attemptedAircraft.add(expected.aircraftId);
       // Authorization is deliberately local to this already-fresh fingerprint.
       // It is persisted before the single mutation attempt for auditability and
