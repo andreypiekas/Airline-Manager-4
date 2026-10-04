@@ -1,5 +1,7 @@
-import { writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { test, expect, Page } from '@playwright/test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { AircraftSnapshot, CollectionResult } from '../../demand/types';
 import { optimizationConfig } from '../../optimization/report';
 import { researchConfig, researchFleetCandidates, writeRouteResearchReport } from '../../optimization/research-reader';
@@ -89,4 +91,38 @@ test('bounded research defers extra aircraft and validates settings before click
 test('uses the inspected Fleet tab when the main menu would toggle the open popup closed',async({page})=>{
   await fixture(page,{toggle:true});const r=await researchFleetCandidates(page,collection(),settings,{...config,maxSuggestions:1});
   expect(r.aircraft[0].status).toBe('observed');expect(r.uiRestored).toBe(true);expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+});
+
+
+test('completed daily review is skipped before consuming the bounded research slot',async({page})=>{
+  await fixture(page);
+  const dir=await mkdtemp(join(tmpdir(),'am4-research-journal-'));
+  try{
+    const now=new Date();
+    await writeFile(join(dir,'return-journal.json'),JSON.stringify({
+      schemaVersion:1,scope:'test-scope',entries:[{
+        aircraftId:'101',origin:'AAA',flightId:'daily_test',reviewedAt:now.toISOString(),decision:'keep_route'
+      }]
+    })+'\n');
+    const withJournal={...settings,returnJournal:{directory:dir,scope:'test-scope'}};
+    const r=await researchFleetCandidates(page,collection(),withJournal,{...config,maxAircraft:1,maxSuggestions:1});
+    expect(r.aircraft[0]).toMatchObject({aircraftId:'101',status:'completed_today'});
+    expect(r.warnings).not.toContain('RESEARCH_JOURNAL_UNAVAILABLE');
+    expect(await page.evaluate(()=>(window as any).resets)).toBe(0);
+    expect(await page.evaluate(()=>(window as any).researches)).toBe(0);
+    expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+  }finally{await rm(dir,{recursive:true,force:true});}
+});
+
+test('unavailable persistent review journal fails route research closed before navigation',async({page})=>{
+  await fixture(page);
+  const dir=await mkdtemp(join(tmpdir(),'am4-research-journal-missing-'));
+  try{
+    const withJournal={...settings,returnJournal:{directory:dir,scope:'test-scope'}};
+    const r=await researchFleetCandidates(page,collection(),withJournal,{...config,maxAircraft:1,maxSuggestions:1});
+    expect(r.aircraft[0]).toMatchObject({aircraftId:'101',status:'journal_unavailable'});
+    expect(r.warnings).toContain('RESEARCH_JOURNAL_UNAVAILABLE');
+    expect(await page.evaluate(()=>(window as any).resets)).toBe(0);
+    expect(await page.evaluate(()=>(window as any).mutations)).toBe(0);
+  }finally{await rm(dir,{recursive:true,force:true});}
 });

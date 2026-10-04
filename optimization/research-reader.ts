@@ -1,6 +1,6 @@
 import { openFleetList as openList, findFleetRoute as findRoute } from '../demand/navigation';
 import { expect, Page } from '@playwright/test';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AircraftSnapshot, CollectionResult } from '../demand/types';
 import { DemandReader } from '../demand/reader';
@@ -32,7 +32,8 @@ import { candidateLoadEnvelope, currentRouteLoadEnvelope } from './route-variabl
 import { compareRouteVariableCycles, conservativeSharedPairRemaining, currentRouteGrossRevenueCeiling, routeVariableRoundTripInterval } from './route-variable-cycle';
 import { routeProfitModelEvidence } from './route-profit-model';
 import { planVariableRouteDecision, routeDecisionSetComparisonReady } from './route-decision';
-import type { LiveAnchoredFlightHistoryStitchDiagnostic } from './return-journal';
+import { validateReturnJournal, type Journal, type LiveAnchoredFlightHistoryStitchDiagnostic } from './return-journal';
+import { dailyReviewDue } from './review-schedule';
 
 export interface ResearchConfig { enabled: boolean; maxAircraft: number; maxSuggestions: number; timeout: number }
 export function researchConfig(env: NodeJS.ProcessEnv = process.env): ResearchConfig {
@@ -53,13 +54,30 @@ export async function researchFleetCandidates(page: Page, collection: Collection
   if (typeof config.enabled !== 'boolean' || !Number.isSafeInteger(config.maxAircraft) || config.maxAircraft < 1 || config.maxAircraft > 10 ||
     !Number.isSafeInteger(config.maxSuggestions) || config.maxSuggestions < 1 || config.maxSuggestions > 10 ||
     !Number.isSafeInteger(config.timeout) || config.timeout < 1 || config.timeout > 30000) throw new Error('RESEARCH_CONFIG_INVALID');
-  const observations = fleetObservations(collection, optimization.aircraftOrigins, new Date(), optimization.maxAgeSeconds, optimization.airlineBases);
-  const aircraft = observations.aircraft.map(a => ({aircraftId:a.aircraftId,registration:a.registration,origin:a.operationalOrigin,
-    routeId:a.routeId,status:!config.enabled || !optimization.routesEnabled ? 'disabled' : !a.detailsVerified ? 'data_unavailable' :
-      !a.operationalOrigin ? 'origin_unavailable' : a.state !== 'ready' ? 'pending_inflight' : a.currentAirport !== a.operationalOrigin ? 'pending_base_return' : 'queued',
-    result:null as Awaited<ReturnType<typeof collectOpenRouteSuggestions>> | null}));
-  const report = {schemaVersion:3,generatedAt:new Date().toISOString(),dryRun:true,mutationAuthorized:false,
-    candidatesComplete:false,comparisonReady:false,collectionComplete:collection.complete,config,uiRestored:true,warnings:[] as string[],aircraft,
+  const now=new Date();
+  const observations = fleetObservations(collection, optimization.aircraftOrigins, now, optimization.maxAgeSeconds, optimization.airlineBases);
+  let reviewJournal:Journal|null=null,reviewJournalAvailable=true;
+  if(optimization.returnJournal){
+    try{
+      reviewJournal=validateReturnJournal(
+        JSON.parse(await readFile(join(optimization.returnJournal.directory,'return-journal.json'),'utf8')),
+        optimization.returnJournal.scope,now
+      );
+    }catch{reviewJournalAvailable=false;}
+  }
+  const aircraft = observations.aircraft.map(a => {
+    let status=!config.enabled || !optimization.routesEnabled ? 'disabled' : !a.detailsVerified ? 'data_unavailable' :
+      !a.operationalOrigin ? 'origin_unavailable' : a.state !== 'ready' ? 'pending_inflight' :
+      a.currentAirport !== a.operationalOrigin ? 'pending_base_return' : 'queued';
+    if(status==='queued'&&optimization.returnJournal&&!reviewJournalAvailable)status='journal_unavailable';
+    else if(status==='queued'&&reviewJournal&&!dailyReviewDue(a.aircraftId,a.operationalOrigin,reviewJournal,now,optimization.reviewTimeZone))
+      status='completed_today';
+    return {aircraftId:a.aircraftId,registration:a.registration,origin:a.operationalOrigin,routeId:a.routeId,status,
+      result:null as Awaited<ReturnType<typeof collectOpenRouteSuggestions>> | null};
+  });
+  const report = {schemaVersion:3,generatedAt:now.toISOString(),dryRun:true,mutationAuthorized:false,
+    candidatesComplete:false,comparisonReady:false,collectionComplete:collection.complete,config,uiRestored:true,
+    warnings:reviewJournalAvailable?[] as string[]:['RESEARCH_JOURNAL_UNAVAILABLE'],aircraft,
     diagnosticProbe:null as Awaited<ReturnType<typeof probeOpenRouteControl>> | null,
     diagnosticProbes:[] as Awaited<ReturnType<typeof probeOpenRouteControl>>[]};
   let attempted=0;
