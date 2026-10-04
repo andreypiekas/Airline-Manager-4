@@ -20,7 +20,7 @@ export interface RouteDecisionCandidate {
 }
 export interface VariableRouteDecision {
   aircraftId:string;
-  decision:'would_reroute'|'keep_route'|'unavailable';
+  decision:'would_reroute'|'keep_route'|'hold'|'unavailable';
   selected:null|{from:string;to:string;airportId:string;conservativeProfitPerHour:number;firstCycleLow:number};
   compared:number;
   dominating:number;
@@ -50,7 +50,7 @@ export function planVariableRouteDecision(
 
   const comparable=candidates.filter(c=>c.comparisonReady&&c.variableCycleComparison.comparisonReady&&
     c.variableCycleComparison.status!=='unavailable'&&c.candidateVariableCycle.status==='verified_interval');
-  if(!comparable.length)return {...base,reason:'NO_VERIFIED_VARIABLE_CYCLE_COMPARISON'};
+  if(!comparable.length)return {...base,decision:'hold',reason:'NO_VERIFIED_VARIABLE_CYCLE_COMPARISON'};
 
   const dominant=comparable.filter(c=>c.variableCycleComparison.status==='candidate_dominates'&&
     finite(c.candidateVariableCycle.recurringCycleProfitPerHour.low)&&

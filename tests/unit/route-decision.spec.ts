@@ -37,6 +37,13 @@ test('dominant economics without verified native target cannot produce reroute p
 
 test('incomplete comparison set fails closed',()=>{
   const c=candidate('AAA',1000);c.comparisonReady=false;
-  expect(planVariableRouteDecision('101',[c])).toMatchObject({decision:'unavailable',reason:'NO_VERIFIED_VARIABLE_CYCLE_COMPARISON'});
+  expect(planVariableRouteDecision('101',[c])).toMatchObject({decision:'hold',reason:'NO_VERIFIED_VARIABLE_CYCLE_COMPARISON'});
   expect(planVariableRouteDecision('bad',[c])).toMatchObject({decision:'unavailable'});
+});
+
+
+test('valid but incomplete comparison stays as explicit retryable HOLD',()=>{
+  const c=candidate('AAA',1000);c.comparisonReady=false;
+  const r=planVariableRouteDecision('101',[c]);
+  expect(r).toMatchObject({decision:'hold',selected:null,compared:0,dominating:0,reason:'NO_VERIFIED_VARIABLE_CYCLE_COMPARISON',mutationAuthorized:false});
 });
