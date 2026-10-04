@@ -103,10 +103,9 @@ export class PlaywrightRouteExecutionPort implements RouteExecutionPort {
     this.prepared={aircraft:fresh,target:next,routeRegistration};
     return {aircraft:fresh,target:next};
     } finally {
-      // Playwright's project default is 30s and this repository does not
-      // override it. Restore it so later independent phases keep their normal
-      // read tolerance; only reroute preparation is aggressively bounded.
-      this.page.setDefaultTimeout(30_000);
+      // Playwright Test actionTimeout defaults to 0 (no limit). Restore the
+      // original project behavior so only reroute preparation is aggressively bounded.
+      this.page.setDefaultTimeout(0);
     }
   }
 
