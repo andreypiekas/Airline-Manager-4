@@ -15,7 +15,7 @@ test('repository zero limit falls back to safe default one',()=>expect(resolveDe
 test('simulation override prevents operations even with both activation switches true',()=>expect(resolveDepartureSettings({AM4_INPUT_MODE:'simulation',AM4_INPUT_EXECUTE:'true',AM4_REPOSITORY_EXECUTE:'true'}).dryRun).toBe(true));
 test('production input is explicit activation',()=>expect(resolveDepartureSettings({AM4_INPUT_MODE:'production',AM4_REPOSITORY_EXECUTE:'false'}).dryRun).toBe(false));
 test('legacy activation input still works',()=>expect(resolveDepartureSettings({AM4_INPUT_EXECUTE:'true',AM4_REPOSITORY_EXECUTE:'false'}).dryRun).toBe(false));
-for(const [index,env] of [{AM4_INPUT_MODE:'automatic'},{AM4_REPOSITORY_EXECUTE:'tru'},{AM4_INPUT_EXECUTE:'yes'},{AM4_INPUT_MAX_DEPARTURES:'-1'},{AM4_INPUT_MAX_DEPARTURES:'21'},{AM4_INPUT_MAX_DEPARTURES:'1.5'},{AM4_REPOSITORY_MAX_DEPARTURES:'99'},{AM4_REPOSITORY_MAX_DEPARTURES:'1\nother=secret'}].entries())
+for(const [index,env] of [{AM4_INPUT_MODE:'automatic'},{AM4_REPOSITORY_EXECUTE:'tru'},{AM4_INPUT_EXECUTE:'yes'},{AM4_INPUT_MAX_DEPARTURES:'-1'},{AM4_INPUT_MAX_DEPARTURES:'21'},{AM4_INPUT_MAX_DEPARTURES:'1.5'},{AM4_REPOSITORY_MAX_DEPARTURES:'1\nother=secret'}].entries())
  test(`invalid settings fail before any game login case ${index}`,()=>expect(()=>resolveDepartureSettings(env)).toThrow());
 test('both workflows wire repository variables into the shared resolver and use its outputs',async()=>{
  for(const name of ['playwright.yml','individual-departures.yml']){
@@ -31,4 +31,14 @@ test('main production workflow forwards the declared departure limit input inste
  const s=await readFile('.github/workflows/playwright.yml','utf8');
  expect(s).toContain('AM4_INPUT_MAX_DEPARTURES: ${{ inputs.max_individual_departures }}');
  expect(s).not.toContain("AM4_INPUT_MAX_DEPARTURES: '20'");
+});
+
+test('legacy repository limit above hard safety cap is bounded to twenty and reported as clamped',()=>{
+ expect(resolveDepartureSettings({AM4_INPUT_MAX_DEPARTURES:'0',AM4_REPOSITORY_MAX_DEPARTURES:'30'})).toMatchObject({
+  maxDepartures:20,limitSource:'variable:MAX_INDIVIDUAL_DEPARTURES:clamped-to-20'
+ });
+ expect(resolveDepartureSettings({AM4_REPOSITORY_MAX_DEPARTURES:'99'}).maxDepartures).toBe(20);
+});
+test('explicit manual limit above twenty still fails instead of being silently clamped',()=>{
+ expect(()=>resolveDepartureSettings({AM4_INPUT_MAX_DEPARTURES:'21',AM4_REPOSITORY_MAX_DEPARTURES:'30'})).toThrow();
 });

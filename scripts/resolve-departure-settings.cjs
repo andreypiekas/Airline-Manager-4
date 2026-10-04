@@ -54,13 +54,19 @@ function resolveDepartureSettings(env) {
   }
 
   if (!/^[1-9]\d*$/.test(rawLimit)) {
-    throw new Error('Limite de decolagens deve ser inteiro de 1 a 20.');
+    throw new Error('Limite de decolagens deve ser inteiro positivo.');
   }
 
-  const maxDepartures = Number(rawLimit);
-
-  if (!Number.isSafeInteger(maxDepartures) || maxDepartures > 20) {
-    throw new Error('Limite de decolagens deve ser inteiro de 1 a 20.');
+  let maxDepartures = Number(rawLimit);
+  if (!Number.isSafeInteger(maxDepartures)) {
+    throw new Error('Limite de decolagens deve ser inteiro positivo.');
+  }
+  if (!useRepositoryLimit && maxDepartures > 20) {
+    throw new Error('Limite de decolagens manual deve ser inteiro de 1 a 20.');
+  }
+  if (useRepositoryLimit && maxDepartures > 20) {
+    maxDepartures = 20;
+    limitSource = 'variable:MAX_INDIVIDUAL_DEPARTURES:clamped-to-20';
   }
 
   return {
