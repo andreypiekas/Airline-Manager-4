@@ -67,7 +67,7 @@ test('persisted uncertain departure quarantine blocks before any click',async()=
 
 
 test('verified historical fuel evidence blocks a departure before the click when run stock is insufficient',async()=>{
- const history=(fuelLbs:number)=>({status:'observed' as const,observedAt:new Date().toISOString(),entries:[0,1,2].map(i=>({relativeTime:`${i+1} hours ago`,from:i%2?'GRU':'AAA',to:i%2?'AAA':'GRU',co2Quotas:100,onboard:{Y:80,J:0,F:0},fuelLbs,revenue:1000}))});
+ const history=(fuelLbs:number)=>({status:'observed' as const,observedAt:new Date().toISOString(),source:'inspected-aircraft-flight-history' as const,complete:false as const,comparisonReady:false as const,mutationAuthorized:false as const,entries:[0,1,2].map(i=>({relativeTime:`${i+1} hours ago`,from:i%2?'GRU':'AAA',to:i%2?'AAA':'GRU',registrationLabel:'TEST',co2Quotas:100,onboard:{Y:80,J:0,F:0},fuelLbs,revenue:1000}))});
  const a=snapshot({flightHistory:history(59928)});
  const s=setup({initial:collection([a]),fresh:collection([a]),prepared:a,fuelHoldingLbsAtRunStart:20040});
  const r=await s.executor.run();
@@ -76,7 +76,7 @@ test('verified historical fuel evidence blocks a departure before the click when
 });
 
 test('confirmed departures debit only uniquely verified historical fuel and protect later aircraft',async()=>{
- const history=(from:string,to:string,fuelLbs:number)=>({status:'observed' as const,observedAt:new Date().toISOString(),entries:[0,1,2].map(i=>({relativeTime:`${i+1} hours ago`,from:i%2?to:from,to:i%2?from:to,co2Quotas:100,onboard:{Y:80,J:0,F:0},fuelLbs,revenue:1000}))});
+ const history=(from:string,to:string,fuelLbs:number)=>({status:'observed' as const,observedAt:new Date().toISOString(),source:'inspected-aircraft-flight-history' as const,complete:false as const,comparisonReady:false as const,mutationAuthorized:false as const,entries:[0,1,2].map(i=>({relativeTime:`${i+1} hours ago`,from:i%2?to:from,to:i%2?from:to,registrationLabel:'TEST',co2Quotas:100,onboard:{Y:80,J:0,F:0},fuelLbs,revenue:1000}))});
  const one=snapshot({flightHistory:history('AAA','GRU',9781)});
  const two=snapshot({aircraftId:'2',routeId:'11',from:'BBB',to:'GRU',routeLabel:'BBB - GRU',flightHistory:history('BBB','GRU',59928)});
  const list=collection([one,two]);let reads=0,clicks=0;
