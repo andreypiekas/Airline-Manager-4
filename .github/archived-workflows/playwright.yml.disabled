@@ -1,0 +1,336 @@
+# ARQUIVADO APÓS MIGRAÇÃO PARA andreypiekas/-Airline-Manager-4-Automation
+# Não é um workflow ativo. Conteúdo histórico abaixo.
+
+name: Automacao Airline Manager 4
+on:
+  workflow_dispatch:
+    inputs:
+      departure_mode:
+        description: 'Modo da execucao: producao ou simulacao live somente leitura'
+        type: choice
+        default: production
+        options: [production, simulation]
+      execute_individual:
+        description: 'Compatibilidade: o runner executa sempre em producao'
+        type: boolean
+        required: false
+        default: true
+      max_individual_departures:
+        description: 'Limite 1 a 20; 0 usa MAX_INDIVIDUAL_DEPARTURES (padrao 1)'
+        type: number
+        required: false
+        default: 0
+      aktifkan_random_delay:
+        description: 'Ativar atraso aleatorio na execucao manual (padrao: desligado)'
+        type: boolean
+        required: false
+        default: false
+      paksa_simpan_video:
+        description: 'Gravar video da execucao (padrao: desligado)'
+        type: boolean
+        required: false
+        default: false
+
+# Evita executar duas automacoes ao mesmo tempo.
+concurrency:
+  group: airline-manager-4-main
+  cancel-in-progress: false
+
+jobs:
+  test:
+    timeout-minutes: 29
+    runs-on: ubuntu-22.04
+    
+    # Permissao para atualizar o arquivo de atividade do repositorio
+    permissions:
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Atraso aleatorio opcional
+      # Executar atraso somente quando ativado manualmente
+      if: github.event_name == 'workflow_dispatch' && inputs.aktifkan_random_delay == true
+      run: |
+         DELAY=$(( RANDOM % 1500 ))
+         echo "Aguardando $DELAY segundos..."
+         sleep $DELAY
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22' # Aman dari bug freeze ekstraksi ZIP
+
+    - name: Instalar dependencias
+      run: npm ci
+
+    - name: Verificar compilacao
+      run: npm run typecheck
+
+    - name: Compilar transporte de estado
+      run: npm run build:state
+
+    - name: Identificar versao do Playwright
+      id: pw-version
+      run: echo "version=$(npx playwright --version | awk '{print $2}')" >> $GITHUB_OUTPUT
+
+    - uses: actions/cache@v4
+      id: playwright-cache
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ runner.os }}-playwright-${{ steps.pw-version.outputs.version }}
+
+    - name: Desativar atualizacao automatica do Man-DB
+      run: |
+        sudo debconf-set-selections <<< "man-db man-db/auto-update boolean false"
+        sudo dpkg-reconfigure man-db
+
+    - name: Instalar Chromium e dependencias
+      env:
+        NODE_OPTIONS: "--max-old-space-size=4096"
+      run: npx playwright install --with-deps chromium
+
+    - name: Validar calculos e interface em testes offline (sem credenciais)
+      run: npm test
+
+    - name: Limpar relatorios sinteticos antes da coleta real
+      if: always()
+      run: rm -rf test-results/demand
+
+    - name: Verificar SHA atual antes de acessar o jogo
+      id: current_head
+      run: |
+        git fetch --no-tags --depth=1 origin +refs/heads/main:refs/remotes/origin/main
+        MAIN_SHA="$(git rev-parse refs/remotes/origin/main)"
+        echo "main_sha=$MAIN_SHA" >> "$GITHUB_OUTPUT"
+        if [ "$MAIN_SHA" != "$GITHUB_SHA" ]; then
+          echo "stale=true" >> "$GITHUB_OUTPUT"
+          echo "::warning::Run obsoleta: $GITHUB_SHA foi substituido por $MAIN_SHA. O jogo nao sera acessado."
+        else
+          echo "stale=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Instalar servidor de tela virtual Xvfb
+      # Xvfb fornece uma tela virtual para o navegador
+      run: sudo apt-get update && sudo apt-get install -y xvfb
+
+    - name: Restaurar registro persistente de retornos
+      id: state_restore
+      if: vars.ENABLE_DEMAND_MANAGER != 'false' && steps.current_head.outputs.stale != 'true'
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
+      run: node .am4-tools/optimization/github-state.js restore
+
+    # Secrets sao entregues diretamente ao processo, sem gravar senhas em .env.
+    - name: Resolver modo e limite de decolagens
+      id: departure_settings
+      if: steps.current_head.outputs.stale != 'true'
+      env:
+        AM4_INPUT_MODE: ${{ inputs.departure_mode || 'production' }}
+        AM4_INPUT_EXECUTE: ${{ inputs.departure_mode == 'production' && 'true' || 'false' }}
+        AM4_INPUT_MAX_DEPARTURES: ${{ inputs.max_individual_departures }}
+        AM4_REPOSITORY_EXECUTE: ${{ vars.EXECUTE_INDIVIDUAL }}
+        AM4_REPOSITORY_MAX_DEPARTURES: ${{ vars.MAX_INDIVIDUAL_DEPARTURES }}
+      run: node scripts/resolve-departure-settings.cjs
+
+    - name: Executar bot Airline Manager 4
+      id: bot
+      if: steps.current_head.outputs.stale != 'true'
+      env:
+        ENABLE_RETURN_JOURNAL: ${{ inputs.departure_mode == 'simulation' && 'false' || 'true' }}
+        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
+        ENABLE_TICKET_PRICING: ${{ vars.ENABLE_TICKET_PRICING || 'true' }}
+        ENABLE_TICKET_PRICING_EXECUTION: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_TICKET_PRICING_EXECUTION || 'true') }}
+        TICKET_PRICING_EXECUTION_ACK: native-route-price-save-v1
+        TICKET_PRICING_MAX_ADJUSTMENTS_PER_RUN: ${{ vars.TICKET_PRICING_MAX_ADJUSTMENTS_PER_RUN || '5' }}
+        ENABLE_ROUTE_EXECUTION: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_ROUTE_EXECUTION || 'true') }}
+        ROUTE_EXECUTION_ACK: native-direct-reroute-v1
+        ROUTE_MAX_REROUTES_PER_RUN: ${{ vars.ROUTE_MAX_REROUTES_PER_RUN || '1' }}
+        ROUTE_REVIEW_TIMEZONE: ${{ vars.ROUTE_REVIEW_TIMEZONE }}
+        AIRLINE_BASES_JSON: ${{ vars.AIRLINE_BASES_JSON }}
+        AIRCRAFT_ORIGINS_JSON: ${{ vars.AIRCRAFT_ORIGINS_JSON || '[]' }}
+        ENABLE_ROUTE_RESEARCH: ${{ vars.ENABLE_ROUTE_RESEARCH || 'true' }}
+        ROUTE_RESEARCH_MAX_AIRCRAFT: ${{ vars.ROUTE_RESEARCH_MAX_AIRCRAFT || '3' }}
+        ROUTE_RESEARCH_MAX_SUGGESTIONS: ${{ vars.ROUTE_RESEARCH_MAX_SUGGESTIONS || '5' }}
+        ROUTE_RESERVATION_NEXT_LEGS: ${{ vars.ROUTE_RESERVATION_NEXT_LEGS || '2' }}
+        ROUTE_RESERVATION_POOL_SCOPE: ${{ vars.ROUTE_RESERVATION_POOL_SCOPE || 'airport-pair' }}
+        ENABLE_ROUTE_OPTIMIZER: ${{ vars.ENABLE_ROUTE_OPTIMIZER || 'true' }}
+        ROUTE_MIN_OCCUPANCY_PERCENT: ${{ vars.ROUTE_MIN_OCCUPANCY_PERCENT || '80' }}
+        ROUTE_MIN_IMPROVEMENT_PERCENT: ${{ vars.ROUTE_MIN_IMPROVEMENT_PERCENT || '0' }}
+        ENABLE_DEMAND_MANAGER: 'true'
+        DEMAND_DRY_RUN: ${{ steps.departure_settings.outputs.dry_run }}
+        DEMAND_FAIL_SAFE: 'true'
+        DEMAND_EXECUTION_ACK: individual-return-legs-v1
+        DEMAND_MAX_DEPARTURES_PER_RUN: ${{ steps.departure_settings.outputs.max_departures }}
+        MIN_DEMAND_PERCENTAGE: ${{ vars.MIN_DEMAND_PERCENTAGE || '80' }}
+        DEMAND_THRESHOLD_MODE: ${{ vars.DEMAND_THRESHOLD_MODE || 'aggregate' }}
+        DEMAND_POOL_SCOPE: ${{ vars.DEMAND_POOL_SCOPE || 'airport-pair' }}
+        DEMAND_MAX_AGE_SECONDS: ${{ vars.DEMAND_MAX_AGE_SECONDS || '300' }}
+        EMAIL: ${{ secrets.EMAIL }}
+        PASSWORD: ${{ secrets.PASSWORD }}
+        MIN_CASH_RESERVE: ${{ vars.MIN_CASH_RESERVE || '0' }}
+        MAX_FUEL_PRICE: ${{ vars.MAX_FUEL_PRICE }}
+        MAX_CO2_PRICE: ${{ vars.MAX_CO2_PRICE }}
+        MAX_FUEL_PURCHASE_PER_RUN: ${{ vars.MAX_FUEL_PURCHASE_PER_RUN }}
+        MAX_CO2_PURCHASE_PER_RUN: ${{ vars.MAX_CO2_PURCHASE_PER_RUN }}
+        REPAIR_WEAR: ${{ vars.REPAIR_WEAR || '30' }}
+        HOURS_CHECK: ${{ vars.HOURS_CHECK || '20' }}
+        INCREASE_AIRLINE_REPUTATION: ${{ vars.INCREASE_AIRLINE_REPUTATION || 'false' }}
+        CAMPAIGN_TYPE: ${{ vars.CAMPAIGN_TYPE || '1' }}
+        CAMPAIGN_DURATION: ${{ vars.CAMPAIGN_DURATION || '4' }}
+        ENABLE_FUEL: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_FUEL || 'true') }}
+        ENABLE_MAINTENANCE: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_MAINTENANCE || 'true') }}
+        ENABLE_CAMPAIGN: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_CAMPAIGN || 'true') }}
+        ENABLE_DEPART: ${{ inputs.departure_mode == 'simulation' && 'false' || (vars.ENABLE_DEPART || 'true') }}
+        PAKSI_VIDEO: ${{ inputs.paksa_simpan_video }}
+      run: |
+        if [ -z "$EMAIL" ] || [ -z "$PASSWORD" ]; then
+          echo "::error::Secrets EMAIL e PASSWORD sao obrigatorios."
+          exit 1
+        fi
+        set -o pipefail
+        mkdir -p test-results
+        xvfb-run --auto-servernum --server-args="-screen 0 1280x1024x24" npx playwright test --headed 2>&1 | tee test-results/bot.log
+      
+    - name: Persistir registro de retornos
+      if: always() && inputs.departure_mode != 'simulation' && steps.state_restore.outcome == 'success' && (steps.bot.outcome == 'success' || steps.bot.outcome == 'failure')
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        RETURN_JOURNAL_SCOPE: ${{ vars.RETURN_JOURNAL_SCOPE || 'am4-prod' }}
+      run: node .am4-tools/optimization/github-state.js save
+
+    - name: Consolidar dashboard e estados operacionais
+      if: always()
+      run: node scripts/company-dashboard.cjs
+
+    - name: Resumo de demanda
+      if: always()
+      run: |
+        if [ -f test-results/demand/ui-health.md ]; then
+          cat test-results/demand/ui-health.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/company-dashboard.md ]; then
+          cat test-results/demand/company-dashboard.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/run-time-budget.md ]; then
+          cat test-results/demand/run-time-budget.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/demand-report.md ]; then
+          cat test-results/demand/demand-report.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/route-research.md ]; then
+          cat test-results/demand/route-research.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/candidate-data.md ]; then
+          cat test-results/demand/candidate-data.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/flight-history-continuity.md ]; then
+          cat test-results/demand/flight-history-continuity.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/flight-history-stitch.md ]; then
+          cat test-results/demand/flight-history-stitch.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/flight-history-live-stitch.md ]; then
+          cat test-results/demand/flight-history-live-stitch.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/route-execution.md ]; then
+          cat test-results/demand/route-execution.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/pricing-execution.md ]; then
+          cat test-results/demand/pricing-execution.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/optimization-report.md ]; then
+          cat test-results/demand/optimization-report.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/supply-report.md ]; then
+          cat test-results/demand/supply-report.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+        if [ -f test-results/demand/execution-report.md ]; then
+          cat test-results/demand/execution-report.md >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Enviar JSON e Markdown de demanda
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: demand-report
+        path: test-results/demand/
+        if-no-files-found: ignore
+        retention-days: 7
+
+    - name: Notificar problemas de demanda (opcional)
+      if: always()
+      continue-on-error: true
+      env:
+        DEMAND_TELEGRAM_ENABLED: ${{ vars.DEMAND_TELEGRAM_ENABLED || 'false' }}
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        BOT_RESULT: ${{ steps.bot.outcome }}
+        DEMAND_PROLONGED_HOLD_MINUTES: ${{ vars.DEMAND_PROLONGED_HOLD_MINUTES || '180' }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      run: node scripts/telegram-demand.cjs
+
+    - name: Enviar relatorios da execucao
+      uses: actions/upload-artifact@v4
+      if: always() # Sempre guardar resultados para diagnostico
+      with:
+        name: playwright-report
+        path: test-results/
+        retention-days: 7
+
+    # Atualizar arquivo de atividade caso tenha sido modificado
+    - name: Manter repositorio ativo
+      if: always()
+      run: |
+        # Configurar identidade do Git
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # Verificar se last-commit.txt foi modificado
+        if [ -f "last-commit.txt" ] && git status --porcelain | grep -q "last-commit.txt"; then
+          echo "Alteracoes identificadas em last-commit.txt. Registrando commit automatico..."
+          git add last-commit.txt
+          # Evitar disparar novas execucoes com o commit automatico
+          git commit -m "chore: keepalive update [skip ci]"
+          git push
+        else
+          echo "Nenhuma alteracao em last-commit.txt. Nenhum commit necessario."
+        fi
+
+    # Alertas opcionais. Configure TELEGRAM_BOT_TOKEN e TELEGRAM_CHAT_ID
+    # em Settings > Secrets and variables > Actions > Secrets.
+    - name: Notificar resultado pelo Telegram
+      if: always() && vars.ENABLE_DEMAND_MANAGER == 'false'
+      continue-on-error: true
+      env:
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        BOT_RESULT: ${{ steps.bot.outcome }}
+        RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        ALERT_CASH_ABOVE: ${{ vars.ALERT_CASH_ABOVE }}
+      run: |
+        if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+          echo "Telegram nao configurado. Notificacao ignorada."
+          exit 0
+        fi
+        if [ "$BOT_RESULT" = "success" ]; then
+          STATUS="SUCESSO"
+        elif [ "$BOT_RESULT" = "failure" ]; then
+          STATUS="FALHA"
+        else
+          STATUS="NAO CONCLUIDO ($BOT_RESULT)"
+        fi
+        # Opcional: informar saldo quando ultrapassar o limite configurado.
+        # Sem a variavel ALERT_CASH_ABOVE nao existe alerta financeiro.
+        if [[ "$ALERT_CASH_ABOVE" =~ ^[0-9]+$ ]] && [ -f test-results/bot.log ]; then
+          BALANCE=$(sed -nE 's/.*Saldo antes de abrir combustivel: ([0-9]+).*/\1/p' test-results/bot.log | tail -n 1)
+          if [[ "$BALANCE" =~ ^[0-9]+$ ]] && (( BALANCE >= ALERT_CASH_ABOVE )); then
+            STATUS="$STATUS | Saldo acima do limite: $BALANCE"
+          fi
+        fi
+        curl --fail --silent --show-error --max-time 15 \
+          --request POST \
+          --data-urlencode "chat_id=$TELEGRAM_CHAT_ID" \
+          --data-urlencode "text=Airline Manager 4: $STATUS | $RUN_URL" \
+          "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+          > /dev/null
